@@ -61,6 +61,15 @@ export class Architecture {
     this.sharedFishGeo.rotateZ(Math.PI / 2);
     this.sharedFishMat = new THREE.MeshLambertMaterial({ color: 0xE2E8F0, flatShading: true });
 
+    // Shared Water Tank Geometries & Material (v1.1 Performance Optimization)
+    this.sharedWaterTankGeo = new THREE.CylinderGeometry(0.65, 0.55, 1.1, 7);
+    this.sharedWaterTankLidGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.14, 7);
+    this.sharedWaterTankMat = new THREE.MeshLambertMaterial({ color: 0x0284C7, flatShading: true });
+
+    // Zonas de Permanência Orgânica (Bancos & Botecos)
+    this.botecoSpots = [];
+    this.alamedaBenches = [];
+
     // Global map of all roads and pathways to prevent houses from spawning on top of them
     this.infrastructureNodes = [];
 
@@ -98,6 +107,7 @@ export class Architecture {
     if (!this.infrastructureCreated) {
       this.createContinentalRoadNetwork();
       this.createAlamedaDoSamba();
+      this.createBotecoPockets();
       this.createEstradasDeLajes();
       this.createLighthouse({ x: -95, z: 50 });
       this.createFishingPier({ x: -78, z: 74 });
@@ -895,17 +905,14 @@ export class Architecture {
     frontWall.position.set(0, lajeY + 0.32, 1.75);
     lajeGroup.add(frontWall);
 
-    // Blue water tank (50% chance)
-    if (Math.random() > 0.5) {
-      const tankGeo = new THREE.CylinderGeometry(0.65, 0.55, 1.1, 7);
-      const tankMat = new THREE.MeshLambertMaterial({ color: 0x0A58CA, flatShading: true });
-      const tank = new THREE.Mesh(tankGeo, tankMat);
+    // Caixa d'água azul tradicional carioca (Otimizado com geometria/material compartilhados)
+    if (houseData.level >= 2 || Math.random() > 0.3) {
+      const tank = new THREE.Mesh(this.sharedWaterTankGeo, this.sharedWaterTankMat);
       tank.position.set(-1.1, lajeY + 0.7, -0.85);
       tank.castShadow = true;
       lajeGroup.add(tank);
 
-      const lidGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.14, 7);
-      const lid = new THREE.Mesh(lidGeo, tankMat);
+      const lid = new THREE.Mesh(this.sharedWaterTankLidGeo, this.sharedWaterTankMat);
       lid.position.set(-1.1, lajeY + 1.25, -0.85);
       lajeGroup.add(lid);
     }
@@ -1354,11 +1361,12 @@ export class Architecture {
     });
 
     // 4. Bancos de Madeira Rústica para Contemplação e Descanso
+    this.alamedaBenches = [];
     const benchConfigs = [
       { x: -4.8, z: -17.5, rot: 1.57, yOffset: 0.2 },
       { x: 0.8,  z: -14.2, rot: -1.57, yOffset: 0.2 }
     ];
-    benchConfigs.forEach(bCfg => {
+    benchConfigs.forEach((bCfg, bIdx) => {
       const bT = (bCfg.z - (-19.5)) / 6.5;
       const bY = 11.6 + bT * 2.5;
 
@@ -1381,6 +1389,15 @@ export class Architecture {
       benchGroup.add(back);
 
       alamedaGroup.add(benchGroup);
+
+      this.alamedaBenches.push({
+        id: `alameda_bench_${bIdx}`,
+        x: bCfg.x,
+        y: bY + bCfg.yOffset,
+        z: bCfg.z,
+        rot: bCfg.rot,
+        isOccupied: false
+      });
     });
 
     // 5. Bandeirinhas Festivas e Fios Aéreos Cruzando a Alameda
@@ -1412,6 +1429,125 @@ export class Architecture {
 
     this.group.add(alamedaGroup);
     this.alamedaDoSamba = alamedaGroup;
+  }
+
+  // CANTINHOS DE BOTECO SUTIS & MESINHAS DE CALÇADA (Atualização 1.1)
+  // Apenas 2 pontos orgânicos e discretos na colina para encontros e pausas
+  createBotecoPockets() {
+    this.botecoSpots = [];
+    const botecoGroup = new THREE.Group();
+
+    const tableMat = new THREE.MeshLambertMaterial({ color: 0xF8FAFC, flatShading: true });
+    const poleMat = new THREE.MeshLambertMaterial({ color: 0x475569, flatShading: true });
+    const chairMatAmbev = new THREE.MeshLambertMaterial({ color: 0xFACC15, flatShading: true }); // Amarela Ambev
+    const chairMatBrahma = new THREE.MeshLambertMaterial({ color: 0xDC2626, flatShading: true }); // Vermelha Brahma
+    const glassMat = new THREE.MeshLambertMaterial({ color: 0x15803D, flatShading: true }); // Garrafa de Guaraná
+    const umbrellaMat = new THREE.MeshLambertMaterial({ color: 0xF59E0B, flatShading: true });
+
+    const configs = [
+      {
+        id: 'boteco_varzea',
+        name: 'Boteco da Várzea',
+        tableX: 37.2,
+        tableZ: -4.8,
+        chairColor: chairMatAmbev,
+        hasUmbrella: true,
+        chairs: [
+          { x: 36.5, z: -4.8, rotY: Math.PI / 2 },
+          { x: 37.9, z: -4.8, rotY: -Math.PI / 2 }
+        ]
+      },
+      {
+        id: 'boteco_prainha',
+        name: 'Venda da Subida da Prainha',
+        tableX: -66.0,
+        tableZ: 2.2,
+        chairColor: chairMatBrahma,
+        hasUmbrella: false,
+        chairs: [
+          { x: -66.0, z: 1.5, rotY: 0 },
+          { x: -66.0, z: 2.9, rotY: Math.PI }
+        ]
+      }
+    ];
+
+    configs.forEach(cfg => {
+      const tableY = this.terrain ? this.terrain.getElevation(cfg.tableX, cfg.tableZ) : 4.0;
+
+      // Mesa de Boteco
+      const tableMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.05, 8), tableMat);
+      tableMesh.position.set(cfg.tableX, tableY + 0.72, cfg.tableZ);
+      tableMesh.castShadow = true;
+      botecoGroup.add(tableMesh);
+
+      const tablePole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.72, 6), poleMat);
+      tablePole.position.set(cfg.tableX, tableY + 0.36, cfg.tableZ);
+      botecoGroup.add(tablePole);
+
+      const tableBase = new THREE.Mesh(new THREE.BoxGeometry(0.48, 0.04, 0.48), poleMat);
+      tableBase.position.set(cfg.tableX, tableY + 0.02, cfg.tableZ);
+      botecoGroup.add(tableBase);
+
+      // Garrafinha verde de refrigerante no centro da mesa
+      const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.045, 0.22, 6), glassMat);
+      bottle.position.set(cfg.tableX + 0.07, tableY + 0.85, cfg.tableZ + 0.05);
+      botecoGroup.add(bottle);
+
+      // Guarda-sol clássico
+      if (cfg.hasUmbrella) {
+        const umbPole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.1, 6), poleMat);
+        umbPole.position.set(cfg.tableX, tableY + 1.05, cfg.tableZ);
+        botecoGroup.add(umbPole);
+
+        const umbTop = new THREE.Mesh(new THREE.ConeGeometry(1.3, 0.42, 8), umbrellaMat);
+        umbTop.position.set(cfg.tableX, tableY + 2.2, cfg.tableZ);
+        botecoGroup.add(umbTop);
+      }
+
+      // Cadeiras de plástico monobloco
+      cfg.chairs.forEach((ch, idx) => {
+        const chY = this.terrain ? this.terrain.getElevation(ch.x, ch.z) : tableY;
+        const chairGroup = new THREE.Group();
+        chairGroup.position.set(ch.x, chY, ch.z);
+        chairGroup.rotation.y = ch.rotY;
+
+        const seat = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.05, 0.40), cfg.chairColor);
+        seat.position.y = 0.40;
+        chairGroup.add(seat);
+
+        const back = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.40, 0.04), cfg.chairColor);
+        back.position.set(0, 0.60, -0.18);
+        chairGroup.add(back);
+
+        [[-0.16, -0.16], [0.16, -0.16], [-0.16, 0.16], [0.16, 0.16]].forEach(([px, pz]) => {
+          const leg = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.40, 0.04), cfg.chairColor);
+          leg.position.set(px, 0.20, pz);
+          chairGroup.add(leg);
+        });
+
+        botecoGroup.add(chairGroup);
+
+        this.botecoSpots.push({
+          id: `${cfg.id}_seat_${idx}`,
+          botecoName: cfg.name,
+          x: ch.x,
+          y: chY,
+          z: ch.z,
+          rotY: ch.rotY,
+          isOccupied: false
+        });
+      });
+    });
+
+    // Desabilitar auto-update de matrizes para máxima performance
+    botecoGroup.traverse(child => {
+      if (child.isMesh) {
+        child.matrixAutoUpdate = false;
+        child.updateMatrix();
+      }
+    });
+
+    this.group.add(botecoGroup);
   }
 
 

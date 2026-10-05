@@ -17,7 +17,10 @@
 - **Alto da Serra (Norte)**: Alta cumeada com o Mirante Imperial, lunetas de observação panorâmica, torre de transmissão de rádio comunitária e aqueduto sustentável.
 
 ### 🚶 NPCs com Inteligência Espacial e Vida Própria
-- **Grafo Viário Topológico (v3.5.0)**: Mais de 70 nós conectados guiando os pedestres estritamente por ruas, ladeiras, escadarias e calçadões, respeitando a topografia real e barreiras naturais.
+- **Grafo Viário Topológico & Fluidez (v1.1)**: Mais de 70 nós conectados guiando os pedestres estritamente por ruas, ladeiras, escadarias e calçadões, com simulação otimizada e suave mesmo em altas velocidades (**1x, 2x e 5x**).
+- **Interações Orgânicas e Esporádicas (v1.1)**:
+  - 🪁 *O Menino da Pipa*: evento poético e autônomo onde um jovem morador empina uma pipa colorida no céu da colina aproveitando a brisa favorável.
+  - 🥤 *Cantinhos de Boteco & Bancos da Alameda*: mesinhas de plástico com cadeiras Ambev/Brahma e bancos coloniais onde moradores sentam esporadicamente para tomar um guaraná e prosear.
 - **Profissões e Identidades Cariocas**:
   - 🎶 *Tião do Cavaco*: dedilhando seu cavaquinho na roda de samba.
   - 🌺 *Dona Teresa*: florista cuidando dos canteiros da Alameda.

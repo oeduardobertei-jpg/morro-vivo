@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8" />
+  <!-- Cross-Browser & Cross-Device Favicon Suite (Cristo Redentor) -->
+  <link rel="shortcut icon" href="/favicon.ico" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+  <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48x48.png" />
+  <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+
+  <!-- Apple Touch Icons (iOS Safari & Home Screen) -->
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  <link rel="apple-touch-icon" sizes="152x152" href="/apple-touch-icon-152x152.png" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Morro Vivo" />
+
+  <!-- Android, Chrome & Progressive Web App (PWA) -->
+  <link rel="manifest" href="/site.webmanifest" />
+  <meta name="theme-color" content="#0ea5e9" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- Windows Tiles (Edge, IE, Windows 10/11) -->
+  <meta name="msapplication-config" content="/browserconfig.xml" />
+  <meta name="msapplication-TileColor" content="#091224" />
+  <meta name="msapplication-TileImage" content="/mstile-150x150.png" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MORRO VIVO - Reinos da Colina | Simulação Orgânica 3D</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+
+<body>
+  <!-- 3D WebGL Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- UI Overlay Layer -->
+  <div id="ui-overlay">
+    <!-- Top Bar: Brand, Metrics, Controls -->
+    <header class="top-bar interactive">
+      <div class="brand">
+        <span class="brand-icon">🌄</span>
+        <div>
+          <h1 class="brand-title">MORRO VIVO</h1>
+          <p class="brand-subtitle">Simulação Orgânica da Colina Carioca</p>
+        </div>
+      </div>
+
+      <!-- Live Simulation Metrics -->
+      <div class="metrics-group">
+        <div class="metric-pill" title="População Total no Morro">
+          <span class="icon">👥</span>
+          <span>Moradores: <strong id="val-pop" class="metric-value">46</strong></span>
+        </div>
+        <div class="metric-pill" title="Crédito e Circulação Econômica Comunitária">
+          <span class="icon">🪙</span>
+          <span>Economia: <strong id="val-wealth" class="metric-value">R$ 380</strong></span>
+        </div>
+        <div class="metric-pill" title="Abastecimento de Água das Lajes">
+          <span class="icon">💧</span>
+          <span>Água: <strong id="val-water" class="metric-value">92%</strong></span>
+        </div>
+        <div class="metric-pill" title="Energia Solar Limpa">
+          <span class="icon">☀️</span>
+          <span>Energia: <strong id="val-energy" class="metric-value">88%</strong></span>
+        </div>
+        <div class="metric-pill" title="Harmonia Social & Cultura">
+          <span class="icon">🥁</span>
+          <span>Harmonia: <strong id="val-culture" class="metric-value">94%</strong></span>
+        </div>
+      </div>
+
+      <!-- Controls: Presets, Audio, Time, Save, New World -->
+      <div class="controls-group">
+        <button id="btn-save" class="btn-icon" title="Salvar Progresso Imediatamente">
+          <span id="save-status">💾 Salvo</span>
+        </button>
+
+        <button id="btn-new-world" class="btn-icon" style="border-color: rgba(231, 111, 81, 0.45);"
+          title="Reiniciar para as 4 vilas pioneiras originais">
+          <span>🔄</span> <span>Novo Mundo</span>
+        </button>
+
+        <button id="btn-audio" class="btn-icon" title="Ativar/Desativar Trilha Sonora Procedural (Bossa & Mar)">
+          <span>🎵</span> <span id="audio-label">Música</span>
+        </button>
+
+        <button id="btn-audio-mixer" class="btn-icon"
+          title="Abrir Mixer de Volumes (Música, Obras, Campinho, Mar, SFX)">
+          <span>🎚️</span> <span>Volumes</span>
+        </button>
+
+        <button id="btn-time-cycle" class="btn-icon active"
+          title="Alternar Horário (Dia, Pôr do Sol, Noite, Alvorecer)">
+          <span id="time-icon">☀️</span> <span id="time-label">Dia Tropical</span>
+        </button>
+
+        <button id="btn-speed" class="btn-icon" title="Velocidade da Simulação">
+          <span>⏩</span> <span id="speed-label">1x</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Center Container: Diplomacy Card (Left) and Action Deck (Right) -->
+    <div class="center-container">
+      <!-- Left: Autonomous Diplomacy & Communities -->
+      <div class="glass-panel interactive">
+        <div class="panel-header">
+          <div class="panel-title">
+            <span>🤝</span> Diplomacia & Bairros
+          </div>
+          <span id="day-counter" style="font-size: 0.75rem; color: var(--color-gold); font-weight: 700;">DIA 1</span>
+        </div>
+
+        <div class="faction-item prainha" style="border-left-color: #0077B6;">
+          <div class="faction-name">
+            <span style="color: #0077B6;">Porto & Prainha (Oeste)</span>
+            <span id="prainha-harmony">90%</span>
+          </div>
+          <div class="faction-desc">Farol, cais de pesca, praia e quiosques.</div>
+          <div class="diplomacy-badge">Pacto: Rotas Navais e Pescado Fresco</div>
+        </div>
+
+        <div class="faction-item sol">
+          <div class="faction-name">
+            <span style="color: #E76F51;">Morro do Sol (Centro)</span>
+            <span id="sol-harmony">94%</span>
+          </div>
+          <div class="faction-desc">Encosta central suave, lajes e rodas de samba.</div>
+          <div class="diplomacy-badge">Pacto: Aliança Cultural e Alvenaria</div>
+        </div>
+
+        <div class="faction-item serra" style="border-left-color: #38BDF8;">
+          <div class="faction-name">
+            <span style="color: #38BDF8;">Alto da Serra (Norte)</span>
+            <span id="serra-harmony">92%</span>
+          </div>
+          <div class="faction-desc">Usina solar, chapada alta e nascentes puras.</div>
+          <div class="diplomacy-badge">Pacto: Energia Limpa & Aqueduto</div>
+        </div>
+
+        <div class="faction-item varzea" style="border-left-color: #2A9D8F;">
+          <div class="faction-name">
+            <span style="color: #2A9D8F;">Polo da Várzea (Leste)</span>
+            <span id="varzea-harmony">96%</span>
+          </div>
+          <div class="faction-desc">Feira cultural, futevôlei e futebol de várzea.</div>
+          <div class="diplomacy-badge">Pacto: Grande Feira Livre Continental</div>
+        </div>
+      </div>
+
+      <!-- Right: Player Interventions & Cameras -->
+      <div class="action-deck interactive">
+        <button id="act-puxadinho" class="action-btn">
+          <span class="btn-icon-lg">🏗️</span>
+          <div class="btn-text-block">
+            <div>Estimular Puxadinho</div>
+            <div class="btn-sub">Subsidia ampliação orgânica de laje</div>
+          </div>
+        </button>
+
+        <button id="act-samba" class="action-btn">
+          <span class="btn-icon-lg">🥁</span>
+          <div class="btn-text-block">
+            <div>Festa da Roda de Samba</div>
+            <div class="btn-sub">Eleva harmonia social e diplomacia</div>
+          </div>
+        </button>
+
+        <button id="act-water" class="action-btn">
+          <span class="btn-icon-lg">💧</span>
+          <div class="btn-text-block">
+            <div>Rede de Caixas d'Água</div>
+            <div class="btn-sub">Abastece todas as vilas do continente</div>
+          </div>
+        </button>
+
+        <button id="act-solar" class="action-btn">
+          <span class="btn-icon-lg">☀️</span>
+          <div class="btn-text-block">
+            <div>Postes com Painéis Solares</div>
+            <div class="btn-sub">Ilumina as praças e avenidas</div>
+          </div>
+        </button>
+
+        <button id="act-frontier" class="action-btn">
+          <span class="btn-icon-lg">⛰️</span>
+          <div class="btn-text-block">
+            <div>Desbravar Cinturão & Cume</div>
+            <div class="btn-sub">Abre socalcos e atrai vida ao alto</div>
+          </div>
+        </button>
+
+        <!-- Cinematic Cameras & Drone Mode -->
+        <div class="camera-bar-wrapper">
+          <div class="camera-bar">
+            <button id="cam-pan" class="cam-btn active" title="Grande Panorâmica do Continente">Panorâmica</button>
+            <button id="cam-prainha" class="cam-btn" title="Porto & Prainha (Oeste)">Porto</button>
+            <button id="cam-morro" class="cam-btn" title="Morro do Sol (Centro)">Morro</button>
+            <button id="cam-serra" class="cam-btn" title="Alto da Serra (Norte)">Serra</button>
+            <button id="cam-cume" class="cam-btn" title="Fenda do Cume & Encostas Vivas">Cume</button>
+            <button id="cam-varzea" class="cam-btn" title="Polo da Várzea (Leste)">Várzea</button>
+          </div>
+          <button id="cam-cinema-toggle" class="cinema-toggle-btn"
+            title="Ativar/Desativar Câmera Cinematográfica Contemplativa (Atalho: Tecla C)">
+            <span class="cinema-icon">🎬</span>
+            <span class="cinema-label">Câmera Cinema: <strong id="cinema-status">Desligada</strong></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Inspector Card (Opens on click) -->
+    <div id="inspector-card" class="inspector-card interactive">
+      <button id="inspector-close" class="inspector-close">&times;</button>
+      <div id="inspector-content">
+        <!-- Populated dynamically via JS -->
+      </div>
+    </div>
+
+    <!-- Bottom Bar: Live Autonomous Event News Ticker -->
+    <footer class="bottom-bar interactive">
+      <div class="news-ticker">
+        <span class="ticker-label">📻 Rádio Comunitária</span>
+        <span id="ticker-text" class="ticker-text">
+          O morro acorda em harmonia. Vento favorável para as pipas na colina.
+        </span>
+      </div>
+    </footer>
+
+    <!-- Confirmation Modal: Novo Mundo -->
+    <div id="modal-new-world" class="modal-backdrop interactive" style="display: none;">
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3>🔄 Iniciar Novo Mundo?</h3>
+        </div>
+        <p class="modal-desc">
+          Deseja zerar a simulação e começar uma nova história? O mapa retornará às 4 comunidades pioneiras originais (8
+          casas humildes) e começará a se expandir organicamente do zero.
+        </p>
+        <div class="modal-actions">
+          <button id="modal-confirm-reset" class="btn-modal btn-danger">Sim, Novo Mundo</button>
+          <button id="modal-cancel-reset" class="btn-modal btn-cancel">Cancelar</button>
+        </div>
+      </div>
+      <!-- Audio Mixer Modal (🎚️ Mesa de Som & Volumes) -->
+      <div id="modal-audio-mixer" class="modal-backdrop interactive" style="display: none;">
+        <div class="modal-box audio-mixer-box">
+          <div class="modal-header">
+            <div class="mixer-title-block">
+              <span class="mixer-icon">🎚️</span>
+              <div>
+                <h3 style="margin: 0; font-size: 1.15rem; color: #FFFFFF;">Mixer de Som do Morro</h3>
+                <p class="modal-subtitle"
+                  style="margin: 0.15rem 0 0; font-size: 0.75rem; color: var(--color-text-dim);">Ajuste os volumes
+                  individuais de cada elemento sonoro</p>
+              </div>
+            </div>
+            <button id="audio-mixer-close" class="inspector-close" title="Fechar">&times;</button>
+          </div>
+
+          <div class="mixer-channels-list">
+            <!-- Channel: Master -->
+            <div class="mixer-channel-row master-row">
+              <div class="channel-info">
+                <span class="channel-icon">🔊</span>
+                <div class="channel-labels">
+                  <span class="channel-name">Volume Geral (Master)</span>
+                  <span class="channel-desc">Controla a saída global de áudio</span>
+                </div>
+              </div>
+              <div class="channel-controls">
+                <input type="range" id="vol-master" min="0" max="100" value="80" class="mixer-slider" />
+                <span id="label-vol-master" class="channel-percent">80%</span>
+              </div>
+            </div>
+
+            <!-- Channel: Music -->
+            <div class="mixer-channel-row">
+              <div class="channel-info">
+                <span class="channel-icon">🎸</span>
+                <div class="channel-labels">
+                  <span class="channel-name">Música (Bossa Nova)</span>
+                  <span class="channel-desc">Acordes acústicos relaxantes de violão</span>
+                </div>
+              </div>
+              <div class="channel-controls">
+                <input type="range" id="vol-music" min="0" max="100" value="65" class="mixer-slider" />
+                <span id="label-vol-music" class="channel-percent">65%</span>
+              </div>
+            </div>
+
+            <!-- Channel: Construction -->
+            <div class="mixer-channel-row">
+              <div class="channel-info">
+                <span class="channel-icon">🏗️</span>
+                <div class="channel-labels">
+                  <span class="channel-name">Construções & Obras</span>
+                  <span class="channel-desc">Martelos, picaretas, alvenaria e lajes</span>
+                </div>
+              </div>
+              <div class="channel-controls">
+                <input type="range" id="vol-construction" min="0" max="100" value="45" class="mixer-slider" />
+                <span id="label-vol-construction" class="channel-percent">45%</span>
+              </div>
+            </div>
+
+            <!-- Channel: Soccer Field -->
+            <div class="mixer-channel-row">
+              <div class="channel-info">
+                <span class="channel-icon">⚽</span>
+                <div class="channel-labels">
+                  <span class="channel-name">Campinho & Pelada</span>
+                  <span class="channel-desc">Chutes na terra batida, apitos e torcida</span>
+                </div>
+              </div>
+              <div class="channel-controls">
+                <input type="range" id="vol-soccer" min="0" max="100" value="50" class="mixer-slider" />
+                <span id="label-vol-soccer" class="channel-percent">50%</span>
+              </div>
+            </div>
+
+            <!-- Channel: Ocean Breeze -->
+            <div class="mixer-channel-row">
+              <div class="channel-info">
+                <span class="channel-icon">🌊</span>
+                <div class="channel-labels">
+                  <span class="channel-name">Brisa do Mar & Ondas</span>
+                  <span class="channel-desc">Arrebentação na praia e ventos da costa</span>
+                </div>
+              </div>
+              <div class="channel-controls">
+                <input type="range" id="vol-sea" min="0" max="100" value="45" class="mixer-slider" />
+                <span id="label-vol-sea" class="channel-percent">45%</span>
+              </div>
+            </div>
+
+            <!-- Channel: General SFX -->
+            <div class="mixer-channel-row">
+              <div class="channel-info">
+                <span class="channel-icon">🔔</span>
+                <div class="channel-labels">
+                  <span class="channel-name">Efeitos Gerais (SFX)</span>
+                  <span class="channel-desc">Carretos de madeira e sinos de entrega</span>
+                </div>
+              </div>
+              <div class="channel-controls">
+                <input type="range" id="vol-sfx" min="0" max="100" value="55" class="mixer-slider" />
+                <span id="label-vol-sfx" class="channel-percent">55%</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mixer-footer">
+            <button id="btn-mixer-reset" class="btn-icon" title="Restaurar volumes balanceados">
+              <span>🔄</span> <span>Restaurar Padrão</span>
+            </button>
+            <button id="btn-mixer-close" class="action-btn"
+              style="width: auto; padding: 0.55rem 1.4rem; justify-content: center; background: var(--color-primary);">
+              <span style="color: #FFFFFF; font-weight: 700;">Concluído</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main JavaScript Entrypoint -->
+    <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
+</div>
+</div>
+</div>
+
+<!-- Main JavaScript Entrypoint -->
+<script type="module" src="/src/main.js"></script>
+</body>
+
+</html>

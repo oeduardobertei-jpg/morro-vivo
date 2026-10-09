@@ -28,7 +28,7 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.05;
 container.appendChild(renderer.domElement);
@@ -611,12 +611,13 @@ window.addEventListener('resize', () => {
 });
 
 // Main Animation & Render Loop
-const clock = new THREE.Clock();
+const timer = new THREE.Timer();
 
 function animate() {
   requestAnimationFrame(animate);
 
-  const rawDelta = Math.min(clock.getDelta(), 0.1);
+  timer.update();
+  const rawDelta = Math.min(timer.getDelta(), 0.1);
   const simSpeed = simulation.speed || 1;
   const gameDelta = rawDelta * simSpeed;
 

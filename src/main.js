@@ -9,6 +9,10 @@ import { SimulationEngine } from './simulation/Simulation.js';
 import { AmbientSoundtrack } from './audio/Soundtrack.js';
 import { SaveSystem } from './simulation/SaveSystem.js';
 import { CinematicCamera } from './camera/CinematicCamera.js';
+import { PerfMonitor } from './debug/PerfMonitor.js';
+import { ContributionCuller } from './render/ContributionCuller.js';
+import { AdaptiveQuality } from './render/AdaptiveQuality.js';
+import { StaticBatcher } from './render/StaticBatcher.js';
 
 // Setup Three.js WebGL Scene
 const container = document.getElementById('canvas-container');
@@ -607,11 +611,24 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  quality.apply();
 });
 
 // Main Animation & Render Loop
 const timer = new THREE.Timer();
+const perf = new PerfMonitor(renderer);
+const urlParams = new URLSearchParams(location.search);
+const culler = new ContributionCuller(scene, camera, renderer, { enabled: !urlParams.has('nocull') });
+const quality = new AdaptiveQuality(renderer, { enabled: !urlParams.has('noadapt') });
+const batcher = new StaticBatcher(scene, {
+  enabled: !urlParams.has('nobatch'),
+  // Casas e moradores são clicáveis e mudam com frequência: ficam fora do agrupamento
+  getExcludedRoots: () => [
+    ...npcs.npcs.map((n) => n.group),
+    ...architecture.houses.map((h) => h.meshGroup)
+  ].filter(Boolean)
+});
+perf.extra = () => `Lotes ${batcher.stats.merged} meshes em ${batcher.stats.chunks} (${batcher.stats.state})\nDinâmicas ${batcher.stats.dynamic}\nCulling ${culler.stats.culledMeshes}/${culler.stats.totalMeshes} meshes\nResolução x${quality.ratio}`;
 
 function animate() {
   requestAnimationFrame(animate);
@@ -636,17 +653,21 @@ function animate() {
     console.warn('Environment update error:', envErr);
   }
 
-  try {
-    architecture.update(gameDelta);
-  } catch (archErr) {
-    console.warn('Architecture update error:', archErr);
-  }
+  perf.measure('arch', () => {
+    try {
+      architecture.update(gameDelta);
+    } catch (archErr) {
+      console.warn('Architecture update error:', archErr);
+    }
+  });
 
-  try {
-    npcs.update(gameDelta);
-  } catch (npcErr) {
-    console.warn('NPCs update error:', npcErr);
-  }
+  perf.measure('npcs', () => {
+    try {
+      npcs.update(gameDelta);
+    } catch (npcErr) {
+      console.warn('NPCs update error:', npcErr);
+    }
+  });
 
   try {
     simulation.update(rawDelta);
@@ -660,8 +681,15 @@ function animate() {
     }
   } catch (audioErr) {}
 
-  renderer.render(scene, camera);
+  perf.measure('batch', () => batcher.update(rawDelta));
+  perf.measure('cull', () => culler.update(rawDelta));
+  perf.measure('render', () => renderer.render(scene, camera));
+  quality.update(rawDelta);
+  perf.endFrame(rawDelta);
 }
+
+// Acesso para depuração e testes automatizados
+window.__morro = { renderer, scene, camera, controls, simulation, npcs, architecture, perf, culler, quality, batcher };
 
 // Initial simulation notification
 simulation.notifyUpdate();

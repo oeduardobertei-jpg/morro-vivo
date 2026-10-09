@@ -202,6 +202,56 @@ export class Terrain {
       elevation = elevation * t + getNaturalElevation(-95, 0) * (1 - t);
     }
 
+    // K. Terraço Industrial do Parque Solar & Reservatório at (x: -18, z: -72)
+    // Nivelamento do relevo da serra para assentamento da usina (elimina 100% de grama sobre painéis)
+    const dxSolar = Math.abs(x - (-18));
+    const dzSolar = Math.abs(z - (-72));
+    if (dxSolar < 11.5 && dzSolar < 9.0) {
+      const tX = Math.max(0, Math.min(1, (dxSolar - 8.5) / 3.0));
+      const tZ = Math.max(0, Math.min(1, (dzSolar - 6.2) / 2.8));
+      const blend = smoothBlend(Math.max(tX, tZ));
+      const targetSolarY = getNaturalElevation(-18, -72) - 0.35;
+      elevation = elevation * blend + targetSolarY * (1 - blend);
+    }
+
+    // L. Mirante do Poente & Terreiro de Capoeira at (x: -110, z: -15)
+    const angleCapoeira = Math.atan2(z - (-15), x - (-110));
+    const dCapoeira = Math.hypot(x - (-110), z - (-15)) + Math.sin(angleCapoeira * 5) * 1.0;
+    if (dCapoeira < 9.0) {
+      const t = smoothBlend(Math.max(0, Math.min(1, (dCapoeira - 6.0) / 3.0)));
+      elevation = elevation * t + getNaturalElevation(-110, -15) * (1 - t);
+    }
+
+    // M. Horta Comunitária em Socalcos da Encosta Oeste at (x: -92, z: -25)
+    const angleHortaW = Math.atan2(z - (-25), x - (-92));
+    const dHortaW = Math.hypot(x - (-92), z - (-25)) + Math.sin(angleHortaW * 4) * 0.8;
+    if (dHortaW < 9.5) {
+      const t = smoothBlend(Math.max(0, Math.min(1, (dHortaW - 6.5) / 3.0)));
+      elevation = elevation * t + getNaturalElevation(-92, -25) * (1 - t);
+    }
+
+    // N. Academia ao Ar Livre da Colina at (x: 112, z: -12)
+    const angleAcademia = Math.atan2(z - (-12), x - 112);
+    const dAcademia = Math.hypot(x - 112, z - (-12)) + Math.sin(angleAcademia * 4) * 0.8;
+    if (dAcademia < 9.5) {
+      const t = smoothBlend(Math.max(0, Math.min(1, (dAcademia - 6.5) / 3.0)));
+      elevation = elevation * t + getNaturalElevation(112, -12) * (1 - t);
+    }
+
+    // O. Ponto de Mototáxi do Levante at (x: 92, z: 14)
+    const dMoto = Math.hypot(x - 92, z - 14);
+    if (dMoto < 7.0) {
+      const t = smoothBlend(Math.max(0, Math.min(1, (dMoto - 4.5) / 2.5)));
+      elevation = elevation * t + getNaturalElevation(92, 14) * (1 - t);
+    }
+
+    // P. Torre de Rádio & Telecomunicações do Cume at (x: 0, z: -104)
+    const dRadio = Math.hypot(x, z - (-104));
+    if (dRadio < 7.5) {
+      const t = smoothBlend(Math.max(0, Math.min(1, (dRadio - 4.5) / 3.0)));
+      elevation = elevation * t + getNaturalElevation(0, -104) * (1 - t);
+    }
+
     // Smooth sandy beach slope into the water:
     // Spans from calçadão edge (z ~ 16, y ~ 0.82m) down to the water's edge (shoreZ ~ 74, y ~ 0.0m)
     if (z > 16 && z <= shoreZ) {
@@ -420,18 +470,17 @@ export class Terrain {
       });
     });
 
-    // 2. DISTRITO CENTRAL (Morro do Sol & Encostas Centrais - Plenamente Adensado!)
+    // 2. DISTRITO CENTRAL (Morro do Sol & Encostas Centrais - Plenamente Adensado e Respeitando o Terreiro do Samba!)
     const solCoords = [
-      // Humble Founding Starters (flanking Samba Plaza)
-      { x: -9, z: -2, isStarter: true },
-      { x: 8,  z: -2, isStarter: true },
-      { x: -10, z: 4,  isStarter: false },
-      { x: 10, z: 4,  isStarter: false },
+      // Humble Founding Starters (posicionados nas encostas a distância segura de 18m+ da Praça do Samba)
+      { x: -20, z: -2, isStarter: true },
+      { x: 20,  z: -2, isStarter: true },
+      { x: -22, z: 6,  isStarter: false },
+      { x: 22, z: 6,   isStarter: false },
       { x: -15, z: -18, isStarter: false },
       { x: 15, z: -18, isStarter: false },
-      { x: -14, z: -2, isStarter: false },
-      { x: 14, z: -2, isStarter: false },
-      { x: 0,  z: -12, isStarter: false },
+      { x: -24, z: -4, isStarter: false },
+      { x: 16, z: -8,  isStarter: false },
       // Flank Terraces connecting outwards:
       { x: -28, z: -18, isStarter: false },
       { x: 28, z: -18, isStarter: false },
@@ -445,11 +494,10 @@ export class Terrain {
       // Expansion Ring 2 (Reaching West toward Prainha and East toward Várzea)
       { x: -16, z: 4,  isStarter: false }, { x: 16, z: 4,  isStarter: false },
       { x: -18, z: 11, isStarter: false }, { x: 18, z: 11, isStarter: false },
-      { x: -12, z: -8, isStarter: false }, { x: 12, z: -8, isStarter: false },
       { x: -20, z: -16, isStarter: false }, { x: 20, z: -16, isStarter: false },
 
       // Expansion Ring 3 (Terraced upper slopes connecting to Serra)
-      { x: -8, z: -16, isStarter: false }, { x: 8,  z: -16, isStarter: false },
+      { x: -8, z: -20, isStarter: false }, { x: 8,  z: -16, isStarter: false },
       { x: -12, z: -20, isStarter: false }, { x: 12, z: -20, isStarter: false },
       { x: -5, z: -22, isStarter: false }, { x: 5,  z: -22, isStarter: false },
       { x: -8, z: -25, isStarter: false }, { x: 8,  z: -25, isStarter: false },
@@ -477,7 +525,7 @@ export class Terrain {
       { x: 14, z: -58,  isStarter: false }
     ];
 
-    solCoords.forEach((pt, i) => {
+    solCoords.filter(pt => Math.hypot(pt.x - (-2), pt.z - (-4)) >= 15.0).forEach((pt, i) => {
       const y = this.getElevation(pt.x, pt.z);
       this.plateaus.push({
         id: `sol_${i + 1}`,
@@ -714,7 +762,7 @@ export class Terrain {
       { x: 52,  z: -98,  s: 3.6, rot: 0.7 },
 
       // B. Falésias e Crag Ocidental (Borda Oeste)
-      { x: -108, z: -20, s: 2.2, rot: 0.3 },
+      { x: -122, z: -25, s: 2.2, rot: 0.3 },
       { x: -106, z: -45, s: 2.6, rot: 1.5 },
       { x: -104, z: -68, s: 2.8, rot: 2.0 },
       { x: -92,  z: -88, s: 2.5, rot: 0.7 },
@@ -722,7 +770,7 @@ export class Terrain {
       { x: -68,  z: -30, s: 1.8, rot: 0.9 },
 
       // C. Falésias e Crag Oriental (Borda Leste)
-      { x: 108, z: -20, s: 2.2, rot: 0.3 },
+      { x: 124, z: -25, s: 2.2, rot: 0.3 },
       { x: 106, z: -45, s: 2.6, rot: 1.5 },
       { x: 104, z: -68, s: 2.8, rot: 2.0 },
       { x: 92,  z: -88, s: 2.5, rot: 0.7 },
@@ -795,11 +843,17 @@ export class Terrain {
 
     let bInstIdx = 0;
     bananaCoords.forEach((bc, idx) => {
-      // EVITAR SOBREPOSIÇÃO EM MONUMENTOS
+      // EVITAR SOBREPOSIÇÃO EM MONUMENTOS E ESTRUTURAS ESPECIAIS (1.2.2)
       const inMarket = (Math.abs(bc.x - 75) < 10 && Math.abs(bc.z - 4) < 8);
       const inOlaria = (Math.abs(bc.x - (-22)) < 8 && Math.abs(bc.z - (-14)) < 6);
       const inAgro = (Math.abs(bc.x - 82) < 9 && Math.abs(bc.z - (-8)) < 6);
-      if (inMarket || inOlaria || inAgro) return;
+      const inSolar = (Math.abs(bc.x - (-18)) < 12 && Math.abs(bc.z - (-72)) < 10);
+      const inCapoeira = (Math.hypot(bc.x - (-110), bc.z - (-15)) < 10);
+      const inHorta = (Math.hypot(bc.x - (-92), bc.z - (-25)) < 10);
+      const inAcademia = (Math.hypot(bc.x - 112, bc.z - (-12)) < 10);
+      const inMoto = (Math.hypot(bc.x - 92, bc.z - 14) < 8);
+      const inRadio = (Math.hypot(bc.x, bc.z - (-104)) < 8);
+      if (inMarket || inOlaria || inAgro || inSolar || inCapoeira || inHorta || inAcademia || inMoto || inRadio) return;
 
       const y = this.getElevation(bc.x, bc.z);
       for (let frond = 0; frond < 3; frond++) {
@@ -819,7 +873,7 @@ export class Terrain {
     const shrubCoords = [
       // Restinga (Oeste / Litoral)
       { x: -100, z: 15 }, { x: -86, z: 12 }, { x: -72, z: 14 }, { x: -56, z: 15 },
-      { x: -94,  z: -2 }, { x: -84, z: -8 }, { x: -66, z: -4 }, { x: -104, z: -12 },
+      { x: -94,  z: -2 }, { x: -84, z: -8 }, { x: -66, z: -4 }, { x: -120, z: -10 },
       // Altitude / Cume
       { x: -8,  z: -96 }, { x: 8,   z: -96 }, { x: -28, z: -82 }, { x: 28,  z: -82 },
       { x: -40, z: -90 }, { x: 40,  z: -90 }, { x: -50, z: -84 }, { x: 50,  z: -84 },
@@ -838,14 +892,24 @@ export class Terrain {
     const shrubMesh = new THREE.InstancedMesh(shrubGeo, shrubMat, shrubCoords.length);
     shrubMesh.castShadow = true;
 
+    let sInstIdx = 0;
     shrubCoords.forEach((sc, idx) => {
+      const inSolar = (Math.abs(sc.x - (-18)) < 12 && Math.abs(sc.z - (-72)) < 10);
+      const inCapoeira = (Math.hypot(sc.x - (-110), sc.z - (-15)) < 10);
+      const inHorta = (Math.hypot(sc.x - (-92), sc.z - (-25)) < 10);
+      const inAcademia = (Math.hypot(sc.x - 112, sc.z - (-12)) < 10);
+      const inMoto = (Math.hypot(sc.x - 92, sc.z - 14) < 8);
+      const inRadio = (Math.hypot(sc.x, sc.z - (-104)) < 8);
+      if (inSolar || inCapoeira || inHorta || inAcademia || inMoto || inRadio) return;
+
       const y = this.getElevation(sc.x, sc.z);
       dummy.position.set(sc.x, y + 0.4, sc.z);
       dummy.rotation.set(idx * 0.5, idx * 0.8, 0);
       dummy.scale.set(1.0 + (idx % 3) * 0.25, 0.75 + (idx % 2) * 0.2, 1.0 + (idx % 3) * 0.25);
       dummy.updateMatrix();
-      shrubMesh.setMatrixAt(idx, dummy.matrix);
+      shrubMesh.setMatrixAt(sInstIdx++, dummy.matrix);
     });
+    shrubMesh.count = sInstIdx;
     shrubMesh.instanceMatrix.needsUpdate = true;
     this.group.add(shrubMesh);
   }

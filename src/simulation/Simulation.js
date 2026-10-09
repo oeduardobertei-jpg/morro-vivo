@@ -18,7 +18,10 @@ export class SimulationEngine {
     // EXPLOSÃO DEMOGRÁFICA INSTANTÂNEA: Spawna a população inteira no mesmo frame ao carregar o jogo
     if (this.npcs && this.npcs.npcs) {
       const expectedCivilians = Math.floor(this.globalMetrics.population / 10);
-      const currentCivilians = this.npcs.npcs.length - 4; // Subtrai os 4 barraqueiros fixos
+      const currentCivilians = this.npcs.npcs.filter(n => 
+        !n.isBarraqueiro && !n.isScenicMirante && !n.isFisherman && !n.isAthlete && !n.isMateiro &&
+        !n.isCapoeira && !n.isHorta && !n.isMototaxi && !n.isSurfer && !n.isCalistenia
+      ).length;
       if (currentCivilians < expectedCivilians) {
         const spawnCount = expectedCivilians - Math.max(0, currentCivilians);
         for (let i = 0; i < spawnCount; i++) {
@@ -172,8 +175,11 @@ export class SimulationEngine {
     if (this.npcs && this.npcs.npcs) {
       // barraqueiros (4 fixos) + civis (resto)
       const expectedCivilians = Math.floor(this.globalMetrics.population / 10);
-      const currentCivilians = this.npcs.npcs.length - 4; // Subtrai os 4 barraqueiros
-      if (currentCivilians >= 0 && currentCivilians < expectedCivilians) {
+      const currentCivilians = this.npcs.npcs.filter(n => 
+        !n.isBarraqueiro && !n.isScenicMirante && !n.isFisherman && !n.isAthlete && !n.isMateiro &&
+        !n.isCapoeira && !n.isHorta && !n.isMototaxi && !n.isSurfer && !n.isCalistenia
+      ).length;
+      if (currentCivilians < expectedCivilians) {
         this.npcs.spawnNewCivilian();
       }
     }
@@ -184,7 +190,11 @@ export class SimulationEngine {
     });
 
     // 2. AUTONOMOUS ORGANIC TERRITORIAL EXPANSION:
-    // Villages start tiny and steadily recruit citizen builders to expand outward along roads!
+    // Horário de Obras: novas construções e puxadinhos são despachados apenas durante o Dia e Pôr do Sol
+    const timeInfo = this.arch && this.arch.env ? this.arch.env.getTimeOfDay() : 'day';
+    const phase = (typeof timeInfo === 'string') ? timeInfo : (timeInfo.phase || 'day');
+    const isWorkHours = (phase === 'day' || phase === 'sunset');
+
     const factionsList = ['prainha', 'sol', 'serra', 'varzea'];
     const frontierFactions = ['prainha', 'serra', 'varzea'];
 
@@ -192,7 +202,7 @@ export class SimulationEngine {
     const maxConstructions = Math.floor(pop / 40) + 1;
     const spawnRate = 0.05 + Math.min(0.20, pop / 1000);
 
-    if (Math.random() < spawnRate && this.arch.activeConstructions.length < maxConstructions) {
+    if (isWorkHours && Math.random() < spawnRate && this.arch.activeConstructions.length < maxConstructions) {
       // 85% bias toward frontier factions to actively colonize West, East, and Ridge red zones
       const targetPool = Math.random() < 0.85 ? frontierFactions : factionsList;
       const candidateFactions = targetPool.filter(f => this.factions[f].wealth >= 20);
@@ -216,9 +226,9 @@ export class SimulationEngine {
     }
 
     // 3. VERTICAL EXPANSION: PUXADINHOS & LAJES
-    // Older houses with wealth >= 35 recruit builders for a new floor/laje
+    // Older houses with wealth >= 35 recruit builders for a new floor/laje (somente durante o dia/tarde)
     const eligibleHouses = this.arch.houses.filter(h => h.level < 3 && h.wealth >= 35 && !h.isUpgrading);
-    if (eligibleHouses.length > 0 && Math.random() < 0.45 && this.arch.activeUpgrades.length < 3) {
+    if (isWorkHours && eligibleHouses.length > 0 && Math.random() < 0.45 && this.arch.activeUpgrades.length < 3) {
       const luckyHouse = eligibleHouses[Math.floor(Math.random() * eligibleHouses.length)];
       const faction = this.factions[luckyHouse.faction] || { name: 'Comunidade' };
 

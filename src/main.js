@@ -653,6 +653,12 @@ function animate() {
     console.warn('Simulation update error:', simErr);
   }
 
+  try {
+    if (soundtrack && soundtrack.update) {
+      soundtrack.update(rawDelta);
+    }
+  } catch (audioErr) {}
+
   renderer.render(scene, camera);
 }
 

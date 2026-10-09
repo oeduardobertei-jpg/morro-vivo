@@ -24,8 +24,8 @@ export class AmbientSoundtrack {
       master: 80,
       music: 65,
       construction: 45,
-      soccer: 50,
-      sea: 45,
+      soccer: 18, // Baixado completamente para nunca incomodar ou irritar
+      sea: 65,    // Volume encorpado e refrescante da maresia
       sfx: 55
     };
     this.loadVolumes();
@@ -99,6 +99,9 @@ export class AmbientSoundtrack {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
     }
+    if (!this.oceanBreezeActive && this.ctx && this.ctx.state === 'running') {
+      this.startOceanBreeze();
+    }
   }
 
   // VOLUME MIXING CONTROLS
@@ -131,7 +134,7 @@ export class AmbientSoundtrack {
         break;
       case 'sea':
         if (this.seaGainNode) {
-          this.seaGainNode.gain.setValueAtTime(fraction * 0.35, t);
+          this.seaGainNode.gain.setValueAtTime(fraction * 0.78, t);
         }
         break;
       case 'sfx':
@@ -146,14 +149,19 @@ export class AmbientSoundtrack {
         break;
       case 'soccer':
         if (this.soccerGainNode) {
-          this.soccerGainNode.gain.setValueAtTime(fraction * 0.60, t);
+          this.soccerGainNode.gain.setValueAtTime(fraction * 0.15, t); // Reduzido drasticamente
+        }
+        break;
+      case 'generalSfx':
+        if (this.generalSfxGainNode) {
+          this.generalSfxGainNode.gain.setValueAtTime(fraction * 0.55, t);
         }
         break;
     }
   }
 
   applyAllVolumes() {
-    ['master', 'music', 'sea', 'sfx', 'construction', 'soccer'].forEach(ch => this.applyVolume(ch));
+    ['master', 'music', 'sea', 'sfx', 'construction', 'soccer', 'generalSfx'].forEach(ch => this.applyVolume(ch));
   }
 
   saveVolumes() {
@@ -210,7 +218,7 @@ export class AmbientSoundtrack {
   }
 
   startOceanBreeze() {
-    if (!this.ctx) return;
+    if (!this.ctx || this.windNode) return;
     // Pink noise buffer for gentle ocean surf
     const bufferSize = this.ctx.sampleRate * 2;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -223,7 +231,7 @@ export class AmbientSoundtrack {
       b2 = 0.96900 * b2 + white * 0.1538520;
       b3 = 0.86650 * b3 + white * 0.3104856;
       b4 = 0.55000 * b4 + white * 0.5329522;
-      data[i] = (b0 + b1 + b2 + b3 + b4) * 0.035;
+      data[i] = (b0 + b1 + b2 + b3 + b4) * 0.024;
     }
 
     const noise = this.ctx.createBufferSource();
@@ -233,18 +241,20 @@ export class AmbientSoundtrack {
     // Filter to simulate low, gentle coastal swells
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(320, this.ctx.currentTime);
+    filter.frequency.setValueAtTime(340, this.ctx.currentTime);
+    this.breezeFilter = filter;
 
     // LFO for wave swelling
     const lfo = this.ctx.createOscillator();
     lfo.frequency.setValueAtTime(0.12, this.ctx.currentTime);
     const lfoGain = this.ctx.createGain();
-    lfoGain.gain.setValueAtTime(140, this.ctx.currentTime);
+    lfoGain.gain.setValueAtTime(130, this.ctx.currentTime);
     lfo.connect(lfoGain);
     lfoGain.connect(filter.frequency);
 
     const breezeGain = this.ctx.createGain();
-    breezeGain.gain.setValueAtTime(0.30, this.ctx.currentTime);
+    breezeGain.gain.setValueAtTime(0.06, this.ctx.currentTime);
+    this.breezeGainNode = breezeGain;
 
     noise.connect(filter);
     filter.connect(breezeGain);
@@ -253,6 +263,7 @@ export class AmbientSoundtrack {
     noise.start();
     lfo.start();
     this.windNode = noise;
+    this.oceanBreezeActive = true;
   }
 
   playNextChord() {
@@ -294,57 +305,89 @@ export class AmbientSoundtrack {
     this.controls = controls;
   }
 
-  getSpatialInfo(pos, maxDist = 38.0, minDist = 4.0) {
+  update(delta) {
+    if (!this.ctx || !this.breezeGainNode) return;
+    // Ambient sea breeze volume response to focus target & altitude (maresia gostosa, viva e responsiva ao zoom)
+    let targetVol = 0.16; // Brisa suave constante em todo o morro
+    if (this.controls && this.controls.target) {
+      const z = this.controls.target.z;
+      if (z > 40) {
+        targetVol = 0.52; // Diretamente nas areias e na arrebentação da praia
+      } else if (z > 15) {
+        targetVol = 0.34; // Bairro litorâneo e calçadão
+      } else {
+        targetVol = 0.16; // Encostas e cumeada
+      }
+    }
+    if (this.camera) {
+      // Zoom proximity factor: conforme dá zoom / se aproxima do terreno, a maresia encorpa significativamente!
+      const camY = Math.max(10, this.camera.position.y);
+      // Zoom in (camY ~ 12-25m) => até 2.40x; Zoom out (camY ~ 75-90m) => 0.70x
+      const zoomFactor = Math.max(0.70, Math.min(2.40, 52.0 / camY));
+      targetVol *= zoomFactor;
+    }
+    this.breezeGainNode.gain.setTargetAtTime(targetVol, this.ctx.currentTime, 0.4);
+
+    // Ajuste dinâmico de brilho das ondas conforme aproximação da praia
+    if (this.breezeFilter) {
+      let targetFreq = 340;
+      if (this.controls && this.controls.target && this.controls.target.z > 20) {
+        const beachProximity = Math.min(1.0, (this.controls.target.z - 20) / 35.0);
+        targetFreq = 340 + beachProximity * 190; // Até 530Hz para escutar a espuma e o arrebentar fresco das ondas
+      }
+      this.breezeFilter.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.5);
+    }
+  }
+
+  getSpatialInfo(pos, maxDist = 70.0, minDist = 6.0) {
     if (!pos || !this.camera) return { gain: 0, pan: 0, filterFreq: 20000 };
     const px = pos.x !== undefined ? pos.x : 0;
     const py = pos.y !== undefined ? pos.y : 0;
     const pz = pos.z !== undefined ? pos.z : 0;
 
-    // 1. Distância euclidiana até a lente da câmera no mundo 3D
-    const dx = this.camera.position.x - px;
-    const dy = this.camera.position.y - py;
-    const dz = this.camera.position.z - pz;
-    const camDist = Math.hypot(dx, dy, dz);
-
-    // 2. Distância até o ponto focal de atenção do jogador no solo (controls.target)
-    let focusDist = camDist;
+    // 1. Distância ao Ponto Focal do Jogador (controls.target)
+    let focusDist = 0;
     if (this.controls && this.controls.target) {
       const tx = this.controls.target.x - px;
       const ty = this.controls.target.y - py;
       const tz = this.controls.target.z - pz;
       focusDist = Math.hypot(tx, ty, tz);
+    } else {
+      const dx = this.camera.position.x - px;
+      const dy = this.camera.position.y - py;
+      const dz = this.camera.position.z - pz;
+      focusDist = Math.hypot(dx, dy, dz);
     }
 
-    // Distância perceptual efetiva: dá 85% do peso ao ponto de foco do jogador,
-    // garantindo que focar em um quiosque ou na praça dê destaque ao som,
-    // mas sem vazar quando a câmera estiver longe ou voltada para outro ponto
-    const effectiveDist = Math.min(camDist, focusDist * 0.85 + camDist * 0.25);
+    // Corte além do raio focal máximo
+    if (focusDist >= maxDist) return { gain: 0, pan: 0, filterFreq: 1200 };
 
-    // Corte estrito de silêncio absoluto além do raio máximo
-    if (effectiveDist >= maxDist) return { gain: 0, pan: 0, filterFreq: 1200 };
-
+    // 2. Curva Smoothstep Cúbica Natural em relação ao foco
     let gain = 1.0;
-    if (effectiveDist > minDist) {
-      // Curva Smoothstep Cúbica (Decaimento Físico Natural):
-      // norm vai de 1.0 (em minDist) até 0.0 (em maxDist)
-      const norm = (maxDist - effectiveDist) / (maxDist - minDist);
+    if (focusDist > minDist) {
+      const norm = (maxDist - focusDist) / (maxDist - minDist);
       gain = norm * norm * (3.0 - 2.0 * norm);
     }
 
-    // Air Absorption: sons mais distantes perdem agudos progressivamente (18kHz -> 2.2kHz)
-    const distRatio = Math.max(0, Math.min(1, effectiveDist / maxDist));
-    const filterFreq = Math.round(18000 - distRatio * 15500);
+    // 3. Atenuação de Altitude/Zoom (visão panorâmica = sem poluição sonora; zoom próximo = imersão rica)
+    const camY = this.camera ? Math.max(12, this.camera.position.y) : 60;
+    const zoomFactor = Math.max(0.24, Math.min(1.0, 45.0 / camY));
+    gain *= zoomFactor;
 
-    // Spatial Stereo Panning
+    // 4. Absorção do Ar
+    const distRatio = Math.max(0, Math.min(1, focusDist / maxDist));
+    const filterFreq = Math.round(18000 - distRatio * 14500);
+
+    // 5. Spatial Stereo Panning por projeção NDC de tela
     let pan = 0;
     try {
       const v = new THREE.Vector3(px, py, pz);
       v.project(this.camera);
-      if (v.z > 1.0) {
-        gain *= 0.45;
-        pan = 0;
+      if (v.z > 1.0 || v.z < -1.0) {
+        pan = v.x < 0 ? -0.5 : 0.5;
+        gain *= 0.35;
       } else {
-        pan = Math.max(-0.75, Math.min(0.75, v.x));
+        pan = Math.max(-0.75, Math.min(0.75, v.x * 0.85));
       }
     } catch (e) {
       pan = 0;
@@ -393,8 +436,8 @@ export class AmbientSoundtrack {
     this.resumeContext();
     if (!this.ctx) return;
 
-    // Raio restrito ao quarteirão da obra (28m máx, 4m min)
-    const spatial = this.getSpatialInfo(pos, 28.0, 4.0);
+    // Raio acústico de obra (80m máx, 5m min)
+    const spatial = this.getSpatialInfo(pos, 80.0, 5.0);
     if (spatial.gain <= 0.01) return;
 
     const t = this.ctx.currentTime;
@@ -459,34 +502,34 @@ export class AmbientSoundtrack {
     }
   }
 
-  // 2. SPATIAL SOCCER BALL KICK (Chute da Pelada de Várzea)
+  // 2. SPATIAL SOCCER BALL KICK (Chute Suave da Pelada de Várzea - Baixado e Intimista)
   playSoccerKick(pos) {
     this.resumeContext();
     if (!this.ctx) return;
 
-    // Raio restrito aos arredores do campo da Várzea (38m máx, 6m min)
-    const spatial = this.getSpatialInfo(pos, 38.0, 6.0);
+    // Raio acústico focado estritamente no campinho (35m máx, 5m min)
+    const spatial = this.getSpatialInfo(pos, 35.0, 5.0);
     if (spatial.gain <= 0.01) return;
 
     const t = this.ctx.currentTime;
-    if (t - this.lastKickTime < 0.15) return;
+    if (t - this.lastKickTime < 0.18) return;
     this.lastKickTime = t;
 
     const gainFactor = spatial.gain;
 
-    // Golpe duplo: impacto macio da chuteira e ressonância da bola
+    // Toque suave e aveludado de bola rolando
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     const filter = this.ctx.createBiquadFilter();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(240, t);
-    osc.frequency.linearRampToValueAtTime(52, t + 0.11);
+    osc.frequency.setValueAtTime(180, t);
+    osc.frequency.linearRampToValueAtTime(45, t + 0.11);
 
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(340, t);
+    filter.frequency.setValueAtTime(260, t);
 
-    const targetVol = gainFactor * 0.32;
+    const targetVol = gainFactor * 0.07; // Volume super baixo e sutil
     gain.gain.setValueAtTime(targetVol, t);
     gain.gain.setTargetAtTime(0.0001, t + 0.03, 0.04);
 
@@ -497,51 +540,51 @@ export class AmbientSoundtrack {
     osc.start(t);
     osc.stop(t + 0.13);
 
-    // Estalo sutil de couro sintético
+    // Estalo sutil atenuado
     const clickOsc = this.ctx.createOscillator();
     const clickGain = this.ctx.createGain();
     clickOsc.type = 'triangle';
-    clickOsc.frequency.setValueAtTime(680, t);
-    clickOsc.frequency.linearRampToValueAtTime(180, t + 0.035);
-    clickGain.gain.setValueAtTime(gainFactor * 0.16, t);
+    clickOsc.frequency.setValueAtTime(480, t);
+    clickOsc.frequency.linearRampToValueAtTime(140, t + 0.03);
+    clickGain.gain.setValueAtTime(gainFactor * 0.03, t);
     clickGain.gain.setTargetAtTime(0.0001, t + 0.01, 0.015);
 
     clickOsc.connect(clickGain);
     this.connectSpatial(clickGain, spatial.pan, 'soccer', spatial.filterFreq);
     clickOsc.start(t);
-    clickOsc.stop(t + 0.05);
+    clickOsc.stop(t + 0.04);
   }
 
-  // 3. SPATIAL GOAL WHISTLE & CROWD CHEER (Golaço no Campinho)
+  // 3. SPATIAL GOAL WHISTLE & CROWD CHEER (Apito Suave e Apenas no Campinho)
   playGoalWhistle(pos) {
     this.resumeContext();
     if (!this.ctx) return;
 
-    // Raio contido no vale leste (50m máx, 8m min)
-    const spatial = this.getSpatialInfo(pos, 50.0, 8.0);
+    // Raio acústico restrito apenas a quem estiver olhando o campinho (28m máx, 4m min - nunca mais audível de longe)
+    const spatial = this.getSpatialInfo(pos, 28.0, 4.0);
     if (spatial.gain <= 0.01) return;
 
     const t = this.ctx.currentTime;
-    if (t - this.lastWhistleTime < 2.5) return;
+    if (t - this.lastWhistleTime < 3.0) return;
     this.lastWhistleTime = t;
 
     const gainFactor = spatial.gain;
 
-    // Apito clássico do juiz
+    // Apito suave e aveludado (frequências médias macias ~950Hz, sem agudos estridentes)
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     const filter = this.ctx.createBiquadFilter();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(2200, t);
-    osc.frequency.setValueAtTime(2600, t + 0.07);
-    osc.frequency.setValueAtTime(2200, t + 0.14);
-    osc.frequency.setValueAtTime(2650, t + 0.21);
+    osc.frequency.setValueAtTime(920, t);
+    osc.frequency.setValueAtTime(1080, t + 0.07);
+    osc.frequency.setValueAtTime(920, t + 0.14);
+    osc.frequency.setValueAtTime(1100, t + 0.21);
 
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(2800, t);
+    filter.frequency.setValueAtTime(1250, t);
 
-    const targetVol = gainFactor * 0.26;
+    const targetVol = gainFactor * 0.04; // Volume ultra baixo e delicado
     gain.gain.setValueAtTime(targetVol, t);
     gain.gain.setTargetAtTime(0.0001, t + 0.24, 0.06);
 
@@ -550,34 +593,34 @@ export class AmbientSoundtrack {
     this.connectSpatial(gain, spatial.pan, 'soccer', spatial.filterFreq);
 
     osc.start(t);
-    osc.stop(t + 0.40);
+    osc.stop(t + 0.38);
 
-    // Celebração da torcida no alambrado
-    const cheerBuffer = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * 1.1), this.ctx.sampleRate);
+    // Celebração discreta no alambrado
+    const cheerBuffer = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * 0.9), this.ctx.sampleRate);
     const cheerData = cheerBuffer.getChannelData(0);
     for (let i = 0; i < cheerData.length; i++) {
-      cheerData[i] = (Math.random() * 2 - 1) * 0.25;
+      cheerData[i] = (Math.random() * 2 - 1) * 0.12;
     }
     const cheerSource = this.ctx.createBufferSource();
     cheerSource.buffer = cheerBuffer;
 
     const cheerFilter = this.ctx.createBiquadFilter();
     cheerFilter.type = 'bandpass';
-    cheerFilter.frequency.setValueAtTime(450, t);
-    cheerFilter.frequency.linearRampToValueAtTime(720, t + 0.35);
-    cheerFilter.frequency.linearRampToValueAtTime(360, t + 1.1);
+    cheerFilter.frequency.setValueAtTime(420, t);
+    cheerFilter.frequency.linearRampToValueAtTime(580, t + 0.30);
+    cheerFilter.frequency.linearRampToValueAtTime(320, t + 0.9);
 
     const cheerGain = this.ctx.createGain();
     cheerGain.gain.setValueAtTime(0.001, t);
-    cheerGain.gain.linearRampToValueAtTime(gainFactor * 0.18, t + 0.25);
-    cheerGain.gain.setTargetAtTime(0.0001, t + 0.40, 0.25);
+    cheerGain.gain.linearRampToValueAtTime(gainFactor * 0.04, t + 0.20);
+    cheerGain.gain.setTargetAtTime(0.0001, t + 0.35, 0.20);
 
     cheerSource.connect(cheerFilter);
     cheerFilter.connect(cheerGain);
     this.connectSpatial(cheerGain, spatial.pan, 'soccer', spatial.filterFreq);
 
     cheerSource.start(t);
-    cheerSource.stop(t + 1.15);
+    cheerSource.stop(t + 0.95);
   }
 
   // 4. SPATIAL CELEBRATION CHIME (Nova Casa / Puxadinho)
@@ -585,8 +628,8 @@ export class AmbientSoundtrack {
     this.resumeContext();
     if (!this.ctx) return;
 
-    // Raio restrito aos arredores do lote (45m máx, 8m min)
-    const spatial = this.getSpatialInfo(pos, 45.0, 8.0);
+    // Raio acústico de celebração de nova laje (85m máx, 6m min)
+    const spatial = this.getSpatialInfo(pos, 85.0, 6.0);
     if (spatial.gain <= 0.01) return;
 
     const t = this.ctx.currentTime;
@@ -626,8 +669,8 @@ export class AmbientSoundtrack {
     this.resumeContext();
     if (!this.ctx) return;
 
-    // Micro-local ao carregador de tijolos (20m máx, 3m min)
-    const spatial = this.getSpatialInfo(pos, 20.0, 3.0);
+    // Raio acústico do carreto de tijolos (65m máx, 5m min)
+    const spatial = this.getSpatialInfo(pos, 65.0, 5.0);
     if (spatial.gain <= 0.01) return;
 
     const t = this.ctx.currentTime;
@@ -660,13 +703,13 @@ export class AmbientSoundtrack {
     this.resumeContext();
     if (!this.ctx) return;
 
-    // Raio estritamente micro-local: mais de 14 metros = SILÊNCIO TOTAL!
-    const spatial = this.getSpatialInfo(pos, 14.0, 2.5);
+    // Raio acústico suave da orla (50m máx, 4m min)
+    const spatial = this.getSpatialInfo(pos, 50.0, 4.0);
     if (spatial.gain <= 0.01) return;
 
     const t = this.ctx.currentTime;
-    // Limitador de frequência: no máximo 1 som a cada 5 segundos por conveniência
-    if (t - this.lastCommerceTime < 5.0) return;
+    // Limitador de frequência suave
+    if (t - this.lastCommerceTime < 1.8) return;
     this.lastCommerceTime = t;
 
     const gainFactor = spatial.gain * 0.18;
@@ -722,19 +765,19 @@ export class AmbientSoundtrack {
   // - Cavaquinho acústico: Progressão harmônica clássica em Ré Maior (D6/9 -> Bm7 -> Em7 -> A7) com palhetada sincopada.
   // - Pandeiro de couro & platinela: Telecoteco clássico carioca (ruído aveludado e suave).
   // - Palmas coletivas: Contratempo comunitário marcando a roda.
-  playSambaRhythm(pos) {
+  playSambaRhythm(pos, isFullRoda = true) {
     try {
       this.resumeContext();
       if (!this.ctx) return;
 
-      // Raio estritamente local à Praça Central (38m máx, 6m min)
-      // Como a praia fica a 47m de distância, o samba é 100% INAUDÍVEL na orla!
-      const spatial = this.getSpatialInfo(pos, 38.0, 6.0);
-      if (spatial.gain <= 0.015) return;
+      // Raio acústico generoso do Terreiro de Samba (135m máx, 10m min)
+      const spatial = this.getSpatialInfo(pos, 135.0, 10.0);
+      if (spatial.gain <= 0.008) return;
 
       const t = this.ctx.currentTime;
-      // Cada compasso duplo dura 2.4s (tempo de 100 BPM no compasso 2/4 clássico)
-      if (this.lastSambaTime && (t - this.lastSambaTime < 2.30)) return;
+      // Cadência: 2.30s para roda completa, 3.60s para dedilhado acústico suave de dia
+      const cadence = isFullRoda ? 2.30 : 3.60;
+      if (this.lastSambaTime && (t - this.lastSambaTime < (cadence - 0.15))) return;
       this.lastSambaTime = t;
 
       const gainFactor = Math.min(1.0, Math.max(0.01, spatial.gain));
@@ -773,7 +816,7 @@ export class AmbientSoundtrack {
 
           filter.frequency.setValueAtTime(140, hitTime);
 
-          const peakGain = Math.max(0.001, gainFactor * 0.30 * vol);
+          const peakGain = Math.max(0.001, gainFactor * 0.42 * vol);
           gain.gain.setValueAtTime(peakGain, hitTime);
           gain.gain.setTargetAtTime(0.0001, hitTime + 0.04, 0.12);
 
@@ -789,7 +832,7 @@ export class AmbientSoundtrack {
 
           filter.frequency.setValueAtTime(110, hitTime);
 
-          const peakGain = Math.max(0.001, gainFactor * 0.15 * vol);
+          const peakGain = Math.max(0.001, gainFactor * 0.22 * vol);
           gain.gain.setValueAtTime(peakGain, hitTime);
           gain.gain.setTargetAtTime(0.0001, hitTime + 0.02, 0.05);
 
@@ -801,13 +844,15 @@ export class AmbientSoundtrack {
         }
       };
 
-      // 1. SURDO DE MARCAÇÃO (2 compassos de 1.2s = 2.4s)
-      playSurdo(t + 0.00, false);       // Compasso 1: Beat 1 mudo
-      playSurdo(t + 0.45, false, 0.6);  // Síncope de resposta
-      playSurdo(t + 0.60, true, 1.0);   // Compasso 1: Beat 2 ABERTO!
-      playSurdo(t + 1.20, false);       // Compasso 2: Beat 1 mudo
-      playSurdo(t + 1.65, false, 0.65); // Síncope de repique
-      playSurdo(t + 1.80, true, 1.0);   // Compasso 2: Beat 2 ABERTO!
+      // 1. SURDO DE MARCAÇÃO (Apenas na Roda Completa festiva à noite e pôr do sol)
+      if (isFullRoda) {
+        playSurdo(t + 0.00, false);       // Compasso 1: Beat 1 mudo
+        playSurdo(t + 0.45, false, 0.6);  // Síncope de resposta
+        playSurdo(t + 0.60, true, 1.0);   // Compasso 1: Beat 2 ABERTO!
+        playSurdo(t + 1.20, false);       // Compasso 2: Beat 1 mudo
+        playSurdo(t + 1.65, false, 0.65); // Síncope de repique
+        playSurdo(t + 1.80, true, 1.0);   // Compasso 2: Beat 2 ABERTO!
+      }
 
       // 2. CAVAQUINHO ACÚSTICO COM LEVADA DE PARTIDO ALTO
       // Toque suave e quente de cordas acústicas com ressonância de madeira nobre
@@ -828,7 +873,7 @@ export class AmbientSoundtrack {
           filter.frequency.setValueAtTime(Math.min(2200, freq * 2.2), stringT);
           filter.Q.setValueAtTime(1.8, stringT);
 
-          const peakGain = Math.max(0.001, gainFactor * 0.075 * intensity);
+          const peakGain = Math.max(0.001, gainFactor * 0.12 * intensity);
           gain.gain.setValueAtTime(peakGain, stringT);
           gain.gain.setTargetAtTime(0.0001, stringT + 0.02, 0.055);
 
@@ -841,87 +886,89 @@ export class AmbientSoundtrack {
       };
 
       // Levada sincopada tradicional de Partido Alto:
+      const cavacoIntensity = isFullRoda ? 1.0 : 0.70;
       // Compasso 1 (com acorde 1):
-      playCavaquinhoStrum(t + 0.00, chord1, 1.0); // Batida cheia no tempo 1
-      playCavaquinhoStrum(t + 0.30, chord1, 0.7); // Puxada leve
-      playCavaquinhoStrum(t + 0.45, chord1, 0.8); // Síncope carioca
-      playCavaquinhoStrum(t + 0.60, chord1, 1.1); // Batida forte no tempo 2 (junto ao surdo)
-      playCavaquinhoStrum(t + 0.90, chord1, 0.85); // Fechamento do swing
+      playCavaquinhoStrum(t + 0.00, chord1, 1.0 * cavacoIntensity); // Batida cheia no tempo 1
+      playCavaquinhoStrum(t + 0.30, chord1, 0.7 * cavacoIntensity); // Puxada leve
+      playCavaquinhoStrum(t + 0.45, chord1, 0.8 * cavacoIntensity); // Síncope carioca
+      playCavaquinhoStrum(t + 0.60, chord1, 1.1 * cavacoIntensity); // Batida forte no tempo 2 (junto ao surdo)
+      playCavaquinhoStrum(t + 0.90, chord1, 0.85 * cavacoIntensity); // Fechamento do swing
       // Compasso 2 (com acorde 2):
-      playCavaquinhoStrum(t + 1.20, chord2, 1.0);
-      playCavaquinhoStrum(t + 1.50, chord2, 0.7);
-      playCavaquinhoStrum(t + 1.65, chord2, 0.8);
-      playCavaquinhoStrum(t + 1.80, chord2, 1.1);
-      playCavaquinhoStrum(t + 2.10, chord2, 0.85);
+      playCavaquinhoStrum(t + 1.20, chord2, 1.0 * cavacoIntensity);
+      playCavaquinhoStrum(t + 1.50, chord2, 0.7 * cavacoIntensity);
+      playCavaquinhoStrum(t + 1.65, chord2, 0.8 * cavacoIntensity);
+      playCavaquinhoStrum(t + 1.80, chord2, 1.1 * cavacoIntensity);
+      playCavaquinhoStrum(t + 2.10, chord2, 0.85 * cavacoIntensity);
 
-      // 3. PANDEIRO CARIOCA & TELECOTECO SUAVE
-      // Toque aveludado de ruído filtrado simulando a pele e platinela
-      const playPandeiroHit = (hitT, isAccent = false) => {
-        if (hitT < t) hitT = t;
-        const bufLen = Math.floor(this.ctx.sampleRate * 0.035);
-        const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
-        const data = buf.getChannelData(0);
-        for (let i = 0; i < bufLen; i++) {
-          data[i] = (Math.random() * 2 - 1) * 0.28;
-        }
+      // 3. PANDEIRO CARIOCA & TELECOTECO SUAVE (Apenas na Roda Completa)
+      if (isFullRoda) {
+        const playPandeiroHit = (hitT, isAccent = false) => {
+          if (hitT < t) hitT = t;
+          const bufLen = Math.floor(this.ctx.sampleRate * 0.035);
+          const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+          const data = buf.getChannelData(0);
+          for (let i = 0; i < bufLen; i++) {
+            data[i] = (Math.random() * 2 - 1) * 0.28;
+          }
 
-        const noise = this.ctx.createBufferSource();
-        noise.buffer = buf;
+          const noise = this.ctx.createBufferSource();
+          noise.buffer = buf;
 
-        const filter = this.ctx.createBiquadFilter();
-        filter.type = isAccent ? 'bandpass' : 'highpass';
-        filter.frequency.setValueAtTime(isAccent ? 1600 : 2600, hitT);
-        filter.Q.setValueAtTime(2.0, hitT);
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = isAccent ? 'bandpass' : 'highpass';
+          filter.frequency.setValueAtTime(isAccent ? 1600 : 2600, hitT);
+          filter.Q.setValueAtTime(2.0, hitT);
 
-        const gain = this.ctx.createGain();
-        const pGain = Math.max(0.001, gainFactor * (isAccent ? 0.12 : 0.065));
-        gain.gain.setValueAtTime(pGain, hitT);
-        gain.gain.setTargetAtTime(0.0001, hitT + 0.01, 0.025);
+          const gain = this.ctx.createGain();
+          const pGain = Math.max(0.001, gainFactor * (isAccent ? 0.16 : 0.095));
+          gain.gain.setValueAtTime(pGain, hitT);
+          gain.gain.setTargetAtTime(0.0001, hitT + 0.01, 0.025);
 
-        noise.connect(filter);
-        filter.connect(gain);
-        this.connectSpatial(gain, spatial.pan, 'generalSfx', spatial.filterFreq);
-        noise.start(hitT);
-        noise.stop(hitT + 0.04);
-      };
+          noise.connect(filter);
+          filter.connect(gain);
+          this.connectSpatial(gain, spatial.pan, 'generalSfx', spatial.filterFreq);
+          noise.start(hitT);
+          noise.stop(hitT + 0.04);
+        };
 
-      // Balanço de 16 avos do pandeiro (telecoteco):
-      const pandeiroTimes = [
-        0.00, 0.15, 0.30, 0.45, 0.60, 0.75, 0.90, 1.05,
-        1.20, 1.35, 1.50, 1.65, 1.80, 1.95, 2.10, 2.25
-      ];
-      pandeiroTimes.forEach(dt => {
-        const isSlap = (Math.abs(dt - 0.60) < 0.05 || Math.abs(dt - 1.80) < 0.05);
-        playPandeiroHit(t + dt, isSlap);
-      });
+        // Balanço de 16 avos do pandeiro (telecoteco):
+        const pandeiroTimes = [
+          0.00, 0.15, 0.30, 0.45, 0.60, 0.75, 0.90, 1.05,
+          1.20, 1.35, 1.50, 1.65, 1.80, 1.95, 2.10, 2.25
+        ];
+        pandeiroTimes.forEach(dt => {
+          const isSlap = (Math.abs(dt - 0.60) < 0.05 || Math.abs(dt - 1.80) < 0.05);
+          playPandeiroHit(t + dt, isSlap);
+        });
 
-      // 4. PALMAS COLETIVAS DA COMUNIDADE (Nos tempos fortes 2 e 4)
-      const playPalma = (palmaT) => {
-        if (palmaT < t) palmaT = t;
-        const bufLen = Math.floor(this.ctx.sampleRate * 0.04);
-        const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
-        const data = buf.getChannelData(0);
-        for (let i = 0; i < bufLen; i++) {
-          data[i] = (Math.random() * 2 - 1) * 0.30;
-        }
-        const src = this.ctx.createBufferSource();
-        src.buffer = buf;
-        const filter = this.ctx.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.frequency.setValueAtTime(1300, palmaT);
-        filter.Q.setValueAtTime(1.8, palmaT);
-        const gain = this.ctx.createGain();
-        gain.gain.setValueAtTime(Math.max(0.001, gainFactor * 0.14), palmaT);
-        gain.gain.setTargetAtTime(0.0001, palmaT + 0.015, 0.03);
-        src.connect(filter);
-        filter.connect(gain);
-        this.connectSpatial(gain, spatial.pan, 'generalSfx', spatial.filterFreq);
-        src.start(palmaT);
-        src.stop(palmaT + 0.045);
-      };
+        // 4. PALMAS COLETIVAS DA COMUNIDADE (Nos tempos fortes 2 e 4)
+        const playPalma = (palmaT) => {
+          if (palmaT < t) palmaT = t;
+          const bufLen = Math.floor(this.ctx.sampleRate * 0.04);
+          const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+          const data = buf.getChannelData(0);
+          for (let i = 0; i < bufLen; i++) {
+            data[i] = (Math.random() * 2 - 1) * 0.30;
+          }
+          const src = this.ctx.createBufferSource();
+          src.buffer = buf;
+          const filter = this.ctx.createBiquadFilter();
+          filter.type = 'bandpass';
+          filter.frequency.setValueAtTime(1300, palmaT);
+          filter.Q.setValueAtTime(1.8, palmaT);
+          const gain = this.ctx.createGain();
+          gain.gain.setValueAtTime(Math.max(0.001, gainFactor * 0.18), palmaT);
+          gain.gain.setTargetAtTime(0.0001, palmaT + 0.015, 0.03);
+          src.connect(filter);
+          filter.connect(gain);
+          this.connectSpatial(gain, spatial.pan, 'generalSfx', spatial.filterFreq);
+          src.start(palmaT);
+          src.stop(palmaT + 0.045);
+        };
 
-      playPalma(t + 0.60);
-      playPalma(t + 1.80);
+        playPalma(t + 0.60);
+        playPalma(t + 1.80);
+      }
 
     } catch (err) {
       console.warn('playSambaRhythm guarded:', err);
@@ -933,8 +980,8 @@ export class AmbientSoundtrack {
     this.resumeContext();
     if (!this.ctx) return;
 
-    // Micro-local à beira d'água leste da praia (22m máx, 4m min)
-    const spatial = this.getSpatialInfo(pos, 22.0, 4.0);
+    // Raio acústico da altinha na areia (55m máx, 4m min)
+    const spatial = this.getSpatialInfo(pos, 55.0, 4.0);
     if (spatial.gain <= 0.01) return;
 
     const t = this.ctx.currentTime;
@@ -968,8 +1015,8 @@ export class AmbientSoundtrack {
     this.resumeContext();
     if (!this.ctx) return;
 
-    // Raio costeiro suave (45m máx, 10m min)
-    const spatial = this.getSpatialInfo(pos, 45.0, 10.0);
+    // Raio costeiro suave (75m máx, 10m min)
+    const spatial = this.getSpatialInfo(pos, 75.0, 10.0);
     if (spatial.gain <= 0.01) return;
 
     const t = this.ctx.currentTime;

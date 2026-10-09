@@ -82,17 +82,16 @@ export class NPCManager {
   getFloorElevation(x, z) {
     // 1. Alameda do Samba (de z: -19.5 até z: -12.8 em torno de x: -2.0)
     // Conecta de forma suave e majestosa a via alta ao Terreiro de Samba
-    if (Math.abs(x - (-2.0)) <= 2.6 && z >= -19.8 && z <= -12.8) {
-      const t = Math.max(0, Math.min(1, (z - (-19.5)) / (-12.8 - (-19.5)))); // 0 na entrada norte, 1 no pórtico
-      const yStart = this.terrain ? this.terrain.getElevation(-2.0, -19.5) + 0.05 : 11.6;
-      const yEnd = 14.25;
-      return yStart + (yEnd - yStart) * t + 0.14;
+    if (Math.abs(x - (-2.0)) <= 2.8 && z >= -19.8 && z <= -12.8) {
+      const yTerr = this.terrain ? this.terrain.getElevation(x, z) : 20.0;
+      return yTerr + 0.18;
     }
 
     // 2. Tablado da Praça do Samba em (-2, -4)
     const distPlaza = Math.hypot(x - (-2.0), z - (-4.0));
-    if (distPlaza <= 9.3) {
-      return 14.25;
+    if (distPlaza <= 9.5) {
+      const yTerr = this.terrain ? this.terrain.getElevation(-2.0, -4.0) : 24.16;
+      return yTerr + 0.35; // Sobre o deck de madeira elevado da praça
     }
 
     // Padrão: Elevação da malha de terreno
@@ -106,7 +105,7 @@ export class NPCManager {
   // =========================================================================
   buildRoadGraph() {
     const rawNodes = [
-      // 1. Morro do Sol & Alameda do Samba (Acesso Estritamente Superior - Zero arestas para o sul!)
+      // 1. Morro do Sol & Alameda do Samba (Conexão Monumental via Alameda Norte e Encostas)
       { id: 'sol_mirante', x: 1.4, z: 2.5, type: 'mirante', desc: 'Mirante Sul Panorâmico' },
       { id: 'sol_plaza_center', x: -2.0, z: -4.0, type: 'plaza', desc: 'Terreiro de Samba Central' },
       { id: 'sol_plaza_portico', x: -2.0, z: -8.8, type: 'portico', desc: 'Pórtico Norte das Fitinhas' },
@@ -197,7 +196,25 @@ export class NPCManager {
       { id: 'viela_e_2', x: 76.0, z: -12.0, type: 'viela', desc: 'Viela do Levante 3' },
       { id: 'viela_e_3', x: 84.0, z: -32.0, type: 'viela', desc: 'Viela do Levante 4' },
       { id: 'viela_e_4', x: 94.0, z: -32.0, type: 'viela', desc: 'Viela do Levante 5' },
-      { id: 'viela_e_5', x: 72.0, z: -62.0, type: 'viela', desc: 'Viela do Levante 6' }
+      { id: 'viela_e_5', x: 72.0, z: -62.0, type: 'viela', desc: 'Viela do Levante 6' },
+
+      // 11. Praias dos Extremos (Prainha Caiçara a Oeste & Esportes/Dunas a Leste)
+      { id: 'beach_west_cove', x: -115.0, z: 46.0, type: 'beach_west', desc: 'Prainha dos Pescadores' },
+      { id: 'beach_west_boats', x: -92.0, z: 52.0, type: 'beach_west', desc: 'Varadouro das Canoas Caiçaras' },
+      { id: 'beach_west_pier', x: -77.8, z: 88.0, type: 'beach_west', desc: 'Píer de Madeira dos Pescadores' },
+
+      { id: 'beach_east_futevolei', x: 78.0, z: 42.0, type: 'beach_east', desc: 'Arena de Futevôlei Carioca' },
+      { id: 'beach_east_volei', x: 98.0, z: 44.0, type: 'beach_east', desc: 'Quadra de Vôlei de Praia' },
+      { id: 'beach_east_kiosk', x: 116.0, z: 32.0, type: 'beach_east', desc: 'Quiosque do Sol Nascente' },
+      { id: 'beach_east_dunes', x: 132.0, z: 46.0, type: 'beach_east', desc: 'Dunas e Coqueiral do Levante' },
+
+      // 12. Expansão 1.2.2: Encostas e Pontos Vivos
+      { id: 'west_capoeira', x: -110.0, z: -15.0, type: 'capoeira', desc: 'Mirante do Poente & Terreiro de Capoeira' },
+      { id: 'west_horta', x: -92.0, z: -25.0, type: 'horta', desc: 'Horta Comunitária em Socalcos' },
+      { id: 'west_trail_foot', x: -105.0, z: 12.0, type: 'trail', desc: 'Trilha de Dormentes da Encosta Oeste' },
+      { id: 'east_mototaxi', x: 92.0, z: 14.0, type: 'mototaxi', desc: 'Ponto Central de Mototáxi' },
+      { id: 'east_academia', x: 112.0, z: -12.0, type: 'academia', desc: 'Academia ao Ar Livre da Colina' },
+      { id: 'east_surf_school', x: 126.0, z: 58.0, type: 'surf', desc: 'Escola de Surfe & Pranchário' }
     ];
 
     const nodeMap = new Map();
@@ -224,7 +241,7 @@ export class NPCManager {
       }
     };
 
-    // 1. Morro do Sol & Alameda do Samba (Acesso Estritamente Superior)
+    // 1. Morro do Sol & Alameda do Samba (Conexão Monumental via Alameda Norte e Encostas)
     addEdge('sol_mirante', 'sol_plaza_center');
     addEdge('sol_plaza_center', 'sol_plaza_portico');
     addEdge('sol_plaza_portico', 'alameda_patamar_3');
@@ -321,6 +338,35 @@ export class NPCManager {
     addEdge('viela_e_4', 'viela_e_5');
     addEdge('viela_e_5', 'transv_e_4');
 
+    // 10. Conexões das Praias dos Extremos com o Calçadão e Enseadas
+    addEdge('coast_far_w_2', 'beach_west_cove');
+    addEdge('beach_west_cove', 'beach_west_boats');
+    addEdge('beach_west_boats', 'coast_w_2');
+    addEdge('coast_w_1', 'beach_west_pier');
+    addEdge('beach_west_boats', 'beach_west_pier');
+
+    addEdge('coast_e_3', 'beach_east_futevolei');
+    addEdge('beach_east_futevolei', 'beach_east_volei');
+    addEdge('coast_e_4', 'beach_east_volei');
+    addEdge('coast_far_e_1', 'beach_east_kiosk');
+    addEdge('beach_east_volei', 'beach_east_kiosk');
+    addEdge('beach_east_kiosk', 'beach_east_dunes');
+    addEdge('coast_far_e_2', 'beach_east_dunes');
+
+    // 11. Conexões da Expansão 1.2.2 (Encostas, Terreiro, Horta, Mototáxi, Academia e Surfe)
+    addEdge('west_capoeira', 'west_horta');
+    addEdge('west_horta', 'viela_w_3');
+    addEdge('west_capoeira', 'west_trail_foot');
+    addEdge('west_trail_foot', 'coast_far_w_2');
+    addEdge('west_trail_foot', 'beach_west_cove');
+
+    addEdge('east_mototaxi', 'coast_e_4');
+    addEdge('east_mototaxi', 'mid_e_0');
+    addEdge('east_academia', 'mid_e_2');
+    addEdge('east_academia', 'viela_e_2');
+    addEdge('east_surf_school', 'beach_east_kiosk');
+    addEdge('east_surf_school', 'beach_east_dunes');
+
     this.roadNodes = Array.from(nodeMap.values());
     this.roadNodesMap = nodeMap;
     this.waypoints = this.roadNodes.map(n => n.position);
@@ -363,15 +409,20 @@ export class NPCManager {
     return [targetId];
   }
 
-  // Encontra o nó do grafo viário mais próximo de uma coordenada (X, Z)
-  getNearestRoadNode(x, z, filterFn = null) {
+  // Encontra o nó do grafo viário mais próximo de uma coordenada (X, Z), com penalidade de altitude 3D
+  getNearestRoadNode(x, z, currentY = null, filterFn = null) {
     if (!this.roadNodes || this.roadNodes.length === 0) return null;
     let best = null;
     let minDist = Infinity;
     for (let i = 0; i < this.roadNodes.length; i++) {
       const n = this.roadNodes[i];
       if (filterFn && !filterFn(n)) continue;
-      const d = Math.hypot(n.x - x, n.z - z);
+      let d = Math.hypot(n.x - x, n.z - z);
+      if (currentY !== null && n.y !== undefined) {
+        // Penalidade vertical pesada para impedir que quem está na orla/ladeira selecione nós no cume do penhasco
+        const dy = Math.abs(n.y - currentY);
+        d += dy * 2.8;
+      }
       if (d < minDist) {
         minDist = d;
         best = n;
@@ -493,6 +544,224 @@ export class NPCManager {
 
       this.npcs.push(mNPC);
     });
+
+    // 3. Personagens Autênticos dos Extremos da Praia (Atualização 1.2)
+    // 3a. Seu Zé do Covo - Pescador Artesanal no Píer Oeste
+    const pierFloorY = 1.58;
+    const zePos = new THREE.Vector3(-77.8, pierFloorY, 92.2);
+    const zeRole = {
+      title: 'Pescador Tradicional',
+      action: 'Pescando no extremo do píer de madeira com sua vara de bambu e paciência caiçara',
+      color: 0x1E3A8A
+    };
+    const zeNPC = this.createNPCMesh('Seu Zé do Covo', zeRole, zePos, [zePos], 301);
+    zeNPC.isFisherman = true;
+    zeNPC.group.rotation.y = 0; // Olhando para o mar aberto ao sul
+    
+    // Vara de bambu na mão do Seu Zé
+    const zeRod = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.015, 0.025, 2.8, 4),
+      new THREE.MeshLambertMaterial({ color: 0xD97706, flatShading: true })
+    );
+    zeRod.position.set(0.35, 1.1, 0.8);
+    zeRod.rotation.set(Math.PI / 3.8, 0, 0);
+    zeNPC.group.add(zeRod);
+    zeNPC.fishingRod = zeRod;
+    this.npcs.push(zeNPC);
+
+    // 3b. Betinho & Pedrão - Dupla de Futevôlei Carioca (Quadra em x: 78, z: 42)
+    const futevoleiConfigs = [
+      { name: 'Betinho do Futevôlei', x: 76.2, z: 42.0, rot: Math.PI / 2, index: 302 },
+      { name: 'Pedrão da Altinha', x: 79.8, z: 42.0, rot: -Math.PI / 2, index: 303 }
+    ];
+    futevoleiConfigs.forEach(cfg => {
+      const pos = new THREE.Vector3(cfg.x, this.getFloorElevation(cfg.x, cfg.z), cfg.z);
+      const role = {
+        title: 'Atleta de Futevôlei',
+        action: 'Trocando peitadas e cabeceios plásticos sobre a rede de futevôlei',
+        color: 0x0284C7
+      };
+      const athlete = this.createNPCMesh(cfg.name, role, pos, [pos], cfg.index);
+      athlete.isAthlete = true;
+      athlete.athleteType = 'futevolei';
+      athlete.group.rotation.y = cfg.rot;
+      this.setNPCBeachOutfit(athlete, true);
+      this.npcs.push(athlete);
+    });
+
+    // Bola animada de Futevôlei
+    const fvBall = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.18, 1),
+      new THREE.MeshLambertMaterial({ color: 0xF8FAFC, flatShading: true })
+    );
+    fvBall.position.set(78.0, 2.4, 42.0);
+    this.group.add(fvBall);
+    this.futevoleiBall = fvBall;
+
+    // 3c. Rodrigo & Carlos - Dupla de Vôlei de Praia (Quadra em x: 98, z: 44)
+    const voleiConfigs = [
+      { name: 'Rodrigo do Vôlei', x: 95.8, z: 44.0, rot: Math.PI / 2, index: 304 },
+      { name: 'Carlos do Vôlei', x: 100.2, z: 44.0, rot: -Math.PI / 2, index: 305 }
+    ];
+    voleiConfigs.forEach(cfg => {
+      const pos = new THREE.Vector3(cfg.x, this.getFloorElevation(cfg.x, cfg.z), cfg.z);
+      const role = {
+        title: 'Jogador de Vôlei de Praia',
+        action: 'Treinando manchetes e saques potentes na quadra de areia',
+        color: 0xEA580C
+      };
+      const athlete = this.createNPCMesh(cfg.name, role, pos, [pos], cfg.index);
+      athlete.isAthlete = true;
+      athlete.athleteType = 'volei';
+      athlete.group.rotation.y = cfg.rot;
+      this.setNPCBeachOutfit(athlete, true);
+      this.npcs.push(athlete);
+    });
+
+    // Bola animada de Vôlei de Praia
+    const vbBall = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.19, 1),
+      new THREE.MeshLambertMaterial({ color: 0xFDE047, flatShading: true })
+    );
+    vbBall.position.set(98.0, 2.7, 44.0);
+    this.group.add(vbBall);
+    this.voleiBall = vbBall;
+
+    // 3d. Beto do Mate - Ambulante Icônico de Praia
+    const matePos = new THREE.Vector3(10, 0.45, 42);
+    matePos.y = this.getFloorElevation(matePos.x, matePos.z);
+    const mateRole = {
+      title: 'Ambulante do Mate',
+      action: 'Circulando pelas areias da praia com seus galões de Mate gelado e Biscoito Globo',
+      color: 0xF97316
+    };
+    const mateNPC = this.createNPCMesh('Beto do Mate', mateRole, matePos, [matePos], 306);
+    mateNPC.isMateiro = true;
+    this.setNPCBeachOutfit(mateNPC, true);
+
+    // Galões de mate nas costas e ombros
+    const canisterGroup = new THREE.Group();
+    canisterGroup.position.set(0, 0.85, 0);
+
+    const mateCanister = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 0.55, 6),
+      new THREE.MeshLambertMaterial({ color: 0xEA580C, flatShading: true }) // Laranja Mate Leão
+    );
+    mateCanister.position.set(-0.28, 0, -0.15);
+    canisterGroup.add(mateCanister);
+
+    const limaoCanister = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 0.55, 6),
+      new THREE.MeshLambertMaterial({ color: 0xFACC15, flatShading: true }) // Amarelo Limão
+    );
+    limaoCanister.position.set(0.28, 0, -0.15);
+    canisterGroup.add(limaoCanister);
+
+    // Sacola de Biscoito Globo na mão
+    const globoBag = new THREE.Mesh(
+      new THREE.BoxGeometry(0.22, 0.28, 0.16),
+      new THREE.MeshLambertMaterial({ color: 0xFEF08A, flatShading: true })
+    );
+    globoBag.position.set(0.35, -0.2, 0.12);
+    canisterGroup.add(globoBag);
+
+    mateNPC.group.add(canisterGroup);
+    mateNPC.canisterGroup = canisterGroup;
+
+    mateNPC.beachPatrolSpots = [
+      { x: -92, z: 52 },
+      { x: -40, z: 46 },
+      { x: -10, z: 46 },
+      { x: 20, z: 46 },
+      { x: 50, z: 46 },
+      { x: 78, z: 44 },
+      { x: 98, z: 46 },
+      { x: 116, z: 34 }
+    ];
+    mateNPC.patrolIndex = 2;
+    mateNPC.targetPos = new THREE.Vector3(20, this.getFloorElevation(20, 46), 46);
+    this.npcs.push(mateNPC);
+
+    // 3e. EXPANSÃO 1.2.2: CINCO PERSONAGENS EMBLEMÁTICOS DE ENCOSTA E DUNA
+    // 1. Mestre Bimba - Terreiro de Capoeira do Poente (-110, -15)
+    const capoeiraPos = new THREE.Vector3(-110.0, this.getFloorElevation(-110.0, -15.0), -15.0);
+    const capoeiraRole = {
+      title: 'Mestre de Capoeira',
+      action: 'Gingando no terreiro e ensinando a tradição afro-brasileira ao som do berimbau',
+      color: 0xF8FAFC
+    };
+    const mestreNPC = this.createNPCMesh('Mestre Bimba', capoeiraRole, capoeiraPos, [capoeiraPos], 310);
+    mestreNPC.isCapoeira = true;
+    mestreNPC.group.rotation.y = 1.2;
+    if (mestreNPC.cityLegMat) mestreNPC.cityLegMat.color.setHex(0xF8FAFC);
+    if (mestreNPC.leftLeg) mestreNPC.leftLeg.material.color.setHex(0xF8FAFC);
+    if (mestreNPC.rightLeg) mestreNPC.rightLeg.material.color.setHex(0xF8FAFC);
+    if (mestreNPC.torso) mestreNPC.torso.material.color.setHex(0xF1F5F9);
+    const cordao = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.08, 0.45), new THREE.MeshLambertMaterial({ color: 0xDC2626 }));
+    cordao.position.set(0, 0.48, 0);
+    mestreNPC.group.add(cordao);
+    this.npcs.push(mestreNPC);
+
+    // 2. Dona Nair - Horta Comunitária da Encosta (-92, -25)
+    const hortaPos = new THREE.Vector3(-92.0, this.getFloorElevation(-92.0, -25.0), -25.0);
+    const hortaRole = {
+      title: 'Agricultora Comunitária',
+      action: 'Cultivando hortaliças frescas, couve e temperos na horta em socalcos',
+      color: 0x15803D
+    };
+    const donaNair = this.createNPCMesh('Dona Nair', hortaRole, hortaPos, [hortaPos], 311);
+    donaNair.isHorta = true;
+    donaNair.group.rotation.y = -0.8;
+    if (donaNair.torso) donaNair.torso.material.color.setHex(0x16A34A);
+    const strawHat = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.06, 8), new THREE.MeshLambertMaterial({ color: 0xFDE047 }));
+    strawHat.position.set(0, 1.45, 0);
+    donaNair.group.add(strawHat);
+    this.npcs.push(donaNair);
+
+    // 3. Tiago Mototáxi - Ponto de Mototáxi do Levante (92, 14)
+    const motoPos = new THREE.Vector3(92.0, this.getFloorElevation(92.0, 14.0), 14.0);
+    const motoRole = {
+      title: 'Mototaxista da Comunidade',
+      action: 'Aguardando passageiros no ponto oficial para transportes ágeis pelas ladeiras',
+      color: 0xEAB308
+    };
+    const tiagoMoto = this.createNPCMesh('Tiago Mototáxi', motoRole, motoPos, [motoPos], 312);
+    tiagoMoto.isMototaxi = true;
+    tiagoMoto.group.rotation.y = -1.6;
+    if (tiagoMoto.torso) tiagoMoto.torso.material.color.setHex(0xFACC15);
+    const helmet = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 6), new THREE.MeshLambertMaterial({ color: 0x2563EB }));
+    helmet.position.set(0, 1.35, 0);
+    tiagoMoto.group.add(helmet);
+    this.npcs.push(tiagoMoto);
+
+    // 4. Guga do Surfe - Escola de Surfe das Dunas (126, 58)
+    const surfPos = new THREE.Vector3(126.0, this.getFloorElevation(126.0, 58.0), 58.0);
+    const surfRole = {
+      title: 'Instrutor de Surfe',
+      action: 'Encerando pranchas e instruindo jovens nas ondas cristalinas do mar',
+      color: 0x0EA5E9
+    };
+    const gugaSurf = this.createNPCMesh('Guga do Surfe', surfRole, surfPos, [surfPos], 313);
+    gugaSurf.isSurfer = true;
+    this.setNPCBeachOutfit(gugaSurf, true);
+    gugaSurf.group.rotation.y = 0.4;
+    const waxBlock = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.18), new THREE.MeshLambertMaterial({ color: 0xFEF08A }));
+    waxBlock.position.set(0.35, 0.4, 0.15);
+    gugaSurf.group.add(waxBlock);
+    this.npcs.push(gugaSurf);
+
+    // 5. Jonas da Calistenia - Academia ao Ar Livre (112, -12)
+    const calPos = new THREE.Vector3(112.0, this.getFloorElevation(112.0, -12.0), -12.0);
+    const calRole = {
+      title: 'Atleta de Calistenia',
+      action: 'Executando séries de barras paralelas e flexões na academia ao ar livre',
+      color: 0x1E293B
+    };
+    const jonasCal = this.createNPCMesh('Jonas da Calistenia', calRole, calPos, [calPos], 314);
+    jonasCal.isCalistenia = true;
+    jonasCal.group.rotation.y = 0.2;
+    if (jonasCal.torso) jonasCal.torso.material.color.setHex(0x0F172A);
+    this.npcs.push(jonasCal);
     
     // Os civis agora serão chamados um a um pela simulação! (Regra População / 10)
   }
@@ -824,6 +1093,9 @@ export class NPCManager {
       sambaRoutingActive: false,
       waypoints,
       speed: 1.8 + Math.random() * 0.6,
+      speedMult: 0.88 + Math.random() * 0.24, // Variação orgânica do passo
+      glanceTimer: 2.0 + Math.random() * 4.0,
+      greetingTimer: 0,
       walkCycle: Math.random() * 10,
       waitTimer: 0,
       // Beach Roles State:
@@ -856,7 +1128,7 @@ export class NPCManager {
   // Automatically transforms citizens into swimwear upon reaching the sand (Z >= 24)
   // and back into street clothes when returning to the morro (Z < 21)!
   setNPCBeachOutfit(npc, isBeach) {
-    if (npc.isBarraqueiro || npc.role === 'Jogador da Pelada' || npc.isScenicMirante) return;
+    if (npc.isBarraqueiro || npc.role === 'Jogador da Pelada' || npc.isScenicMirante || npc.isFisherman || npc.isCapoeira || npc.isHorta || npc.isMototaxi || npc.isCalistenia) return;
     if (npc.isBuilder || npc.isCourier) return;
 
     if (isBeach && !npc.isWearingBeachwear) {
@@ -880,7 +1152,7 @@ export class NPCManager {
 
   // DISPATCH WHEELBARROW COURIER FROM OLARIA WITH BRICK SUPPLIES
   dispatchCourierWithSupplies(siteData, onDelivered) {
-    const candidates = this.npcs.filter(npc => !npc.isBuilder && !npc.isCourier && !npc.isScenicMirante && !npc.isBarraqueiro && npc.role !== 'Jogador da Pelada');
+    const candidates = this.npcs.filter(npc => !npc.isBuilder && !npc.isCourier && !npc.isScenicMirante && !npc.isBarraqueiro && !npc.isFisherman && !npc.isAthlete && !npc.isMateiro && !npc.isCapoeira && !npc.isHorta && !npc.isMototaxi && !npc.isSurfer && !npc.isCalistenia && npc.role !== 'Jogador da Pelada');
     if (candidates.length === 0) {
       if (onDelivered) onDelivered();
       return null;
@@ -967,7 +1239,7 @@ export class NPCManager {
 
   // RECRUIT REAL CITIZENS FROM THE WORKING POPULATION AS BUILDERS
   recruitWorkersForSite(siteData, count = 2) {
-    const candidates = this.npcs.filter(npc => !npc.isBuilder && !npc.isCourier && !npc.isScenicMirante && !npc.isBarraqueiro && npc.role !== 'Jogador da Pelada');
+    const candidates = this.npcs.filter(npc => !npc.isBuilder && !npc.isCourier && !npc.isScenicMirante && !npc.isBarraqueiro && !npc.isFisherman && !npc.isAthlete && !npc.isMateiro && !npc.isCapoeira && !npc.isHorta && !npc.isMototaxi && !npc.isSurfer && !npc.isCalistenia && npc.role !== 'Jogador da Pelada');
     if (candidates.length === 0) return [];
 
     // Sort by proximity to site to choose nearby citizens
@@ -979,31 +1251,55 @@ export class NPCManager {
 
     const recruited = candidates.slice(0, count);
 
+    // 1. Identifica o nó de rua mais próximo do canteiro de obras
+    const plotY = siteData.plateau.y || (this.terrain ? this.terrain.getElevation(siteData.plateau.x, siteData.plateau.z) : 2.0);
+    const plotRoadNode = this.getNearestRoadNode(siteData.plateau.x, siteData.plateau.z, plotY);
+    const roadX = plotRoadNode ? plotRoadNode.x : siteData.plateau.x;
+    const roadZ = plotRoadNode ? plotRoadNode.z : siteData.plateau.z;
+
+    // Ângulo do centro do lote em direção à rua pavimentada de acesso
+    const toRoadAngle = Math.atan2(roadX - siteData.plateau.x, roadZ - siteData.plateau.z);
+
     recruited.forEach((npc, idx) => {
       npc.isBuilder = true;
       npc.builderState = 'traveling';
       npc.assignedSite = siteData;
-      npc.waitTimer = 0; // Cancel any idle pause immediately
+      npc.waitTimer = 0; // Cancela qualquer pausa imediatamente
 
-      // Equip builder gear
+      // Equipamento do operário
       npc.builderHelmet.visible = true;
       npc.hat.visible = false;
       npc.toolArm.visible = true;
-      npc.torso.material.color.setHex(0xF97316); // High-vis construction safety vest!
+      npc.torso.material.color.setHex(0xF97316); // Colete refletivo de alta visibilidade!
 
-      // Assign specific work spot around plot perimeter
-      const angle = (idx === 0 ? -0.85 : 0.85) + (Math.random() - 0.5) * 0.3;
-      const radius = 2.4;
-      const spotX = siteData.plateau.x + Math.sin(angle) * radius;
-      const spotZ = siteData.plateau.z + Math.cos(angle) * radius;
-      const spotY = this.terrain ? this.terrain.getElevation(spotX, spotZ) : siteData.plateau.y;
+      // Ponto de trabalho perimetral externo (raio 3.4m voltado para a rua de acesso - NUNCA dentro da casa ou sobre o pad de terraplanagem!)
+      const angleOffset = (idx === 0 ? -0.42 : 0.42);
+      const spotAngle = toRoadAngle + angleOffset;
+      const radius = 3.4; // 3.4m garante que fique no calçamento/guia da rua, fora do pad de terraplanagem (4.4x4.0)
+      const spotX = siteData.plateau.x + Math.sin(spotAngle) * radius;
+      const spotZ = siteData.plateau.z + Math.cos(spotAngle) * radius;
+      const spotY = this.terrain ? this.terrain.getElevation(spotX, spotZ) : plotY;
 
       npc.workerSpot = new THREE.Vector3(spotX, spotY, spotZ);
-      npc.targetPos = npc.workerSpot.clone();
-      npc.speed = 2.4; // brisk purposeful stride
+      npc.speed = 2.4; // passo firme e cadenciado
+
+      // 2. Roteamento viário: trajeto via ruas pavimentadas até a esquina da obra
+      const curY = npc.group.position.y || (this.terrain ? this.terrain.getElevation(npc.group.position.x, npc.group.position.z) : 0);
+      const workerStartNode = this.getNearestRoadNode(npc.group.position.x, npc.group.position.z, curY);
+      const roadPath = this.findRoadPath(workerStartNode.id, plotRoadNode ? plotRoadNode.id : workerStartNode.id);
+
+      npc.builderPathQueue = roadPath.slice(1);
+      if (npc.builderPathQueue.length > 0) {
+        npc.builderTargetNodeId = npc.builderPathQueue.shift();
+        const nxt = this.roadNodesMap.get(npc.builderTargetNodeId);
+        npc.targetPos = nxt ? nxt.position.clone() : npc.workerSpot.clone();
+      } else {
+        npc.builderTargetNodeId = null;
+        npc.targetPos = npc.workerSpot.clone();
+      }
 
       const districtName = siteData.plateau.faction ? siteData.plateau.faction.toUpperCase() : 'novo lote';
-      npc.currentAction = `👷 A caminho da obra em ${districtName} com ferramentas de terraplanagem`;
+      npc.currentAction = `👷 A caminho da obra em ${districtName} pelas ruas com ferramentas de alvenaria`;
     });
 
     return recruited;
@@ -1015,32 +1311,45 @@ export class NPCManager {
     npc.builderState = 'idle';
     npc.assignedSite = null;
     npc.workerSpot = null;
+    npc.builderPathQueue = null;
+    npc.builderTargetNodeId = null;
     npc.cheerTimer = 0;
 
     // Unequip gear and restore civilian clothing
-    npc.builderHelmet.visible = false;
-    npc.hat.visible = true;
-    npc.toolArm.visible = false;
-    npc.toolArm.rotation.set(0, 0, 0);
-    npc.torso.rotation.set(0, 0, 0);
-    npc.torso.material.color.setHex(npc.originalColor);
+    if (npc.builderHelmet) npc.builderHelmet.visible = false;
+    if (npc.hat) npc.hat.visible = true;
+    if (npc.toolArm) {
+      npc.toolArm.visible = false;
+      npc.toolArm.rotation.set(0, 0, 0);
+    }
+    if (npc.torso) {
+      npc.torso.rotation.set(0, 0, 0);
+      if (npc.originalColor !== undefined) {
+        npc.torso.material.color.setHex(npc.originalColor);
+      }
+    }
 
     npc.speed = 1.8 + Math.random() * 0.6;
 
-    // Connect smoothly to nearest street waypoint
-    let nearestWpIdx = 0;
-    let minDist = 9999;
-    for (let i = 0; i < npc.waypoints.length; i++) {
-      const wp = npc.waypoints[i];
-      const d = Math.hypot(npc.group.position.x - wp.x, npc.group.position.z - wp.z);
-      if (d < minDist) {
-        minDist = d;
-        nearestWpIdx = i;
+    // Reconecta instantaneamente ao grafo viário da comunidade
+    const curY = (this.terrain ? this.terrain.getElevation(npc.group.position.x, npc.group.position.z) : npc.group.position.y) || 0;
+    const nearestNode = this.getNearestRoadNode(npc.group.position.x, npc.group.position.z, curY);
+    if (nearestNode) {
+      npc.currentNodeId = nearestNode.id;
+      if (nearestNode.neighbors && nearestNode.neighbors.length > 0) {
+        npc.targetNodeId = nearestNode.neighbors[Math.floor(Math.random() * nearestNode.neighbors.length)];
+      } else {
+        npc.targetNodeId = nearestNode.id;
       }
+      const targetNode = this.roadNodesMap ? this.roadNodesMap.get(npc.targetNodeId) : null;
+      npc.targetPos = targetNode ? targetNode.position.clone() : nearestNode.position.clone();
+      npc.targetPos.y = this.getFloorElevation(npc.targetPos.x, npc.targetPos.z);
+    } else if (npc.waypoints && npc.waypoints.length > 0) {
+      npc.targetPos = npc.waypoints[0].clone();
+      npc.targetPos.y = this.getFloorElevation(npc.targetPos.x, npc.targetPos.z);
     }
-    npc.currentWpIndex = nearestWpIdx;
-    npc.targetPos = npc.waypoints[nearestWpIdx].clone();
-    npc.targetPos.y = this.getFloorElevation(npc.targetPos.x, npc.targetPos.z);
+    npc.pathQueue = [];
+    npc.waitTimer = 1.0;
     npc.currentAction = 'Retornando à rotina comunitária após entrega da obra';
   }
 
@@ -1146,6 +1455,8 @@ export class NPCManager {
   triggerAutonomousKite() {
     const candidates = this.npcs.filter(n =>
       !n.isBuilder && !n.isCourier && !n.isBarraqueiro && !n.isScenicMirante &&
+      !n.isFisherman && !n.isAthlete && !n.isMateiro &&
+      !n.isCapoeira && !n.isHorta && !n.isMototaxi && !n.isSurfer && !n.isCalistenia &&
       !n.isSitting && !n.chatPartner && n.role !== 'Jogador da Pelada' &&
       (!n.sambaState || !n.sambaState.isParticipant) &&
       n.group.position.z <= 0 && n.group.position.y >= 7.0
@@ -1210,6 +1521,25 @@ export class NPCManager {
 
   updateStep(delta) {
     const time = performance.now() * 0.003;
+
+    // Atualização dinâmica das bolas esportivas na praia (Futevôlei e Vôlei de Praia)
+    if (this.futevoleiBall) {
+      const s = Math.sin(time * 3.5);
+      const bx = 78.0 + s * 1.6;
+      const by = 2.05 + Math.cos(s * Math.PI / 2) * 0.85;
+      this.futevoleiBall.position.set(bx, by, 42.0);
+      this.futevoleiBall.rotation.x += delta * 6;
+      this.futevoleiBall.rotation.z += delta * 8;
+    }
+
+    if (this.voleiBall) {
+      const s = Math.sin(time * 2.8);
+      const vx = 98.0 + s * 2.0;
+      const vy = 2.45 + Math.cos(s * Math.PI / 2) * 1.1;
+      this.voleiBall.position.set(vx, vy, 44.0);
+      this.voleiBall.rotation.x += delta * 7;
+      this.voleiBall.rotation.y += delta * 5;
+    }
 
     this.npcs.forEach(npc => {
       // 1. Manter pés firmemente apoiados no piso/lajes/deck
@@ -1281,13 +1611,13 @@ export class NPCManager {
             customer.currentAction = `Aproveitando ${npc.assignedStall.product} na praia`;
 
             npc.saleTimer = (npc.saleTimer || 0) + delta;
-            if (npc.saleTimer > 6.0) {
+            if (npc.saleTimer > 5.0) {
               npc.saleTimer = 0;
               if (this.soundtrack && this.soundtrack.playBeachCommerceSound) {
                 this.soundtrack.playBeachCommerceSound(cSpot);
               }
-              if (this.arch && this.arch.spawnConstructionPuff) {
-                this.arch.spawnConstructionPuff(cSpot);
+              if (this.arch && this.arch.spawnBeachStallParticles) {
+                this.arch.spawnBeachStallParticles(npc.assignedStall.id, cSpot);
               }
             }
           } else {
@@ -1326,6 +1656,166 @@ export class NPCManager {
           if (npc.rightArm) npc.rightArm.rotation.x = -0.25 + Math.sin(time * 1.5) * 0.18;
           npc.currentAction = '🌊 Contemplando a brisa e a vista panorâmica do oceano no Mirante Sul';
         }
+        return;
+      }
+
+      // 2c. SEU ZÉ DO COVO - PESCADOR DO PÍER (Atualização 1.2)
+      if (npc.isFisherman) {
+        if (npc.fishingRod) {
+          const biteTug = Math.sin(time * 7.5) > 0.82 ? -0.10 : 0;
+          npc.fishingRod.rotation.x = Math.PI / 3.8 + Math.sin(time * 2.2) * 0.04 + biteTug;
+        }
+        if (npc.torso) npc.torso.rotation.x = 0.08 + Math.sin(time * 1.5) * 0.03;
+        if (npc.rightArm) npc.rightArm.rotation.x = -0.4 + Math.sin(time * 2.2) * 0.05;
+        npc.currentAction = '🎣 Pescando pacientemente no extremo do píer sentindo o puxão das marés';
+        return;
+      }
+
+      // 2d. ATLETAS DE AREIA - FUTEVÔLEI & VÔLEI DE PRAIA (Atualização 1.2)
+      if (npc.isAthlete) {
+        if (npc.athleteType === 'futevolei') {
+          // Betinho (x: 76.2) e Pedrão (x: 79.8) trocando cabeceios e peitadas
+          const s = Math.sin(time * 3.5);
+          const isMyTurn = (npc.group.position.x < 78.0) ? (s < -0.3) : (s > 0.3);
+          if (isMyTurn) {
+            const hop = Math.abs(Math.sin(time * 7.0)) * 0.28;
+            npc.group.position.y += hop;
+            if (npc.torso) npc.torso.rotation.x = -0.22;
+            if (npc.leftArm) npc.leftArm.rotation.x = 0.6;
+            if (npc.rightArm) npc.rightArm.rotation.x = -0.6;
+            if (npc.head) npc.head.rotation.x = -0.35;
+          } else {
+            if (npc.torso) npc.torso.rotation.x = 0.05;
+            if (npc.leftArm) npc.leftArm.rotation.x = 0.1;
+            if (npc.rightArm) npc.rightArm.rotation.x = -0.1;
+            if (npc.head) npc.head.rotation.x = -0.1;
+          }
+          npc.currentAction = '⚽ Disputando peitadas e cabeceios plásticos na arena de futevôlei';
+        } else if (npc.athleteType === 'volei') {
+          // Rodrigo (x: 95.8) e Carlos (x: 100.2) na manchete e saque
+          const s = Math.sin(time * 2.8);
+          const isMyTurn = (npc.group.position.x < 98.0) ? (s < -0.3) : (s > 0.3);
+          if (isMyTurn) {
+            const hop = Math.abs(Math.sin(time * 5.6)) * 0.32;
+            npc.group.position.y += hop;
+            if (npc.leftArm) npc.leftArm.rotation.x = -0.85;
+            if (npc.rightArm) npc.rightArm.rotation.x = -0.85;
+            if (npc.torso) npc.torso.rotation.x = 0.15;
+          } else {
+            if (npc.leftArm) npc.leftArm.rotation.x = -0.2;
+            if (npc.rightArm) npc.rightArm.rotation.x = -0.2;
+            if (npc.torso) npc.torso.rotation.x = 0;
+          }
+          npc.currentAction = '🏐 Treinando recepção e saques rápidos na quadra de vôlei de praia';
+        }
+        return;
+      }
+
+      // 2e. BETO DO MATE - AMBULANTE ICÔNICO DE PRAIA (Atualização 1.2)
+      if (npc.isMateiro) {
+        if (npc.waitTimer > 0) {
+          npc.waitTimer -= delta;
+          if (npc.torso) npc.torso.rotation.y = Math.sin(time * 3) * 0.15;
+          if (npc.leftArm) npc.leftArm.rotation.x = 0.2 + Math.sin(time * 2) * 0.1;
+          if (npc.rightArm) npc.rightArm.rotation.x = -0.4 + Math.sin(time * 4) * 0.2;
+          npc.currentAction = '🥤 "Olha o mate geladinho e o biscoito Globo fresquinho!"';
+          return;
+        }
+
+        const dirX = npc.targetPos.x - npc.group.position.x;
+        const dirZ = npc.targetPos.z - npc.group.position.z;
+        const dist = Math.hypot(dirX, dirZ);
+
+        if (dist < 1.4) {
+          npc.waitTimer = 3.5 + Math.random() * 2.0;
+          npc.patrolIndex = (npc.patrolIndex + 1) % npc.beachPatrolSpots.length;
+          const nextPt = npc.beachPatrolSpots[npc.patrolIndex];
+          const ny = this.terrain ? this.terrain.getElevation(nextPt.x, nextPt.z) : 0.45;
+          npc.targetPos.set(nextPt.x, ny, nextPt.z);
+          npc.currentAction = '🥤 "Olha o mate geladinho e o biscoito Globo fresquinho!"';
+        } else {
+          const normX = dirX / dist;
+          const normZ = dirZ / dist;
+          const mateSpeed = 1.9;
+          npc.group.position.x += normX * mateSpeed * delta;
+          npc.group.position.z += normZ * mateSpeed * delta;
+          npc.group.rotation.y = Math.atan2(normX, normZ);
+
+          npc.walkCycle += delta * 8;
+          const swing = Math.sin(npc.walkCycle) * 0.55;
+          if (npc.leftLeg) npc.leftLeg.rotation.x = swing;
+          if (npc.rightLeg) npc.rightLeg.rotation.x = -swing;
+          if (npc.canisterGroup) {
+            npc.canisterGroup.rotation.z = Math.sin(npc.walkCycle) * 0.05;
+          }
+          npc.currentAction = '🚶 Caminhando pelas areias oferecendo Mate Leão e biscoito';
+        }
+        return;
+      }
+
+      // 2f. MESTRE BIMBA - TERREIRO DE CAPOEIRA (Atualização 1.2.2)
+      if (npc.isCapoeira) {
+        const s = Math.sin(time * 3.2);
+        const c = Math.cos(time * 3.2);
+        if (npc.torso) {
+          npc.torso.rotation.z = s * 0.18;
+          npc.torso.rotation.x = 0.12 + Math.abs(c) * 0.08;
+        }
+        if (npc.leftLeg) npc.leftLeg.rotation.x = s * 0.45;
+        if (npc.rightLeg) npc.rightLeg.rotation.x = -s * 0.45;
+        if (npc.leftArm) npc.leftArm.rotation.x = -0.3 + c * 0.35;
+        if (npc.rightArm) npc.rightArm.rotation.x = -0.3 - c * 0.35;
+        npc.currentAction = '🥋 Praticando a ginga e ensinando cantigas de capoeira com o berimbau';
+        return;
+      }
+
+      // 2g. DONA NAIR - HORTA COMUNITÁRIA EM SOCALCOS (Atualização 1.2.2)
+      if (npc.isHorta) {
+        const s = Math.sin(time * 1.6);
+        if (npc.torso) {
+          npc.torso.rotation.x = 0.28 + s * 0.12;
+          npc.torso.rotation.y = Math.cos(time * 0.8) * 0.2;
+        }
+        if (npc.leftArm) npc.leftArm.rotation.x = -0.5 + s * 0.25;
+        if (npc.rightArm) npc.rightArm.rotation.x = -0.3 - s * 0.25;
+        npc.currentAction = '🌱 Cuidando dos canteiros de couve, hortelã e tomate orgânico na encosta';
+        return;
+      }
+
+      // 2h. TIAGO MOTOTÁXI - PONTO OFICIAL DE MOTOTÁXI (Atualização 1.2.2)
+      if (npc.isMototaxi) {
+        const s = Math.sin(time * 1.8);
+        if (npc.torso) npc.torso.rotation.y = s * 0.25;
+        if (npc.leftArm) npc.leftArm.rotation.x = -0.2 + Math.sin(time * 3.0) * 0.1;
+        if (npc.rightArm) npc.rightArm.rotation.x = 0.1 + Math.cos(time * 2.0) * 0.08;
+        npc.currentAction = '🛵 Pronto no ponto de mototáxi para subir o morro com passageiros';
+        return;
+      }
+
+      // 2i. GUGA DO SURFE - ESCOLA DE SURFE & PRANCHÁRIO (Atualização 1.2.2)
+      if (npc.isSurfer) {
+        const s = Math.sin(time * 2.2);
+        if (npc.torso) {
+          npc.torso.rotation.y = 0.3 + s * 0.15;
+          npc.torso.rotation.x = 0.1;
+        }
+        if (npc.rightArm) npc.rightArm.rotation.x = -0.6 + s * 0.3; // Encerando prancha
+        if (npc.leftArm) npc.leftArm.rotation.x = -0.2;
+        npc.currentAction = '🏄 Checando a ondulação e preparando pranchas de surfe para os alunos';
+        return;
+      }
+
+      // 2j. JONAS DA CALISTENIA - ACADEMIA AO AR LIVRE (Atualização 1.2.2)
+      if (npc.isCalistenia) {
+        const s = Math.sin(time * 2.5);
+        const dip = Math.max(0, s);
+        npc.group.position.y = (this.terrain ? this.terrain.getElevation(112, -12) : 2.0) + dip * 0.35;
+        if (npc.torso) npc.torso.rotation.x = 0.15;
+        if (npc.leftArm) npc.leftArm.rotation.x = -0.8 + dip * 0.5;
+        if (npc.rightArm) npc.rightArm.rotation.x = -0.8 + dip * 0.5;
+        if (npc.leftLeg) npc.leftLeg.rotation.x = 0.3;
+        if (npc.rightLeg) npc.rightLeg.rotation.x = 0.3;
+        npc.currentAction = '💪 Treinando barras paralelas e exercícios de calistenia ao ar livre';
         return;
       }
 
@@ -1472,7 +1962,7 @@ export class NPCManager {
       const curPhase = (typeof curTime === 'string') ? curTime : (curTime.phase || 'day');
       const isNightOrSunset = (curPhase === 'night' || curPhase === 'sunset');
 
-      if (isNightOrSunset && npc.sambaState && npc.sambaState.isParticipant && !npc.isBuilder && !npc.isCourier && !npc.isBarraqueiro && !npc.isScenicMirante && npc.role !== 'Jogador da Pelada') {
+      if (isNightOrSunset && npc.sambaState && npc.sambaState.isParticipant && !npc.isBuilder && !npc.isCourier && !npc.isBarraqueiro && !npc.isScenicMirante && !npc.isFisherman && !npc.isAthlete && !npc.isMateiro && !npc.isCapoeira && !npc.isHorta && !npc.isMototaxi && !npc.isSurfer && !npc.isCalistenia && npc.role !== 'Jogador da Pelada') {
         const slot = npc.sambaState.slotIndex;
         // Primeiros 10 sentam (bancos). Próximos 14 ficam de pé.
         const isInner = slot < 10;
@@ -1480,7 +1970,7 @@ export class NPCManager {
         const angle = isInner ? ((slot / 10) * Math.PI * 2) : ((slot / 14) * Math.PI * 2 + Math.PI/10);
         const plazaX = -2.0 + Math.cos(angle) * radius;
         const plazaZ = -4.0 + Math.sin(angle) * radius;
-        const plazaY = 14.25;
+        const plazaY = this.getFloorElevation(-2.0, -4.0);
 
         // Roteamento em Grafo Viário até o Terreiro de Samba
         const distToSlot = Math.hypot(plazaX - npc.group.position.x, plazaZ - npc.group.position.z);
@@ -1515,7 +2005,7 @@ export class NPCManager {
           const dirX = npc.targetPos.x - npc.group.position.x;
           const dirZ = npc.targetPos.z - npc.group.position.z;
           const norm = Math.hypot(dirX, dirZ) || 1;
-          const sambaSpeed = 3.0;
+          const sambaSpeed = 2.8;
           npc.group.position.x += (dirX / norm) * sambaSpeed * delta;
           npc.group.position.z += (dirZ / norm) * sambaSpeed * delta;
           npc.group.rotation.y = Math.atan2(dirX, dirZ);
@@ -1540,50 +2030,52 @@ export class NPCManager {
           const bounce = Math.abs(Math.sin(time * 8.2 + slot)) * 0.22;
           
           if (isInner) {
-            // Sentado tocando pandeiro/cavaco
-            npc.group.position.y = plazaY + 0.1;
-            if (npc.torso) npc.torso.rotation.x = Math.sin(time * 6) * 0.15;
-            if (npc.torso) npc.torso.rotation.z = Math.sin(time * 4) * 0.1;
-            if (npc.leftArm) npc.leftArm.rotation.x = -0.35 - Math.sin(time * 8.2) * 0.45;
-            if (npc.rightArm) npc.rightArm.rotation.x = 0.35 + Math.sin(time * 8.2) * 0.45;
-            npc.currentAction = '🎶 Sambando sentado na roda principal';
-          } else {
-            // De pé dançando (Ginga e Bounce)
-            npc.group.position.y = plazaY + bounce;
-            if (npc.torso) npc.torso.rotation.x = Math.sin(time * 3 + slot) * 0.1;
-            if (npc.torso) npc.torso.rotation.y = Math.sin(time * 4 + slot) * 0.2;
-            if (npc.leftLeg) npc.leftLeg.rotation.x = Math.sin(time * 8.2 + slot) * 0.28;
-            if (npc.rightLeg) npc.rightLeg.rotation.x = -Math.sin(time * 8.2 + slot) * 0.28;
-            if (npc.leftArm) npc.leftArm.rotation.x = 0.35 + Math.sin(time * 8.2 + slot) * 0.45;
-            if (npc.rightArm) npc.rightArm.rotation.x = -0.35 - Math.sin(time * 8.2 + slot) * 0.45;
-            npc.currentAction = '💃 Curtindo e sambando em pé ao redor da praça';
-          }
-
-          // Trigger spatial samba music from the plaza (rate-limited and guarded)
-          this.sambaAudioCooldown = (this.sambaAudioCooldown || 0) - delta;
-          if (slot === 0 && this.sambaAudioCooldown <= 0 && this.soundtrack && this.soundtrack.playSambaRhythm) {
-            this.sambaAudioCooldown = 2.30;
-            try {
-              this.soundtrack.playSambaRhythm({ x: -2.0, y: plazaY, z: -4.0 });
-            } catch (sambaErr) {
-              console.warn('Samba audio trigger guarded:', sambaErr);
+            // Sentado tocando pandeiro/cavaco no banco
+            npc.group.position.y = plazaY + 0.28;
+            if (npc.torso) {
+              npc.torso.rotation.x = Math.sin(time * 5.5) * 0.14;
+              npc.torso.rotation.y = Math.sin(time * 3.8) * 0.18;
             }
+            if (npc.leftArm) npc.leftArm.rotation.x = -0.40 - Math.sin(time * 8.2) * 0.40;
+            if (npc.rightArm) npc.rightArm.rotation.x = 0.38 + Math.sin(time * 8.2) * 0.40;
+            if (npc.head) npc.head.rotation.x = Math.sin(time * 4.0) * 0.12;
+            npc.currentAction = '🎶 Tocando e cantando na roda de samba ao redor da fogueira';
+          } else {
+            // De pé dançando (Ginga carioca e Bounce)
+            npc.group.position.y = plazaY + bounce;
+            if (npc.torso) {
+              npc.torso.rotation.x = Math.sin(time * 3 + slot) * 0.12;
+              npc.torso.rotation.y = Math.sin(time * 4 + slot) * 0.25;
+            }
+            if (npc.leftLeg) npc.leftLeg.rotation.x = Math.sin(time * 8.2 + slot) * 0.32;
+            if (npc.rightLeg) npc.rightLeg.rotation.x = -Math.sin(time * 8.2 + slot) * 0.32;
+            if (npc.leftArm) npc.leftArm.rotation.x = 0.40 + Math.sin(time * 8.2 + slot) * 0.45;
+            if (npc.rightArm) npc.rightArm.rotation.x = -0.40 - Math.sin(time * 8.2 + slot) * 0.45;
+            if (npc.head) npc.head.rotation.y = Math.sin(time * 2.5 + slot) * 0.18;
+            npc.currentAction = '💃 Sambando e batendo palmas em volta da praça iluminada';
           }
 
-          if (Math.random() < 0.14) {
+          if (Math.random() < 0.18) {
             this.spawnSambaSpark({ x: -2.0, y: plazaY + 0.8, z: -4.0 });
           }
         }
         return;
-      } else if (!isNightOrSunset && npc.sambaState && npc.sambaState.isActive) {
+      } else if (!isNightOrSunset && npc.sambaState && (npc.sambaState.isActive || npc.sambaRoutingActive)) {
         npc.sambaState.isActive = false;
+        npc.sambaRoutingActive = false; // Permite reagendamento e rota limpa para a próxima noite
         npc.sambaStairStep = undefined;
-        npc.currentAction = npc.originalAction;
+        npc.currentAction = npc.originalAction || 'Caminhando pelas ruas pavimentadas da comunidade';
+      }
+
+      // Limpeza de estado de conversa ao amanhecer
+      if (!isNightOrSunset && npc.chatPartner) {
+        npc.chatPartner = null;
+        npc.chatTimer = 0;
       }
 
       // 4b. VIDA NOTURNA NAS RUAS & ENCONTROS NA CALÇADA
-      // Moradores que não estão no samba se encontram na frente de casas/postes para bater papo!
-      if (isNightOrSunset && !npc.isBuilder && !npc.isCourier && !npc.isBarraqueiro && !npc.isScenicMirante && (!npc.sambaState || !npc.sambaState.isParticipant) && npc.role !== 'Jogador da Pelada') {
+      // Moradores que não estão no samba se encontram na frente de casas/postes para bater papo breve!
+      if (isNightOrSunset && !npc.isBuilder && !npc.isCourier && !npc.isBarraqueiro && !npc.isScenicMirante && !npc.isFisherman && !npc.isAthlete && !npc.isMateiro && !npc.isCapoeira && !npc.isHorta && !npc.isMototaxi && !npc.isSurfer && !npc.isCalistenia && (!npc.sambaState || !npc.sambaState.isParticipant) && npc.role !== 'Jogador da Pelada') {
         // Se já estiver em conversa ativa com um vizinho:
         if (npc.chatPartner) {
           const partner = npc.chatPartner;
@@ -1601,29 +2093,33 @@ export class NPCManager {
           const dz = partner.group.position.z - npc.group.position.z;
           npc.group.rotation.y = Math.atan2(dx, dz);
 
-          // Animação de conversa brasileira com gesticulação e cabeça acenando
+          // Pés firmes e alinhados
+          if (npc.leftLeg) npc.leftLeg.rotation.x = 0;
+          if (npc.rightLeg) npc.rightLeg.rotation.x = 0;
+
+          // Animação de conversa brasileira com gesticulação viva e cabeça acenando
           const animOffset = (npc.citizenName ? npc.citizenName.length : 1);
           if (npc.torso) npc.torso.rotation.y = Math.sin(time * 3.0 + animOffset) * 0.14;
           if (npc.leftArm) npc.leftArm.rotation.x = -0.35 + Math.sin(time * 2.8 + animOffset) * 0.28;
           if (npc.rightArm) npc.rightArm.rotation.x = 0.25 - Math.cos(time * 2.5 + animOffset) * 0.22;
           if (npc.head) npc.head.rotation.x = Math.sin(time * 3.5 + animOffset) * 0.12;
 
-          if (npc.chatTimer > 15.0 || Math.hypot(dx, dz) > 2.8) {
-            // Conversa concluída! Despedem-se e voltam a caminhar para suas casas
-            npc.currentAction = `Despedindo-se de ${partnerName} e voltando para casa`;
-            partner.currentAction = `Despedindo-se de ${npcName} e voltando para casa`;
+          // Conversa breve e expressiva de 3.5s - NUNCA congela ou empaca pedestres na calçada!
+          if (npc.chatTimer > 3.5 || Math.hypot(dx, dz) > 2.6) {
+            npc.currentAction = `Despedindo-se de ${partnerName} e seguindo caminho`;
+            partner.currentAction = `Despedindo-se de ${npcName} e seguindo caminho`;
             npc.chatPartner = null;
             partner.chatPartner = null;
             npc.chatTimer = 0;
-            npc.chatCooldown = 35.0;
-            partner.chatCooldown = 35.0;
+            npc.chatCooldown = 50.0;
+            partner.chatCooldown = 50.0;
           }
           return;
         }
 
-        // Tenta iniciar uma conversa espontânea com algum vizinho próximo na rua (otimizado sem loop pesado)
+        // Tenta iniciar uma conversa espontânea com algum vizinho próximo na rua (raro e fluido)
         npc.chatCooldown = (npc.chatCooldown || 0) - delta;
-        if (npc.chatCooldown <= 0 && Math.random() < 0.02) {
+        if (npc.chatCooldown <= 0 && (!npc.pathQueue || npc.pathQueue.length === 0) && Math.random() < 0.003) {
           const randomIdx = Math.floor(Math.random() * this.npcs.length);
           const other = this.npcs[randomIdx];
           if (
@@ -1634,17 +2130,18 @@ export class NPCManager {
             !other.isCourier &&
             !other.isBarraqueiro &&
             !other.isScenicMirante &&
+            (!other.pathQueue || other.pathQueue.length === 0) &&
             (!other.sambaState || !other.sambaState.isParticipant) &&
             other.role !== 'Jogador da Pelada' &&
-            Math.abs(other.group.position.x - npc.group.position.x) < 2.5 &&
-            Math.abs(other.group.position.z - npc.group.position.z) < 2.5
+            Math.abs(other.group.position.x - npc.group.position.x) < 2.2 &&
+            Math.abs(other.group.position.z - npc.group.position.z) < 2.2
           ) {
             npc.chatPartner = other;
             other.chatPartner = npc;
             npc.chatTimer = 0;
             other.chatTimer = 0;
-            npc.currentAction = `Conversando na frente de casa com ${other.citizenName}`;
-            other.currentAction = `Batendo papo na calçada com ${npc.citizenName}`;
+            npc.currentAction = `Cumprimentando ${other.citizenName} na calçada`;
+            other.currentAction = `Batendo papo rápido com ${npc.citizenName}`;
             return;
           }
         }
@@ -1652,30 +2149,87 @@ export class NPCManager {
 
       // 4. SPECIALIZED BUILDER BEHAVIOR STATE MACHINE
       if (npc.isBuilder) {
+        // Encerramento estrito de expediente noturno:
+        // Ao anoitecer, libera o operário IMEDIATAMENTE de volta à vida civil da comunidade!
+        const timeInfo = this.arch && this.arch.env ? this.arch.env.getTimeOfDay() : 'day';
+        const phase = (typeof timeInfo === 'string') ? timeInfo : (timeInfo.phase || 'day');
+        const isWorkHours = (phase === 'day' || phase === 'sunset');
+        if (!isWorkHours) {
+          this.releaseWorker(npc);
+          return;
+        }
+
+        // Watchdog autônomo de encerramento de obra:
+        // Verifica se a obra atribuída ainda existe em activeConstructions ou activeUpgrades
+        const assignedSite = npc.assignedSite;
+        let siteStillActive = false;
+        if (assignedSite && this.arch) {
+          if (this.arch.activeConstructions && this.arch.activeConstructions.some(c => c === assignedSite || (c.plateau && assignedSite.plateau && c.plateau.id === assignedSite.plateau.id))) {
+            siteStillActive = true;
+          } else if (this.arch.activeUpgrades && this.arch.activeUpgrades.some(u => u === assignedSite || u.id === assignedSite.id || (u.house && assignedSite.house && u.house.id === assignedSite.house.id))) {
+            siteStillActive = true;
+          }
+        }
+
+        // Se a obra foi entregue/removida ou não está mais ativa, comemora e libera o cidadão de volta às ruas!
+        if (!siteStillActive) {
+          if (npc.builderState !== 'celebrating') {
+            npc.builderState = 'celebrating';
+            npc.cheerTimer = 2.5;
+            npc.currentAction = '🎉 Finalizando os últimos detalhes e celebrando a entrega da obra com a comunidade!';
+          }
+        }
+
         if (npc.builderState === 'traveling') {
-          // Walking to construction site
-          const dirX = npc.targetPos.x - npc.group.position.x;
-          const dirZ = npc.targetPos.z - npc.group.position.z;
+          // Deslocamento estrito por vias pavimentadas até o canteiro de obras
+          const target = npc.targetPos || npc.workerSpot;
+          const dirX = target.x - npc.group.position.x;
+          const dirZ = target.z - npc.group.position.z;
           const dist = Math.hypot(dirX, dirZ);
 
-          if (dist < 1.3) {
-            // Arrived at construction site!
-            npc.builderState = 'working';
-            npc.currentAction = 'Modelando o terreno e assentando tijolos';
-            npc.leftLeg.rotation.x = 0;
-            npc.rightLeg.rotation.x = 0;
-
-            // Rotate towards the center of the plot
-            if (npc.assignedSite && npc.assignedSite.plateau) {
-              const toCenterX = npc.assignedSite.plateau.x - npc.group.position.x;
-              const toCenterZ = npc.assignedSite.plateau.z - npc.group.position.z;
-              npc.group.rotation.y = Math.atan2(toCenterX, toCenterZ);
+          // Checa se atingiu o nó intermediário do trajeto viário
+          if (npc.builderPathQueue && npc.builderPathQueue.length > 0) {
+            if (dist < 1.2) {
+              npc.builderTargetNodeId = npc.builderPathQueue.shift();
+              const nxt = this.roadNodesMap.get(npc.builderTargetNodeId);
+              if (nxt) {
+                npc.targetPos = nxt.position.clone();
+              } else {
+                npc.targetPos = npc.workerSpot.clone();
+              }
             }
-          } else {
+          } else if (npc.workerSpot) {
+            // Fim da malha viária: caminha da última esquina até o workerSpot perimetral do lote
+            npc.targetPos = npc.workerSpot;
+            const distToSpot = Math.hypot(
+              npc.workerSpot.x - npc.group.position.x,
+              npc.workerSpot.z - npc.group.position.z
+            );
+
+            if (distToSpot < 1.3) {
+              // Chegou fisicamente ao canteiro de obras!
+              npc.builderState = 'working';
+              npc.currentAction = 'Modelando o terreno e assentando vigas e fiadas';
+              npc.leftLeg.rotation.x = 0;
+              npc.rightLeg.rotation.x = 0;
+
+              // Vira o corpo em direção ao centro da construção
+              if (npc.assignedSite && npc.assignedSite.plateau) {
+                const toCenterX = npc.assignedSite.plateau.x - npc.group.position.x;
+                const toCenterZ = npc.assignedSite.plateau.z - npc.group.position.z;
+                npc.group.rotation.y = Math.atan2(toCenterX, toCenterZ);
+              }
+              return;
+            }
+          }
+
+          // Movimento em direção ao ponto-alvo atual
+          if (dist > 0.05) {
             const normX = dirX / dist;
             const normZ = dirZ / dist;
-            npc.group.position.x += normX * npc.speed * delta;
-            npc.group.position.z += normZ * npc.speed * delta;
+            const moveStep = Math.min(dist, npc.speed * delta);
+            npc.group.position.x += normX * moveStep;
+            npc.group.position.z += normZ * moveStep;
 
             const angle = Math.atan2(normX, normZ);
             npc.group.rotation.y = angle;
@@ -1689,14 +2243,25 @@ export class NPCManager {
         }
 
         if (npc.builderState === 'working') {
-          // Standing on site, actively digging/hammering/laying bricks
+          // Checa horário de obras: dia e pôr do sol trabalham, noite e alvorecer descansam em silêncio
+          const timeInfo = this.arch && this.arch.env ? this.arch.env.getTimeOfDay() : 'day';
+          const phase = (typeof timeInfo === 'string') ? timeInfo : (timeInfo.phase || 'day');
+          const isWorkHours = (phase === 'day' || phase === 'sunset');
+
           npc.leftLeg.rotation.x = 0;
           npc.rightLeg.rotation.x = 0;
 
+          if (!isWorkHours) {
+            this.releaseWorker(npc);
+            return;
+          }
+
+          // Expediente diurno: atividade ativa de assentamento
           const swingCycle = Math.sin(time * 9 + npc.walkCycle);
           npc.toolArm.rotation.x = swingCycle * 0.85;
           npc.toolArm.rotation.z = Math.sin(time * 4.5) * 0.15;
           npc.torso.rotation.x = Math.max(0, swingCycle * 0.15);
+          npc.currentAction = 'Modelando o terreno e assentando vigas e fiadas';
           return;
         }
 
@@ -1708,7 +2273,9 @@ export class NPCManager {
 
           npc.toolArm.rotation.x = -Math.PI * 0.75 + Math.sin(time * 8) * 0.25;
           npc.torso.rotation.x = -0.1;
-          npc.currentAction = '🎉 Comemorando a entrega da nova casa com a comunidade!';
+          if (!npc.currentAction || !npc.currentAction.startsWith('🎉')) {
+            npc.currentAction = '🎉 Comemorando a entrega da nova casa com a comunidade!';
+          }
 
           if (npc.cheerTimer <= 0) {
             this.releaseWorker(npc);
@@ -1739,7 +2306,8 @@ export class NPCManager {
         { x: -40, z: 46.5, action: 'Comprando água de coco fresca na barraca do Seu Baiano' },
         { x: -10, z: 46.5, action: 'Pedindo mate gelado com biscoito Globo na barraca do Leandro' },
         { x: 20, z: 46.5, action: 'Saboreando tigela de açaí geladinho com banana na barraca do Marcos' },
-        { x: 50, z: 46.5, action: 'Pegando pasteis quentinhos de camarão na barraca da Dona Cida' }
+        { x: 50, z: 46.5, action: 'Pegando pasteis quentinhos de camarão na barraca da Dona Cida' },
+        { x: 116, z: 34.0, action: 'Tomando água de coco gelada no Quiosque do Sol Nascente' }
       ];
 
       const beachLeisureSpots = [
@@ -1748,14 +2316,21 @@ export class NPCManager {
         { x: 12, z: 66, action: 'Molhando os pés na beira da maré e sentindo a espuma' },
         { x: -50, z: 50, action: 'Relaxando na cadeira de praia sob o guarda-sol' },
         { x: 42, z: 49, action: 'Curtindo o visual do mar sob os guarda-sóis coloridos' },
-        { x: -15, z: 65, action: 'Caminhando na beira d\'água apreciando as ondas' }
+        { x: -15, z: 65, action: 'Caminhando na beira d\'água apreciando as ondas' },
+        { x: -92, z: 52, action: 'Apreciando as canoas caiçaras e a calmaria da prainha oeste' },
+        { x: -115, z: 46, action: 'Caminhando entre as redes de pesca estendidas na areia da prainha' },
+        { x: -78, z: 82, action: 'Passeando pelas tábuas do píer sentindo a brisa do oceano' },
+        { x: 78, z: 46, action: 'Assistindo à partida disputada de futevôlei na quadra leste' },
+        { x: 98, z: 48, action: 'Torcendo pela dupla na quadra de vôlei de praia' },
+        { x: 88, z: 56, action: 'Descansando na canga colorida estendida sob o sol' },
+        { x: 132, z: 46, action: 'Relaxando à sombra do coqueiral nas dunas do nascente' }
       ];
 
       const dirX = npc.targetPos.x - npc.group.position.x;
       const dirZ = npc.targetPos.z - npc.group.position.z;
       const dist = Math.hypot(dirX, dirZ);
 
-      if (npc.beachTrip && !npc.isBuilder && !npc.isCourier && !npc.isBarraqueiro && !npc.isScenicMirante && npc.role !== 'Jogador da Pelada') {
+      if (npc.beachTrip && !npc.isBuilder && !npc.isCourier && !npc.isBarraqueiro && !npc.isScenicMirante && !npc.isFisherman && !npc.isAthlete && !npc.isMateiro && !npc.isCapoeira && !npc.isHorta && !npc.isMototaxi && !npc.isSurfer && !npc.isCalistenia && npc.role !== 'Jogador da Pelada') {
         if (npc.beachTrip.state === 'going_to_beach') {
           if (dist < 1.3) {
             if (npc.pathQueue && npc.pathQueue.length > 0) {
@@ -1788,8 +2363,18 @@ export class NPCManager {
               if (this.simulation && this.simulation.addEconomy) {
                 this.simulation.addEconomy(5, 'Comércio na orla da praia');
               }
-              if (this.arch && this.arch.spawnConstructionPuff) {
-                this.arch.spawnConstructionPuff(npc.group.position);
+              // Encontra barraca mais próxima para o efeito temático
+              let nearestStall = 'coco';
+              let minDist = 999;
+              beachStalls.forEach(st => {
+                const d = Math.hypot(st.x - npc.group.position.x, st.z - npc.group.position.z);
+                if (d < minDist) { minDist = d; nearestStall = st.id; }
+              });
+              if (this.arch && this.arch.spawnBeachStallParticles) {
+                this.arch.spawnBeachStallParticles(nearestStall, npc.group.position);
+              }
+              if (this.soundtrack && this.soundtrack.playBeachCommerceSound) {
+                this.soundtrack.playBeachCommerceSound(npc.group.position);
               }
             }
 
@@ -1809,7 +2394,7 @@ export class NPCManager {
 
           if (npc.beachTrip.beachTimer <= 0) {
             // Retorno da praia pelas ruas pavimentadas (Prainha ou Várzea)
-            const chosenExitId = (npc.group.position.x < 0) ? 'coast_w_3' : 'coast_e_2';
+            const chosenExitId = (npc.group.position.x < -50) ? 'coast_w_2' : (npc.group.position.x < 30 ? 'coast_w_3' : 'coast_e_2');
             const hillDestinations = ['spine_1', 'mid_w_3', 'mid_e_3', 'transv_w_2', 'transv_e_2', 'viela_w_2', 'viela_e_2'];
             const targetHillId = hillDestinations[Math.floor(Math.random() * hillDestinations.length)];
             const path = this.findRoadPath(chosenExitId, targetHillId);
@@ -1840,10 +2425,11 @@ export class NPCManager {
 
       // Navegação Ordinária Guiada por Grafo Viário (Arestas Estritas de Ruas)
       if (dist < 1.2 && (!npc.beachTrip || npc.beachTrip.state === 'idle')) {
-        npc.waitTimer = 1.0 + Math.random() * 2.5;
+        // Se estiver em rota direta por fila de nós, não pausa a cada metro; pausas só ocorrem esporadicamente
+        npc.waitTimer = (npc.pathQueue && npc.pathQueue.length > 0) ? 0 : (Math.random() < 0.20 ? (0.6 + Math.random() * 0.8) : 0);
 
         // Oportunidade Orgânica e Esporádica de Sentar (Chance 5% em cadeiras de boteco ou bancos da Alameda)
-        if (!npc.isBuilder && !npc.isCourier && !npc.isBarraqueiro && !npc.isScenicMirante && npc.role !== 'Jogador da Pelada' && Math.random() < 0.05) {
+        if (!npc.isBuilder && !npc.isCourier && !npc.isBarraqueiro && !npc.isScenicMirante && !npc.isFisherman && !npc.isAthlete && !npc.isMateiro && !npc.isCapoeira && !npc.isHorta && !npc.isMototaxi && !npc.isSurfer && !npc.isCalistenia && npc.role !== 'Jogador da Pelada' && Math.random() < 0.05) {
           let candidateSpot = null;
           if (this.arch && this.arch.botecoSpots) {
             candidateSpot = this.arch.botecoSpots.find(s => !s.isOccupied && Math.hypot(s.x - npc.group.position.x, s.z - npc.group.position.z) < 3.2);
@@ -1866,14 +2452,14 @@ export class NPCManager {
         }
 
         // Desejo autônomo de ir à praia
-        if (npc.beachTrip && !npc.isBuilder && !npc.isCourier && !npc.isBarraqueiro && npc.role !== 'Jogador da Pelada') {
+        if (npc.beachTrip && !npc.isBuilder && !npc.isCourier && !npc.isBarraqueiro && !npc.isScenicMirante && !npc.isFisherman && !npc.isAthlete && !npc.isMateiro && !npc.isCapoeira && !npc.isHorta && !npc.isMototaxi && !npc.isSurfer && !npc.isCalistenia && npc.role !== 'Jogador da Pelada') {
           const nearCoast = (npc.group.position.z >= 12.0);
           const rollBeach = nearCoast ? (Math.random() < 0.28) : (Math.random() < 0.05);
 
           if (rollBeach) {
             const curId = npc.currentNodeId || (this.getNearestRoadNode(npc.group.position.x, npc.group.position.z) ? this.getNearestRoadNode(npc.group.position.x, npc.group.position.z).id : 'coast_w_3');
             // Cidadãos no alto usam rotas seguras de encosta (Prainha a oeste ou Várzea a leste)
-            const chosenEntranceId = (npc.group.position.x < 0) ? 'coast_w_3' : 'coast_e_2';
+            const chosenEntranceId = (npc.group.position.x < -50) ? 'coast_w_2' : (npc.group.position.x < 30 ? 'coast_w_3' : 'coast_e_2');
             const path = this.findRoadPath(curId, chosenEntranceId);
             npc.beachTrip.state = 'going_to_beach';
             npc.pathQueue = path.slice(1);
@@ -1951,12 +2537,30 @@ export class NPCManager {
         const angle = Math.atan2(normX, normZ);
         npc.group.rotation.y = angle;
 
-        npc.walkCycle += delta * 8;
+        npc.walkCycle += delta * (7.5 * (npc.speedMult || 1.0));
         const swing = Math.sin(npc.walkCycle) * 0.55;
         if (npc.leftLeg) npc.leftLeg.rotation.x = swing;
         if (npc.rightLeg) npc.rightLeg.rotation.x = -swing;
-        if (npc.leftArm) npc.leftArm.rotation.x = -swing * 0.65;
-        if (npc.rightArm) npc.rightArm.rotation.x = swing * 0.65;
+        
+        // Aceno e gestos comunitários orgânicos
+        if (npc.greetingTimer > 0) {
+          npc.greetingTimer -= delta;
+          if (npc.rightArm) npc.rightArm.rotation.x = -0.85 * Math.sin(npc.greetingTimer * Math.PI / 1.2);
+          if (npc.leftArm) npc.leftArm.rotation.x = -swing * 0.45;
+        } else {
+          if (npc.leftArm) npc.leftArm.rotation.x = -swing * 0.65;
+          if (npc.rightArm) npc.rightArm.rotation.x = swing * 0.65;
+        }
+
+        // Rotação orgânica do olhar da cabeça dos cidadãos
+        if (npc.head) {
+          npc.glanceTimer = (npc.glanceTimer || 3.0) - delta;
+          if (npc.glanceTimer <= 0) {
+            npc.glanceTimer = 2.5 + Math.random() * 4.5;
+            npc.targetHeadRotY = (Math.random() - 0.5) * 0.45;
+          }
+          npc.head.rotation.y += ((npc.targetHeadRotY || 0) - npc.head.rotation.y) * delta * 2.5;
+        }
       }
 
       // 4. REAL-TIME OBSTACLE AVOIDANCE & TANGENTIAL WALL SLIDING:
@@ -1973,10 +2577,11 @@ export class NPCManager {
           const dz = npc.group.position.z - hz;
           if (Math.abs(dz) > 3.8) continue;
           const dy = npc.group.position.y - hy;
-          if (Math.abs(dy) > 3.5) continue;
+          // Cobre toda a altura da casa incluindo fundações e palafitas na encosta (-6.5m até +4.0m)
+          if (dy > 4.0 || dy < -6.5) continue;
 
           const distSq = dx * dx + dz * dz;
-          const minSafeDist = 2.3; // Corrected radius: allows squeezing through 5.5m alleys without bouncing
+          const minSafeDist = 2.45; // Raio seguro: impede 100% de entrar na parede ou passar sob palafitas
 
           if (distSq < minSafeDist * minSafeDist && distSq > 0.0001) {
             const distH = Math.sqrt(distSq);
@@ -2034,17 +2639,20 @@ export class NPCManager {
         }
       } else if (npc.isBuilder && npc.builderState === 'traveling') {
         npc.stuckCheckTimer = (npc.stuckCheckTimer || 0) + delta;
-        if (npc.stuckCheckTimer >= 2.5) {
+        if (npc.stuckCheckTimer >= 2.2) {
           npc.stuckCheckTimer = 0;
           if (npc.stuckLastPos) {
             const distTraveled = Math.hypot(
               npc.group.position.x - npc.stuckLastPos.x,
               npc.group.position.z - npc.stuckLastPos.z
             );
-            if (distTraveled < 0.4) {
-              // Builder caught on corner, evade laterally
-              npc.group.position.x += (Math.random() - 0.5) * 2.0;
-              npc.group.position.z += (Math.random() - 0.5) * 2.0;
+            if (distTraveled < 0.35) {
+              // Construtor bloqueado: reposiciona suavemente no nó pavimentado mais próximo em vez de teletransporte aleatório
+              const curY = npc.group.position.y || (this.terrain ? this.terrain.getElevation(npc.group.position.x, npc.group.position.z) : 0);
+              const safeRoad = this.getNearestRoadNode(npc.group.position.x, npc.group.position.z, curY);
+              if (safeRoad) {
+                npc.group.position.set(safeRoad.x, safeRoad.y + 0.1, safeRoad.z);
+              }
             }
           }
           if (!npc.stuckLastPos) npc.stuckLastPos = new THREE.Vector3();
@@ -2102,6 +2710,12 @@ export class NPCManager {
           p1.z -= nz * push;
           p2.x += nx * push;
           p2.z += nz * push;
+
+          // Cumprimento afetuoso esporádico entre vizinhos cruzando ladeiras
+          if ((!n1.greetingTimer || n1.greetingTimer <= 0) && (!n2.greetingTimer || n2.greetingTimer <= 0) && Math.random() < 0.20) {
+            n1.greetingTimer = 1.2;
+            n2.greetingTimer = 1.2;
+          }
         }
       }
     }
@@ -2121,6 +2735,9 @@ export class NPCManager {
         this.sambaSparks.splice(s, 1);
       }
     }
+
+    // Samba soundscape & acoustic rhythm update
+    this.updateSambaSoundscape(delta, time);
   }
 
   spawnSambaSpark(pos) {
@@ -2133,6 +2750,57 @@ export class NPCManager {
       vel: new THREE.Vector3((Math.random() - 0.5) * 0.35, 1.2 + Math.random() * 0.8, (Math.random() - 0.5) * 0.35),
       life: 1.4
     });
+  }
+
+  // CENTRALIZED SPATIAL SAMBA SOUNDSCAPE (Desacoplado de slots individuais)
+  updateSambaSoundscape(delta, time) {
+    if (!this.soundtrack || !this.soundtrack.playSambaRhythm) return;
+
+    const curTime = this.env ? this.env.getTimeOfDay() : 'day';
+    const curPhase = (typeof curTime === 'string') ? curTime : (curTime.phase || 'day');
+    const isNightOrSunset = (curPhase === 'night' || curPhase === 'sunset');
+
+    const plazaY = this.getFloorElevation(-2.0, -4.0);
+    const plazaCenter = { x: -2.0, y: plazaY, z: -4.0 };
+
+    this.sambaAudioCooldown = (this.sambaAudioCooldown || 0) - delta;
+
+    if (isNightOrSunset) {
+      // Conta quantos participantes já chegaram à Praça do Samba ou estão no raio de 14 metros
+      let participantsInPlaza = 0;
+      for (let i = 0; i < this.npcs.length; i++) {
+        const n = this.npcs[i];
+        if (n.sambaState && (n.sambaState.isActive || Math.hypot(n.group.position.x - (-2.0), n.group.position.z - (-4.0)) < 14.0)) {
+          participantsInPlaza++;
+        }
+      }
+
+      // Se houver pelo menos 1 participante na praça, a roda com surdo, pandeiro, cavaco e palmas toca a cada 2.30s!
+      if (participantsInPlaza >= 1) {
+        if (this.sambaAudioCooldown <= 0) {
+          this.sambaAudioCooldown = 2.30;
+          try {
+            this.soundtrack.playSambaRhythm(plazaCenter, true);
+          } catch (e) {
+            console.warn('Samba soundscape guarded:', e);
+          }
+        }
+        // Fogueira crepitando e fagulhas douradas ao redor
+        if (Math.random() < 0.25) {
+          this.spawnSambaSpark({ x: -2.0, y: plazaY + 0.8, z: -4.0 });
+        }
+      }
+    } else {
+      // Durante o Dia Tropical: solo acústico intimista de cavaquinho do Músico Cênico do Terreiro!
+      if (this.sambaAudioCooldown <= 0) {
+        this.sambaAudioCooldown = 3.60;
+        try {
+          this.soundtrack.playSambaRhythm(plazaCenter, false);
+        } catch (e) {
+          console.warn('Daytime samba guarded:', e);
+        }
+      }
+    }
   }
 
   clearAll() {

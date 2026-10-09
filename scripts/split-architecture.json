@@ -1,0 +1,46 @@
+{
+  "dir": "architecture",
+  "drop": ["upgradeHouse"],
+  "modules": {
+    "houses": {
+      "export": "HousesMixin",
+      "doc": "Casas, construção, upgrades e lajes.",
+      "methods": ["createInitialSettlements","clearHouses","selectExpansionPlateau","spawnNewHouse","startHouseConstruction","upgradeHouse#2","buildHouse","buildStory","buildLaje","createClothesline","spawnConstructionPuff","getActiveHousesData"]
+    },
+    "roads": {
+      "export": "RoadsMixin",
+      "doc": "Vias, alameda do samba, bocas de boteco, estradas de laje e postes.",
+      "methods": ["createContinentalRoadNetwork","createAlamedaDoSamba","createBotecoPockets","createEstradasDeLajes","createSolarLamps"]
+    },
+    "westCoast": {
+      "export": "WestCoastMixin",
+      "doc": "Costa oeste: farol, píer, enseada dos pescadores, palmeiras e barcos.",
+      "methods": ["createLighthouse","createFishingPier","createWestFishingCove","createWestPioneerCove","createBeachPalms","updateExpeditionBoats","spawnJumpingFish"]
+    },
+    "beachLife": {
+      "export": "BeachLifeMixin",
+      "doc": "Orla: calçadão, barracas, quiosques, esportes de praia e comércio.",
+      "methods": ["createBeachBoardwalks","createBeachStalls","createBeachfrontKiosks","createBeachLeisureZones","createBeachLifeEdges","createEastBeachSportsAndLeisure","createCoastalBromeliadsAndBushes","createCommunityShopSigns","createAltinhaDuo","spawnBeachStallParticles"]
+    },
+    "hillsides": {
+      "export": "HillsidesMixin",
+      "doc": "Encostas leste e oeste, mata atlântica, miradouros laterais e olarias.",
+      "methods": ["createWestHillsideExpansion","createEastHillsideAndDuneExpansion","createMataAtlanticaBorders","createMiranteDoPoente","createMiranteDoLevante","createGrandeOlariaCeramica","createBrickOlaria"]
+    },
+    "community": {
+      "export": "CommunityMixin",
+      "doc": "Centro e várzea: samba, futebol, feira, horta agroflorestal e usina solar.",
+      "methods": ["createAgroforestFarm","createCulturalMarket","createSoccerField","kickSoccerBall","createSambaPlaza","createSolarPark"]
+    },
+    "highlands": {
+      "export": "HighlandsMixin",
+      "doc": "Alto da Serra: mirante imperial, turbinas, pipas, terraços, nascente e torre.",
+      "methods": ["createHighlandLandmarks","createMiranteDaVistaImperial","createWindTurbines","createMiranteDasPipas","createAgroflorestaTerraces","createNascenteDaSerra","createTorreDeRadioCume"]
+    },
+    "updates": {
+      "export": "UpdatesMixin",
+      "doc": "Laço de atualização por frame: iluminação noturna, fumaça e animações.",
+      "methods": ["update","updateNightLighting","updateLajesAndSmoke","spawnSmokePuff"]
+    }
+  }
+}

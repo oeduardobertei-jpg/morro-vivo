@@ -1,0 +1,30 @@
+{
+  "dir": "npcs",
+  "modules": {
+    "roadGraph": {
+      "export": "RoadGraphMixin",
+      "doc": "Grafo viário: elevação do piso, construção da malha e busca de caminhos.",
+      "methods": ["getFloorElevation","buildRoadGraph","findRoadPath","getNearestRoadNode"]
+    },
+    "population": {
+      "export": "PopulationMixin",
+      "doc": "População: spawn inicial, novos moradores, malha 3D dos NPCs e roupas de praia.",
+      "methods": ["spawnInitialPopulation","spawnNewCivilian","createNPCMesh","setNPCBeachOutfit"]
+    },
+    "workers": {
+      "export": "WorkersMixin",
+      "doc": "Obras: carreteiros e operários recrutados para os canteiros.",
+      "methods": ["dispatchCourierWithSupplies","releaseCourier","recruitWorkersForSite","releaseWorker"]
+    },
+    "kite": {
+      "export": "KiteMixin",
+      "doc": "Evento do Menino da Pipa.",
+      "methods": ["createKiteMesh","createKiteLine","updateKite","triggerAutonomousKite","cleanKite"]
+    },
+    "sambaSound": {
+      "export": "SambaMixin",
+      "doc": "Faíscas e paisagem sonora da roda de samba.",
+      "methods": ["spawnSambaSpark","updateSambaSoundscape"]
+    }
+  }
+}

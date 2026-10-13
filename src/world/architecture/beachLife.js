@@ -954,5 +954,21 @@ export const BeachLifeMixin = {
       maxLife: 1.2,
       isCoin: true
     });
+  },
+
+  // Centelha Econômica para qualquer ponto de comércio ou feira da colina
+  spawnCoinFeedback(pos) {
+    if (!this.stallCoinGeo || !this.stallMatCoin) return;
+    const coinMesh = new THREE.Mesh(this.stallCoinGeo, this.stallMatCoin);
+    coinMesh.position.set(pos.x, pos.y + 0.8, pos.z);
+    this.group.add(coinMesh);
+    this.particles.push({
+      mesh: coinMesh,
+      vel: new THREE.Vector3(0, 0.95, 0),
+      gravity: 0,
+      life: 1.2,
+      maxLife: 1.2,
+      isCoin: true
+    });
   }
 };

@@ -4,6 +4,7 @@ import { PopulationMixin } from './npcs/population.js';
 import { WorkersMixin } from './npcs/workers.js';
 import { KiteMixin } from './npcs/kite.js';
 import { SambaMixin } from './npcs/sambaSound.js';
+import { EconomyBehaviors } from './npcs/economyBehaviors.js';
 
 export class NPCManager {
   constructor(scene, terrain, architecture) {
@@ -135,6 +136,9 @@ export class NPCManager {
           npc.group.position.z = 17.6; // Retém na base, no calçadão litorâneo
         }
       }
+
+      // 1b2. MICRO-ECONOMIA COMUNITÁRIA ORGÂNICA (Vendas e Trocas Solidárias)
+      EconomyBehaviors.updateNPCEconomy(npc, delta, this.arch, this.simulation, this.soundtrack);
 
       // 1c. MORADOR SENTADO (Boteco de Calçada ou Banco da Alameda)
       if (npc.isSitting) {

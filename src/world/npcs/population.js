@@ -462,7 +462,13 @@ export const PopulationMixin = {
     head.position.y = 1.36;
     npcGroup.add(head);
 
-    // Hat / Visor / Cap (City hat)
+    // Identificação de papéis profissionais especializados
+    const isFishermanRole = role.title.includes('Pescador');
+    const isFarmerRole = role.title.includes('Agricultor') || role.title.includes('Horta');
+    const isMerchantRole = role.title.includes('Feirante');
+    const isLighthouseRole = role.title.includes('Farol');
+
+    // Hat / Visor / Cap (City hat & Uniformes Profissionais)
     let hat;
     if (isBarraqueiro) {
       if (role.stallId === 'coco') {
@@ -481,6 +487,37 @@ export const PopulationMixin = {
         hat.position.y = 1.58;
       }
       npcGroup.add(hat);
+    } else if (isFishermanRole) {
+      // Chapéu de palha de pescador caiçara tradicional com aba curva
+      const fishStrawMat = new THREE.MeshLambertMaterial({ color: 0xD4A373, flatShading: true });
+      hat = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.48, 0.14, 8), fishStrawMat);
+      hat.position.y = 1.57;
+      npcGroup.add(hat);
+    } else if (isFarmerRole) {
+      // Chapéu de palha rústico de aba larga da horta agroflorestal
+      const farmStrawMat = new THREE.MeshLambertMaterial({ color: 0xCA8A04, flatShading: true });
+      hat = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.52, 0.12, 8), farmStrawMat);
+      hat.position.y = 1.57;
+      npcGroup.add(hat);
+    } else if (isMerchantRole) {
+      // Boina / boné verde da feira livre
+      hat = new THREE.Mesh(
+        new THREE.BoxGeometry(0.40, 0.10, 0.46),
+        new THREE.MeshLambertMaterial({ color: 0x059669, flatShading: true })
+      );
+      hat.position.y = 1.58;
+      npcGroup.add(hat);
+    } else if (isLighthouseRole) {
+      // Quepe náutico tradicional da marinha/farol
+      const capGroup = new THREE.Group();
+      const capCrown = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.14, 0.42), new THREE.MeshLambertMaterial({ color: 0xF8FAFC }));
+      capCrown.position.y = 1.60;
+      capGroup.add(capCrown);
+      const capVisor = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.04, 0.20), new THREE.MeshLambertMaterial({ color: 0x0F172A }));
+      capVisor.position.set(0, 1.54, 0.24);
+      capGroup.add(capVisor);
+      hat = capGroup;
+      npcGroup.add(hat);
     } else {
       hat = new THREE.Mesh(
         new THREE.BoxGeometry(0.40, 0.12, 0.44),
@@ -489,6 +526,71 @@ export const PopulationMixin = {
       hat.position.y = 1.58;
       npcGroup.add(hat);
     }
+
+    // Acessório da Mão / Ofício (Cesto de peixes, horta, feira ou bebida refrescante)
+    const handItem = new THREE.Group();
+    handItem.position.set(-0.35, 0.65, 0.12);
+
+    if (isFishermanRole) {
+      // Cesto trançado com peixe fresco
+      const basket = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.14, 0.26, 6),
+        new THREE.MeshLambertMaterial({ color: 0x78350F, flatShading: true })
+      );
+      handItem.add(basket);
+      const fishTail = new THREE.Mesh(
+        new THREE.ConeGeometry(0.08, 0.22, 4),
+        new THREE.MeshLambertMaterial({ color: 0x94A3B8, flatShading: true })
+      );
+      fishTail.rotation.x = Math.PI;
+      fishTail.position.set(0, 0.14, 0);
+      handItem.add(fishTail);
+      handItem.visible = true;
+    } else if (isFarmerRole) {
+      // Cesto de colheita com hortaliças frescas
+      const basket = new THREE.Mesh(
+        new THREE.BoxGeometry(0.28, 0.20, 0.24),
+        new THREE.MeshLambertMaterial({ color: 0xA16207, flatShading: true })
+      );
+      handItem.add(basket);
+      const greens = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.12, 0),
+        new THREE.MeshLambertMaterial({ color: 0x16A34A, flatShading: true })
+      );
+      greens.position.set(0, 0.12, 0);
+      handItem.add(greens);
+      handItem.visible = true;
+    } else if (isMerchantRole) {
+      // Caixote de feira comunitária
+      const crate = new THREE.Mesh(
+        new THREE.BoxGeometry(0.32, 0.22, 0.28),
+        new THREE.MeshLambertMaterial({ color: 0x854D0E, flatShading: true })
+      );
+      handItem.add(crate);
+      const fruit = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(0.10, 0),
+        new THREE.MeshLambertMaterial({ color: 0xEA580C, flatShading: true })
+      );
+      fruit.position.set(0, 0.12, 0);
+      handItem.add(fruit);
+      handItem.visible = true;
+    } else {
+      // Copo de mate gelado / coco verde adquirido nas barracas (ativado na compra)
+      const cup = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08, 0.06, 0.20, 6),
+        new THREE.MeshLambertMaterial({ color: 0x10B981, flatShading: true })
+      );
+      handItem.add(cup);
+      const straw = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.012, 0.012, 0.26, 4),
+        new THREE.MeshBasicMaterial({ color: 0xFEF08A })
+      );
+      straw.position.set(0.02, 0.12, 0);
+      straw.rotation.z = -0.2;
+      handItem.add(straw);
+      handItem.visible = false;
+    }
+    npcGroup.add(handItem);
 
     // Beach Accessories Group (Sunglasses, straw sun visor, beach towel)
     const beachAccGroup = new THREE.Group();
@@ -625,6 +727,15 @@ export const PopulationMixin = {
       leftArm,
       rightArm,
       hat,
+      handItem,
+      isFishermanRole,
+      isFarmerRole,
+      isMerchantRole,
+      isLighthouseRole,
+      // Micro-economia comunitária orgânica
+      wallet: 15 + Math.floor(Math.random() * 25),
+      purchaseCooldown: 8.0 + Math.random() * 20.0,
+      holdingDrinkTimer: 0,
       builderHelmet: helmetGroup,
       toolArm,
       cartGroup,

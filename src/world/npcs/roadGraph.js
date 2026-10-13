@@ -19,6 +19,17 @@ export const RoadGraphMixin = {
       return yTerr + 0.35; // Sobre o deck de madeira elevado da praça
     }
 
+    // 3. Píer dos Pescadores no Extremo Oeste (z: 73 a 96 em torno de x: -78)
+    if (Math.abs(x - (-78.0)) <= 2.2 && z >= 73.0 && z <= 96.5) {
+      return 1.78; // Superfície firme do pranchão de madeira sobre as águas
+    }
+
+    // 4. Deck de Madeira do Mercado Cultural da Várzea
+    if (Math.hypot(x - 75.0, z - 4.0) <= 8.5) {
+      const yTerr = this.terrain ? this.terrain.getElevation(75.0, 4.0) : 3.8;
+      return yTerr + 0.25;
+    }
+
     // Padrão: Elevação da malha de terreno
     return this.terrain ? this.terrain.getElevation(x, z) : 0;
   },

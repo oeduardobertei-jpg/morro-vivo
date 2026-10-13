@@ -358,11 +358,11 @@ if (btnNewWorld && modalNewWorld) {
 // Camera Presets & Cinematic Mode Controller
 const cameraPresets = {
   pan: { pos: new THREE.Vector3(-65, 68, 145), target: new THREE.Vector3(0, 10, -35), name: 'Panorâmica Continental' },
-  prainha: { pos: new THREE.Vector3(-115, 36, 65), target: new THREE.Vector3(-85, 8, -25), name: 'Distrito Poente & Falésias' },
-  morro: { pos: new THREE.Vector3(-18, 28, 35), target: new THREE.Vector3(-2, 10, -4), name: 'Morro do Sol' },
+  prainha: { pos: new THREE.Vector3(-105, 22, 95), target: new THREE.Vector3(-75, 4, 65), name: 'Porto & Prainha' },
+  morro: { pos: new THREE.Vector3(-24, 28, 45), target: new THREE.Vector3(-2, 10, -4), name: 'Morro do Sol' },
   serra: { pos: new THREE.Vector3(0, 52, -20), target: new THREE.Vector3(0, 16, -68), name: 'Alto da Serra' },
   cume: { pos: new THREE.Vector3(0, 48, -40), target: new THREE.Vector3(0, 14, -98), name: 'Distrito Cume & Alturas' },
-  varzea: { pos: new THREE.Vector3(115, 36, 65), target: new THREE.Vector3(85, 8, -25), name: 'Distrito Levante & Vale Verde' }
+  varzea: { pos: new THREE.Vector3(80, 24, 45), target: new THREE.Vector3(55, 5, 8), name: 'Polo da Várzea' }
 };
 
 let activePresetKey = 'pan';
@@ -384,24 +384,31 @@ function setActiveCamBtn(activeKey) {
   });
 }
 
-function animateCameraTo(targetPos, lookAtPos) {
+function animateCameraTo(targetPos, lookAtPos, durationMs = 1100) {
   const startPos = camera.position.clone();
   const startTarget = controls.target.clone();
-  let progress = 0;
+  const startTime = performance.now();
 
-  function step() {
-    if (cinematicCam.enabled) return; // Yield immediately to cinematic camera if active
-    progress += 0.035;
-    if (progress <= 1) {
-      camera.position.lerpVectors(startPos, targetPos, progress);
-      controls.target.lerpVectors(startTarget, lookAtPos, progress);
+  function step(now) {
+    if (cinematicCam.enabled) return;
+    const elapsed = Math.max(0, now - startTime);
+    const t = Math.min(1.0, elapsed / durationMs);
+    // Curva suave easeInOutCubic para transição cinematográfica natural
+    const ease = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+    camera.position.lerpVectors(startPos, targetPos, ease);
+    controls.target.lerpVectors(startTarget, lookAtPos, ease);
+    controls.update();
+
+    if (t < 1.0) {
       requestAnimationFrame(step);
     } else {
       camera.position.copy(targetPos);
       controls.target.copy(lookAtPos);
+      controls.update();
     }
   }
-  step();
+  requestAnimationFrame(step);
 }
 
 function selectCameraPreset(key) {

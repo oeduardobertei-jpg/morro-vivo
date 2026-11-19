@@ -37,6 +37,9 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
+// Shadow map em 20 Hz reduz ~65% dos draw calls de sombra sem impacto visual ao orbitar/mover a câmera!
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true;
 renderer.toneMapping = THREE.AgXToneMapping;
 renderer.toneMappingExposure = 1.0;
 container.appendChild(renderer.domElement);
@@ -105,6 +108,133 @@ controls.addEventListener('start', () => {
   // User manually grabbed the camera: release lock on followed target
   followTargetGroup = null;
 });
+
+// =========================================================================
+// CONTROLE DE CÂMERA PELO TECLADO (W A S D / Setas + Q/E girar + Shift turbo)
+// =========================================================================
+const camKeys = new Set();
+const camVel = new THREE.Vector3();
+let camYawVel = 0;
+const _camFwd = new THREE.Vector3();
+const _camRight = new THREE.Vector3();
+const _camUp = new THREE.Vector3(0, 1, 0);
+const _camMove = new THREE.Vector3();
+const _camOffset = new THREE.Vector3();
+const _followTargetTmp = new THREE.Vector3();
+const _followPosTmp = new THREE.Vector3();
+
+const CAM_KEY_CODES = new Set([
+  'KeyW', 'KeyA', 'KeyS', 'KeyD',
+  'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+  'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight'
+]);
+
+function isTypingInUI(el) {
+  if (!el) return false;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+}
+
+window.addEventListener('keydown', (e) => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (isTypingInUI(document.activeElement)) return;
+  if (!CAM_KEY_CODES.has(e.code)) return;
+
+  camKeys.add(e.code);
+  if (e.code.startsWith('Arrow')) e.preventDefault();
+
+  // Ao mover com teclado, solta trava de follow/cinema imediatamente
+  if (e.code !== 'ShiftLeft' && e.code !== 'ShiftRight') {
+    followTargetGroup = null;
+    if (cinematicCam.enabled && typeof toggleCinematicMode === 'function') {
+      toggleCinematicMode();
+    }
+  }
+});
+
+window.addEventListener('keyup', (e) => {
+  camKeys.delete(e.code);
+});
+
+window.addEventListener('blur', () => {
+  camKeys.clear();
+  camVel.set(0, 0, 0);
+  camYawVel = 0;
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    camKeys.clear();
+    camVel.set(0, 0, 0);
+    camYawVel = 0;
+  }
+});
+
+function updateKeyboardCamera(dt) {
+  const fwdInput = (camKeys.has('KeyW') || camKeys.has('ArrowUp') ? 1 : 0)
+    - (camKeys.has('KeyS') || camKeys.has('ArrowDown') ? 1 : 0);
+  const sideInput = (camKeys.has('KeyD') || camKeys.has('ArrowRight') ? 1 : 0)
+    - (camKeys.has('KeyA') || camKeys.has('ArrowLeft') ? 1 : 0);
+  const yawInput = (camKeys.has('KeyQ') ? 1 : 0) - (camKeys.has('KeyE') ? 1 : 0);
+
+  const hasInput = fwdInput !== 0 || sideInput !== 0 || yawInput !== 0;
+  if (!hasInput && camVel.lengthSq() < 1e-4 && Math.abs(camYawVel) < 1e-4) return;
+
+  // Velocidade adaptativa à distância de zoom (precisa no close-up, rápida na panorâmica!)
+  const camDist = camera.position.distanceTo(controls.target);
+  const boost = (camKeys.has('ShiftLeft') || camKeys.has('ShiftRight')) ? 2.15 : 1.0;
+  const maxSpeed = THREE.MathUtils.clamp(camDist * 0.72, 22, 165) * boost;
+
+  camera.getWorldDirection(_camFwd);
+  _camFwd.y = 0;
+  if (_camFwd.lengthSq() < 1e-6) _camFwd.set(0, 0, -1);
+  _camFwd.normalize();
+  _camRight.crossVectors(_camFwd, _camUp).normalize();
+
+  _camMove.set(0, 0, 0);
+  if (fwdInput !== 0) _camMove.addScaledVector(_camFwd, fwdInput);
+  if (sideInput !== 0) _camMove.addScaledVector(_camRight, sideInput);
+  if (_camMove.lengthSq() > 1e-6) _camMove.normalize().multiplyScalar(maxSpeed);
+
+  // Inércia suave (acelera e freia como seda)
+  const dampLambda = hasInput ? 11.0 : 9.0;
+  camVel.x = THREE.MathUtils.damp(camVel.x, _camMove.x, dampLambda, dt);
+  camVel.z = THREE.MathUtils.damp(camVel.z, _camMove.z, dampLambda, dt);
+  camYawVel = THREE.MathUtils.damp(camYawVel, yawInput * 1.25 * (boost > 1 ? 1.35 : 1.0), 10.0, dt);
+
+  if (Math.abs(camVel.x) > 1e-4 || Math.abs(camVel.z) > 1e-4) {
+    const dx = camVel.x * dt;
+    const dz = camVel.z * dt;
+
+    const prevX = controls.target.x;
+    const prevZ = controls.target.z;
+    const nextX = THREE.MathUtils.clamp(prevX + dx, -315, 315);
+    const nextZ = THREE.MathUtils.clamp(prevZ + dz, -195, 165);
+    const appliedDx = nextX - prevX;
+    const appliedDz = nextZ - prevZ;
+
+    controls.target.x = nextX;
+    controls.target.z = nextZ;
+    camera.position.x += appliedDx;
+    camera.position.z += appliedDz;
+
+    // Acompanha suavemente o relevo sob o alvo ao subir/descer entre praia e serra
+    if (terrain && typeof terrain.getElevation === 'function') {
+      const groundTargetY = Math.max(2.0, terrain.getElevation(nextX, nextZ) + 4.0);
+      const nextTargetY = THREE.MathUtils.damp(controls.target.y, groundTargetY, 4.5, dt);
+      const dy = nextTargetY - controls.target.y;
+      controls.target.y = nextTargetY;
+      camera.position.y += dy;
+    }
+  }
+
+  // Rotação horizontal suave com Q / E em torno do ponto alvo
+  if (Math.abs(camYawVel) > 1e-4) {
+    _camOffset.subVectors(camera.position, controls.target);
+    _camOffset.applyAxisAngle(_camUp, camYawVel * dt);
+    camera.position.copy(controls.target).add(_camOffset);
+  }
+}
 
 // Fast BVH + Sphere Pre-filtered Raycaster for instant object picking (< 0.1ms)
 const fastPicker = new FastPicker(camera, architecture, npcs);
@@ -1172,14 +1302,22 @@ const quality = new AdaptiveQuality(renderer, {
 adaptiveQualityReady = true;
 const batcher = new StaticBatcher(scene, {
   enabled: !urlParams.has('nobatch'),
-  // Casas, moradores e veículos de mobilidade (bondinho/mototáxi) ficam fora do agrupamento estático
+  // Apenas NPCs e veículos móveis ficam fora do batch estático; casas estáticas entram no batch e continuam clicáveis via FastPicker (layer 31)!
   getExcludedRoots: () => [
     ...npcs.npcs.map((n) => n.group),
-    ...architecture.houses.map((h) => h.meshGroup),
     ...(architecture.mobilityDynamicGroups || [])
-  ].filter(Boolean)
+  ].filter(Boolean),
+  onActive: () => {
+    if (culler && culler.enabled) culler.collect();
+  }
 });
+architecture.batcher = batcher;
 perf.extra = () => `Lotes ${batcher.stats.merged} meshes em ${batcher.stats.chunks} (${batcher.stats.state})\nDinâmicas ${batcher.stats.dynamic} | Pick ${fastPicker.lastPickMs.toFixed(2)}ms\nCulling ${culler.stats.culledMeshes}/${culler.stats.totalMeshes} meshes\nResolução x${quality.ratio} | FX: ${postFX.mode}`;
+
+let shadowRefreshAcc = 0;
+env.onPhaseChange(() => {
+  renderer.shadowMap.needsUpdate = true;
+});
 
 function animate() {
   requestAnimationFrame(animate);
@@ -1188,6 +1326,13 @@ function animate() {
   const rawDelta = Math.min(timer.getDelta(), 0.1);
   const simSpeed = simulation.speed || 1;
   const gameDelta = rawDelta * simSpeed;
+
+  // Atualiza shadow map a 20 Hz (50ms) para eliminar engasgos ao girar/mover a câmera mantendo sombras suaves
+  shadowRefreshAcc += rawDelta;
+  if (shadowRefreshAcc >= 0.05) {
+    shadowRefreshAcc = 0;
+    renderer.shadowMap.needsUpdate = true;
+  }
 
   // Update subsystems with synchronized simulation speed!
   const envSpeed = simSpeed === 1 ? 1 : Math.min(simSpeed * 0.75, 2.5);
@@ -1214,22 +1359,22 @@ function animate() {
     }
   });
 
-  // Update camera system: follow target (NPC/Bondinho/Mototáxi), cinematic drone, or user orbit controls
+  // Update camera system: follow target (NPC/Bondinho/Mototáxi), cinematic drone, or user orbit + WASD controls
   if (followTargetGroup) {
     const tp = followTargetGroup.position;
-    controls.target.lerp(new THREE.Vector3(tp.x, tp.y + 1.2, tp.z), Math.min(1, rawDelta * 6));
+    _followTargetTmp.set(tp.x, tp.y + 1.2, tp.z);
+    controls.target.lerp(_followTargetTmp, Math.min(1, rawDelta * 6));
     const desiredFollowX = tp.x + followOffset.x;
     const desiredFollowZ = tp.z + followOffset.z;
     const groundFollowY = terrain ? terrain.getElevation(desiredFollowX, desiredFollowZ) : tp.y;
     const desiredFollowY = Math.max(tp.y + followOffset.y, groundFollowY + 5.5);
-    camera.position.lerp(
-      new THREE.Vector3(desiredFollowX, desiredFollowY, desiredFollowZ),
-      Math.min(1, rawDelta * 4.5)
-    );
+    _followPosTmp.set(desiredFollowX, desiredFollowY, desiredFollowZ);
+    camera.position.lerp(_followPosTmp, Math.min(1, rawDelta * 4.5));
     controls.update();
   } else if (cinematicCam.enabled) {
     cinematicCam.update(rawDelta);
   } else {
+    updateKeyboardCamera(rawDelta);
     controls.update();
     if (terrain && typeof terrain.getElevation === 'function') {
       const minGroundY = terrain.getElevation(camera.position.x, camera.position.z) + 2.8;

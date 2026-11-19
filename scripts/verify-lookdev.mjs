@@ -153,7 +153,33 @@ try {
   await setCam(42, 20, 12, 24, 8, -14);
   await snap('06_night_village_studiofx.png');
 
-  // 7. Telemetria estabilizada (Panorâmica Dia em ambos os modos)
+  // 7. Teste funcional rápido: WASD move câmera + FastPicker clica casa agrupada
+  await setCam(-45, 42, 108, 0, 8, -10);
+  const beforePos = await page.evaluate(() => window.__morro.controls.target.toArray());
+  await page.keyboard.down('KeyW');
+  await page.keyboard.down('KeyD');
+  await new Promise((r) => setTimeout(r, 450));
+  await page.keyboard.up('KeyW');
+  await page.keyboard.up('KeyD');
+  await new Promise((r) => setTimeout(r, 150));
+  const afterPos = await page.evaluate(() => window.__morro.controls.target.toArray());
+  const wasdMovedDist = Number(Math.hypot(afterPos[0] - beforePos[0], afterPos[2] - beforePos[2]).toFixed(2));
+
+  // Testa FastPicker em uma casa agrupada (layer 31)
+  const pickCheck = await page.evaluate(() => {
+    const m = window.__morro;
+    const h = m.architecture.houses.find((x) => x && x.meshGroup && x.meshGroup.visible);
+    if (!h) return { ok: false, reason: 'no-house' };
+    const p = h.meshGroup.position;
+    m.camera.position.set(p.x + 10, p.y + 8, p.z + 12);
+    m.controls.target.set(p.x, p.y + 1.8, p.z);
+    m.controls.update();
+    m.camera.updateMatrixWorld(true);
+    const hit = m.fastPicker.pick({ x: 0, y: 0 });
+    return { ok: !!(hit && hit.type === 'house'), hitType: hit ? hit.type : null, pickMs: Number(m.fastPicker.lastPickMs.toFixed(2)) };
+  });
+
+  // 8. Telemetria estabilizada (Panorâmica Dia em ambos os modos)
   await setCam(-45, 42, 108, 0, 8, -10);
   const metrics = await page.evaluate(async () => {
     const m = window.__morro;
@@ -177,10 +203,14 @@ try {
     await new Promise((r) => setTimeout(r, 1500));
     const fpsStudioFX = await countFrames(2000);
 
+    let pointLightCount = 0;
+    m.scene.traverse((o) => { if (o.isPointLight) pointLightCount++; });
+
     return {
       fpsMaquete: Number(fpsMaquete.toFixed(1)),
       fpsStudioFX: Number(fpsStudioFX.toFixed(1)),
       maqueteRenderInfo,
+      pointLightCount,
       perf: m.perf.snapshot(),
       cull: m.culler.stats,
       batch: m.batcher.stats,
@@ -191,7 +221,7 @@ try {
     };
   });
 
-  console.log(JSON.stringify({ outDir, metrics, errors, warningCount: warnings.length }, null, 2));
+  console.log(JSON.stringify({ outDir, wasdMovedDist, pickCheck, metrics, errors, warningCount: warnings.length }, null, 2));
   if (errors.length > 0) process.exitCode = 1;
 } finally {
   await browser.close();

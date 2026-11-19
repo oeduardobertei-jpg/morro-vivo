@@ -95,6 +95,8 @@ export class Architecture {
       createStylizedMaterial({ color: 0x45607D, roughness: 0.24, metalness: 0.10 }, 'ceramic', { roughness: 0.24, metalness: 0.10 }),
       createStylizedMaterial({ color: 0x31455A, roughness: 0.28, metalness: 0.08 }, 'ceramic', { roughness: 0.28, metalness: 0.08 })
     ];
+    // Marca como emissivo dinâmico para que StaticBatcher agrupe todas as janelas compartilhando o material vivo (acendem à noite em O(1)!)
+    this.sharedWindowMats.forEach(m => { m.userData.dynamicEmissive = true; });
 
     // Zonas de Permanência Orgânica (Bancos & Botecos)
     this.botecoSpots = [];

@@ -737,6 +737,10 @@ export const HousesMixin = {
         this.buildLaje(house, 2);
       }
 
+      if (this.batcher && house.meshGroup) {
+        this.batcher.ingestGroup(house.meshGroup);
+      }
+
       return true;
     }
     return false;
@@ -998,6 +1002,9 @@ export const HousesMixin = {
     });
 
     this.group.add(houseGroup);
+    if (this.batcher) {
+      this.batcher.ingestGroup(houseGroup);
+    }
     return houseData;
   },
 

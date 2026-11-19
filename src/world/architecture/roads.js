@@ -314,6 +314,7 @@ export const RoadsMixin = {
     });
 
     // 3. Postes Coloniais com Iluminação Âmbar e Floreiras Laterais
+    const alamedaLampMat = new THREE.MeshBasicMaterial({ color: 0xFFD700 });
     const lampZs = [-19.2, -17.0, -14.8, -13.2];
     lampZs.forEach((lZ, lIdx) => {
       const baseLY = this.terrain ? this.terrain.getElevation(-2.0, lZ) : 22.0;
@@ -327,14 +328,10 @@ export const RoadsMixin = {
         post.position.set(postX, lY + 1.4, lZ);
         alamedaGroup.add(post);
 
-        // Luminária Dourada
-        const lamp = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22, 0), new THREE.MeshBasicMaterial({ color: 0xFFD700 }));
+        // Luminária Dourada (sem PointLight por poste para evitar loop pesado de luzes no fragment shader!)
+        const lamp = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22, 0), alamedaLampMat);
         lamp.position.set(postX, lY + 2.8, lZ);
         alamedaGroup.add(lamp);
-
-        const light = new THREE.PointLight(0xFFA200, 1.8, 8);
-        light.position.set(postX, lY + 2.8, lZ);
-        alamedaGroup.add(light);
 
         // Vaso com Folhagens e Flores entre os postes
         if (lIdx % 2 === 1) {
@@ -896,40 +893,39 @@ export const RoadsMixin = {
       { x: 0, z: -165 }   // Mirante da Sela Norte
     ];
 
+    // Geometrias e materiais compartilhados (permite batching em 1 draw call e 0 PointLights extras por poste!)
+    const poleGeo = new THREE.CylinderGeometry(0.08, 0.1, 3.5, 5);
+    const poleMat = new THREE.MeshLambertMaterial({ color: 0x334155 });
+    const solarGeo = new THREE.BoxGeometry(0.8, 0.05, 0.6);
+    const solarMat = new THREE.MeshLambertMaterial({ color: 0x1E3A8A });
+    const bulbGeo = new THREE.SphereGeometry(0.24, 6, 6);
+    const sharedSolarBulbMat = new THREE.MeshLambertMaterial({
+      color: 0xFFE066,
+      emissive: 0xFFA200,
+      emissiveIntensity: 0.2
+    });
+
     lampCoords.forEach(pos => {
       const lampGroup = new THREE.Group();
       const y = this.terrain ? this.terrain.getElevation(pos.x, pos.z) : 6;
       lampGroup.position.set(pos.x, y, pos.z);
 
-      const poleGeo = new THREE.CylinderGeometry(0.08, 0.1, 3.5, 5);
-      const poleMat = new THREE.MeshLambertMaterial({ color: 0x334155 });
       const pole = new THREE.Mesh(poleGeo, poleMat);
       pole.position.y = 1.75;
       lampGroup.add(pole);
 
-      const solarGeo = new THREE.BoxGeometry(0.8, 0.05, 0.6);
-      const solarMat = new THREE.MeshLambertMaterial({ color: 0x1E3A8A });
       const solar = new THREE.Mesh(solarGeo, solarMat);
       solar.position.set(0, 3.55, 0);
       solar.rotation.x = 0.3;
       lampGroup.add(solar);
 
-      const bulbGeo = new THREE.SphereGeometry(0.22, 6, 6);
-      const bulbMat = new THREE.MeshLambertMaterial({
-        color: 0xFFE066,
-        emissive: 0xFFA200,
-        emissiveIntensity: 0.2
-      });
-      const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+      const bulb = new THREE.Mesh(bulbGeo, sharedSolarBulbMat);
       bulb.position.set(0.3, 3.25, 0);
       lampGroup.add(bulb);
 
-      const lampLight = new THREE.PointLight(0xFFA200, 0, 14);
-      lampLight.position.set(0.3, 3.1, 0);
-      lampGroup.add(lampLight);
-
       this.group.add(lampGroup);
-      this.solarLamps.push({ bulbMat, lampLight });
     });
+    // Registra 1 única entrada para atualizar emissiveIntensity em O(1) para todos os 21 postes solares!
+    this.solarLamps.push({ bulbMat: sharedSolarBulbMat, lampLight: null });
   }
 };

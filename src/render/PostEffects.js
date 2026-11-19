@@ -100,14 +100,14 @@ export class PostEffects {
       this.composer.addPass(this.renderPass);
 
       this.normalPass = new NormalPass(this.scene, this.camera, {
-        resolutionScale: 0.75
+        resolutionScale: 0.5
       });
       this.composer.addPass(this.normalPass);
 
       this.ssaoEffect = new SSAOEffect(this.camera, this.normalPass.texture, {
         blendFunction: BlendFunction.MULTIPLY,
-        samples: 8,
-        rings: 3,
+        samples: 6,
+        rings: 2,
         depthAwareUpsampling: true,
         worldDistanceThreshold: 520,
         worldDistanceFalloff: 180,
@@ -153,7 +153,7 @@ export class PostEffects {
       this.composer.addPass(this.mainEffectPass);
 
       this.smaaEffect = new SMAAEffect({
-        preset: SMAAPreset.MEDIUM
+        preset: SMAAPreset.LOW
       });
       this.smaaPass = new EffectPass(this.camera, this.smaaEffect);
       this.composer.addPass(this.smaaPass);

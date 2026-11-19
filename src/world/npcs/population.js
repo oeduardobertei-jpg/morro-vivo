@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
-// Helpers de modelagem estilizada (formas arredondadas e anatômicas em vez de caixas cruas)
-const RB = (w, h, d, r = 0.04, seg = 2) => new RoundedBoxGeometry(w, h, d, seg, Math.min(r, w * 0.49, h * 0.49, d * 0.49));
+// Helpers de modelagem estilizada (formas arredondadas e anatômicas com baixo custo de vértices)
+const RB = (w, h, d, r = 0.04, seg = 1) => new RoundedBoxGeometry(w, h, d, seg, Math.min(r, w * 0.49, h * 0.49, d * 0.49));
 const at = (geo, x = 0, y = 0, z = 0) => { geo.translate(x, y, z); return geo; };
 // Merge seguro: normaliza atributos (remove index/uv divergentes) para unir partes numa única malha
 const merge = (...geos) => {
@@ -17,19 +17,75 @@ const merge = (...geos) => {
   return merged;
 };
 
-// Cache compartilhado para figuras estilizadas de veículos, barcos, praia e lajes (mesma estética Claude Opus dos NPCs)
+// Reutilizáveis para fundir sub-partes coloridas de um mesmo membro rígido em 1 único draw call (vertex colors)
+const _m4 = new THREE.Matrix4();
+const _mp = new THREE.Vector3();
+const _mq = new THREE.Quaternion();
+const _me = new THREE.Euler();
+const _ms = new THREE.Vector3();
+const _mc = new THREE.Color();
+
+function mergeColoredParts(parts) {
+  if (!parts || parts.length === 0) return null;
+  const prepared = [];
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    if (!p || !p.geo) continue;
+    const g = p.geo.index ? p.geo.toNonIndexed() : p.geo.clone();
+    for (const attrName of Object.keys(g.attributes)) {
+      if (attrName !== 'position' && attrName !== 'normal') g.deleteAttribute(attrName);
+    }
+    if (p.pos || p.rot || p.scale) {
+      _mp.set(p.pos ? p.pos[0] : 0, p.pos ? p.pos[1] : 0, p.pos ? p.pos[2] : 0);
+      _me.set(p.rot ? p.rot[0] : 0, p.rot ? p.rot[1] : 0, p.rot ? p.rot[2] : 0);
+      _mq.setFromEuler(_me);
+      _ms.set(p.scale ? p.scale[0] : 1, p.scale ? p.scale[1] : 1, p.scale ? p.scale[2] : 1);
+      _m4.compose(_mp, _mq, _ms);
+      g.applyMatrix4(_m4);
+    }
+    if (!g.attributes.normal) g.computeVertexNormals();
+    const count = g.attributes.position.count;
+    const colors = new Float32Array(count * 3);
+    _mc.setHex(p.color);
+    if (p.skinWarm) {
+      // Leve aquecimento para simular dispersão subsuperficial sem precisar de emissivo no material compartilhado
+      _mc.r = Math.min(1, _mc.r * 1.12);
+      _mc.g = Math.min(1, _mc.g * 1.10);
+      _mc.b = Math.min(1, _mc.b * 1.08);
+    }
+    for (let v = 0; v < count; v++) {
+      colors[v * 3] = _mc.r;
+      colors[v * 3 + 1] = _mc.g;
+      colors[v * 3 + 2] = _mc.b;
+    }
+    g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    prepared.push(g);
+  }
+  if (prepared.length === 0) return null;
+  const merged = mergeGeometries(prepared, false);
+  for (let i = 0; i < prepared.length; i++) prepared[i].dispose();
+  merged.computeBoundingSphere();
+  return merged;
+}
+
+// Cache compartilhado para figuras estilizadas de veículos, barcos, praia e lajes (compactadas em 4-6 draw calls por figura)
 let _figCache = null;
 function _getFigCache() {
   if (_figCache) return _figCache;
   const dome = (r, sy, drop) => {
-    const g = new THREE.SphereGeometry(r, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+    const g = new THREE.SphereGeometry(r, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2);
     g.scale(1, sy, 1);
     g.translate(0, -drop, 0);
     return g;
   };
   _figCache = {
+    vertexMat: new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.78,
+      metalness: 0.02,
+      flatShading: false
+    }),
     mats: new Map(),
-    skinMats: new Map(),
     torsoM: merge(
       at(RB(0.45, 0.33, 0.26, 0.08), 0, 0.12, 0),
       at(RB(0.38, 0.31, 0.23, 0.07), 0, -0.14, 0)
@@ -39,13 +95,13 @@ function _getFigCache() {
       at(RB(0.31, 0.15, 0.20, 0.06), 0, -0.06, 0),
       at(RB(0.40, 0.16, 0.24, 0.07), 0, -0.20, 0)
     ),
-    collar: new THREE.CylinderGeometry(0.11, 0.13, 0.05, 12),
+    collar: new THREE.CylinderGeometry(0.11, 0.13, 0.05, 10),
     lapel: RB(0.115, 0.54, 0.275, 0.04),
     stripe: RB(0.46, 0.10, 0.275, 0.045),
-    neck: new THREE.CylinderGeometry(0.07, 0.082, 0.12, 10),
+    neck: new THREE.CylinderGeometry(0.07, 0.082, 0.12, 8),
     head: merge(
-      at(RB(0.30, 0.29, 0.29, 0.08, 3), 0, 0.02, 0),
-      at(RB(0.25, 0.11, 0.26, 0.048, 2), 0, -0.105, 0.008)
+      at(RB(0.30, 0.29, 0.29, 0.08, 2), 0, 0.02, 0),
+      at(RB(0.25, 0.11, 0.26, 0.048, 1), 0, -0.105, 0.008)
     ),
     ear: RB(0.034, 0.08, 0.055, 0.015),
     eyeWhite: RB(0.066, 0.048, 0.012, 0.005, 1),
@@ -64,9 +120,9 @@ function _getFigCache() {
     mustache: RB(0.115, 0.03, 0.028, 0.01, 1),
     hairTop: RB(0.315, 0.095, 0.305, 0.042),
     hairBack: RB(0.305, 0.20, 0.068, 0.028),
-    strawBrim: new THREE.CylinderGeometry(0.32, 0.35, 0.03, 16),
-    strawCrown: new THREE.CylinderGeometry(0.155, 0.185, 0.14, 14),
-    strawBand: new THREE.CylinderGeometry(0.18, 0.188, 0.038, 14),
+    strawBrim: new THREE.CylinderGeometry(0.32, 0.35, 0.03, 12),
+    strawCrown: new THREE.CylinderGeometry(0.155, 0.185, 0.14, 10),
+    strawBand: new THREE.CylinderGeometry(0.18, 0.188, 0.038, 10),
     helmetDome: dome(0.195, 0.76, 0.055),
     visor: RB(0.28, 0.065, 0.05, 0.02, 1),
     shades: merge(
@@ -75,18 +131,18 @@ function _getFigCache() {
       at(new THREE.BoxGeometry(0.32, 0.014, 0.014), 0, 0.02, 0)
     ),
     sleeve: merge(
-      at(new THREE.SphereGeometry(0.078, 10, 8), 0, 0, 0),
+      at(new THREE.SphereGeometry(0.078, 8, 6), 0, 0, 0),
       at(RB(0.132, 0.20, 0.132, 0.055), 0, -0.09, 0)
     ),
     forearm: merge(
-      at(new THREE.CapsuleGeometry(0.048, 0.19, 4, 10), 0, -0.28, 0),
+      at(new THREE.CapsuleGeometry(0.048, 0.19, 2, 6), 0, -0.28, 0),
       at(RB(0.08, 0.098, 0.06, 0.03), 0, -0.44, 0.005),
       at(RB(0.028, 0.055, 0.028, 0.01, 1), 0.042, -0.415, 0.018)
     ),
     thigh: at(RB(0.16, 0.30, 0.18, 0.065), 0, -0.14, 0),
     calf: merge(
       at(RB(0.135, 0.22, 0.145, 0.055), 0, -0.37, 0),
-      at(new THREE.SphereGeometry(0.074, 10, 8), 0, -0.27, 0.005)
+      at(new THREE.SphereGeometry(0.074, 8, 6), 0, -0.27, 0.005)
     ),
     shoe: merge(
       at(RB(0.145, 0.08, 0.225, 0.038), 0, -0.49, 0.03),
@@ -98,48 +154,9 @@ function _getFigCache() {
   return _figCache;
 }
 
-const _NPCS_FINISH = {
-  cloth: { roughness: 0.85, metalness: 0.0 },
-  gloss: { roughness: 0.24, metalness: 0.14 },
-  leather: { roughness: 0.42, metalness: 0.05 },
-  helmet: { roughness: 0.34, metalness: 0.10 },
-  hair: { roughness: 0.72, metalness: 0.0 },
-  straw: { roughness: 0.90, metalness: 0.0 }
-};
-
 export function createStylizedFigure(opts = {}) {
   const C = _getFigCache();
-  const getMat = (hex, finish = 'cloth') => {
-    const key = `${hex}_${finish}`;
-    let m = C.mats.get(key);
-    if (!m) {
-      const f = _NPCS_FINISH[finish] || _NPCS_FINISH.cloth;
-      m = new THREE.MeshStandardMaterial({
-        color: hex,
-        roughness: f.roughness,
-        metalness: f.metalness,
-        flatShading: false
-      });
-      C.mats.set(key, m);
-    }
-    return m;
-  };
-  const getSkin = (hex) => {
-    let m = C.skinMats.get(hex);
-    if (!m) {
-      const warm = new THREE.Color(hex).multiplyScalar(0.08);
-      m = new THREE.MeshStandardMaterial({
-        color: hex,
-        roughness: 0.64,
-        metalness: 0.0,
-        emissive: warm,
-        emissiveIntensity: 0.45,
-        flatShading: false
-      });
-      C.skinMats.set(hex, m);
-    }
-    return m;
-  };
+  const vMat = C.vertexMat;
 
   const {
     skinColor = 0xB27138,
@@ -166,170 +183,121 @@ export function createStylizedFigure(opts = {}) {
     includeShoes = true
   } = opts;
 
-  const skinMat = getSkin(skinColor);
-  const torsoMat = bareChest ? skinMat : getMat(shirtColor, 'cloth');
-  const sleeveMat = bareChest ? skinMat : getMat(shirtColor, 'cloth');
-  const legMat = bareLegs ? skinMat : getMat(pantsColor, 'cloth');
-  const calfMat = (bareLegs || wearsShorts) ? skinMat : getMat(pantsColor, 'cloth');
-  const hairMat = getMat(hairColor, 'hair');
+  const torsoHex = bareChest ? skinColor : shirtColor;
+  const sleeveHex = bareChest ? skinColor : shirtColor;
+  const legHex = bareLegs ? skinColor : pantsColor;
+  const calfHex = (bareLegs || wearsShorts) ? skinColor : pantsColor;
 
   const group = new THREE.Group();
 
-  // 1. Torso em V + pescoço + gola/colete/listra
-  const torso = new THREE.Mesh(isFemale ? C.torsoF : C.torsoM, torsoMat);
+  // 1. Torso em V + pescoço + gola/colete/listra (1 único draw call)
+  const torsoParts = [
+    { geo: isFemale ? C.torsoF : C.torsoM, color: torsoHex, skinWarm: bareChest },
+    { geo: C.neck, color: skinColor, skinWarm: true, pos: [0, 0.33, 0] }
+  ];
+  if (!bareChest) {
+    torsoParts.push({ geo: C.collar, color: 0xF8FAFC, pos: [0, 0.28, 0.01] });
+  }
+  if (hasVest) {
+    torsoParts.push({ geo: C.lapel, color: vestColor, pos: [-0.16, -0.01, 0] });
+    torsoParts.push({ geo: C.lapel, color: vestColor, pos: [0.16, -0.01, 0] });
+  }
+  if (hasStripe && !bareChest) {
+    torsoParts.push({ geo: C.stripe, color: stripeColor, pos: [0, 0.05, 0] });
+  }
+  const torso = new THREE.Mesh(mergeColoredParts(torsoParts), vMat);
   torso.position.y = 0.85;
   torso.castShadow = true;
   group.add(torso);
 
-  const neck = new THREE.Mesh(C.neck, skinMat);
-  neck.position.set(0, 0.33, 0);
-  torso.add(neck);
-
-  if (!bareChest) {
-    const collar = new THREE.Mesh(C.collar, getMat(0xF8FAFC));
-    collar.position.set(0, 0.28, 0.01);
-    torso.add(collar);
-  }
-  if (hasVest) {
-    const vMat = getMat(vestColor);
-    [-0.16, 0.16].forEach(lx => {
-      const lapel = new THREE.Mesh(C.lapel, vMat);
-      lapel.position.set(lx, -0.01, 0);
-      torso.add(lapel);
-    });
-  }
-  if (hasStripe && !bareChest) {
-    const st = new THREE.Mesh(C.stripe, getMat(stripeColor));
-    st.position.set(0, 0.05, 0);
-    torso.add(st);
-  }
-
-  // 2. Cabeça esculpida com orelhas, olhos (esclera + íris + brilho), sobrancelhas, nariz, boca e barba
-  const head = new THREE.Mesh(C.head, skinMat);
-  head.position.y = 1.35;
-  head.castShadow = true;
-  group.add(head);
-
-  [-0.155, 0.155].forEach(ex => {
-    const ear = new THREE.Mesh(C.ear, skinMat);
-    ear.position.set(ex, -0.005, 0);
-    head.add(ear);
-  });
-
-  const whiteMat = getMat(0xF5F1EA, 'gloss');
-  const irisMat = getMat(0x3B2414, 'gloss');
-  const shineMat = getMat(0xFFFFFF, 'gloss');
+  // 2. Cabeça esculpida + rosto + barba/óculos + cabelo/chapéu/capacete (1 único draw call)
+  const lipHex = new THREE.Color(skinColor).multiplyScalar(0.62).getHex();
+  const headParts = [
+    { geo: C.head, color: skinColor, skinWarm: true },
+    { geo: C.ear, color: skinColor, skinWarm: true, pos: [-0.155, -0.005, 0] },
+    { geo: C.ear, color: skinColor, skinWarm: true, pos: [0.155, -0.005, 0] },
+    { geo: C.nose, color: skinColor, skinWarm: true, pos: [0, -0.01, 0.152] },
+    { geo: C.mouth, color: lipHex, pos: [0, -0.088, hasBeard ? 0.156 : 0.143] },
+    { geo: C.hairBack, color: hairColor, pos: [0, 0.015, -0.138] }
+  ];
   [-1, 1].forEach(side => {
     const ex = side * 0.064;
-    const w = new THREE.Mesh(C.eyeWhite, whiteMat);
-    w.position.set(ex, 0.024, 0.144);
-    head.add(w);
-    const ir = new THREE.Mesh(C.eyeIris, irisMat);
-    ir.position.set(ex - side * 0.005, 0.021, 0.150);
-    head.add(ir);
-    const sh = new THREE.Mesh(C.eyeShine, shineMat);
-    sh.position.set(ex - side * 0.005 + 0.007, 0.031, 0.155);
-    head.add(sh);
-
-    const brow = new THREE.Mesh(C.brow, hairMat);
-    brow.position.set(ex, 0.068, 0.147);
-    brow.rotation.z = side * -0.07;
-    head.add(brow);
+    headParts.push(
+      { geo: C.eyeWhite, color: 0xF5F1EA, pos: [ex, 0.024, 0.144] },
+      { geo: C.eyeIris, color: 0x3B2414, pos: [ex - side * 0.005, 0.021, 0.150] },
+      { geo: C.eyeShine, color: 0xFFFFFF, pos: [ex - side * 0.005 + 0.007, 0.031, 0.155] },
+      { geo: C.brow, color: hairColor, pos: [ex, 0.068, 0.147], rot: [0, 0, side * -0.07] }
+    );
   });
-
-  const nose = new THREE.Mesh(C.nose, skinMat);
-  nose.position.set(0, -0.01, 0.152);
-  head.add(nose);
-
   if (hasBeard) {
-    const beard = new THREE.Mesh(C.beard, hairMat);
-    beard.position.set(0, -0.13, 0.052);
-    head.add(beard);
+    headParts.push({ geo: C.beard, color: hairColor, pos: [0, -0.13, 0.052] });
   } else if (hasMustache) {
-    const must = new THREE.Mesh(C.mustache, hairMat);
-    must.position.set(0, -0.062, 0.146);
-    head.add(must);
+    headParts.push({ geo: C.mustache, color: hairColor, pos: [0, -0.062, 0.146] });
   }
-
-  const lipHex = new THREE.Color(skinColor).multiplyScalar(0.62).getHex();
-  const mouth = new THREE.Mesh(C.mouth, getMat(lipHex));
-  mouth.position.set(0, -0.088, hasBeard ? 0.156 : 0.143);
-  head.add(mouth);
-
   if (hasShades) {
-    const shades = new THREE.Mesh(C.shades, getMat(0x111827, 'gloss'));
-    shades.position.set(0, 0.026, 0.158);
-    head.add(shades);
+    headParts.push({ geo: C.shades, color: 0x111827, pos: [0, 0.026, 0.158] });
   }
-
-  // Base capilar traseira + chapéu/capacete/cabelo
-  const hairBack = new THREE.Mesh(C.hairBack, hairMat);
-  hairBack.position.set(0, 0.015, -0.138);
-  head.add(hairBack);
-
   if (hatType === 'straw') {
-    const strawMat = getMat(0xDFB848, 'straw');
-    const brim = new THREE.Mesh(C.strawBrim, strawMat);
-    brim.position.y = 0.155;
-    const crown = new THREE.Mesh(C.strawCrown, strawMat);
-    crown.position.y = 0.23;
-    const band = new THREE.Mesh(C.strawBand, getMat(0x991B1B, 'cloth'));
-    band.position.y = 0.182;
-    head.add(brim, crown, band);
+    headParts.push(
+      { geo: C.strawBrim, color: 0xDFB848, pos: [0, 0.155, 0] },
+      { geo: C.strawCrown, color: 0xDFB848, pos: [0, 0.23, 0] },
+      { geo: C.strawBand, color: 0x991B1B, pos: [0, 0.182, 0] }
+    );
   } else if (hatType === 'helmet') {
-    const hDome = new THREE.Mesh(C.helmetDome, getMat(helmetColor, 'helmet'));
-    hDome.position.set(0, 0.14, -0.005);
-    head.add(hDome);
-    if (hasVisor) {
-      const vis = new THREE.Mesh(C.visor, getMat(0x0F172A, 'gloss'));
-      vis.position.set(0, 0.065, 0.155);
-      head.add(vis);
-    }
+    headParts.push({ geo: C.helmetDome, color: helmetColor, pos: [0, 0.14, -0.005] });
+    if (hasVisor) headParts.push({ geo: C.visor, color: 0x0F172A, pos: [0, 0.065, 0.155] });
   } else if (hatType === 'hair') {
-    const hTop = new THREE.Mesh(C.hairTop, hairMat);
-    hTop.position.y = 0.155;
-    head.add(hTop);
+    headParts.push({ geo: C.hairTop, color: hairColor, pos: [0, 0.155, 0] });
   }
+  const head = new THREE.Mesh(mergeColoredParts(headParts), vMat);
+  head.position.y = 1.35;
+  group.add(head);
 
-  // 3. Braços articulados com ombro arredondado, antebraço e mão com polegar
-  const leftArm = new THREE.Group();
+  // 3. Braços articulados (1 único draw call por braço, geometria compartilhada)
+  const armGeo = mergeColoredParts([
+    { geo: C.sleeve, color: sleeveHex, skinWarm: bareChest },
+    { geo: C.forearm, color: skinColor, skinWarm: true }
+  ]);
+  const leftArm = new THREE.Mesh(armGeo, vMat);
   leftArm.position.set(-0.295, 1.04, 0);
-  leftArm.add(new THREE.Mesh(C.sleeve, sleeveMat), new THREE.Mesh(C.forearm, skinMat));
   group.add(leftArm);
 
-  const rightArm = new THREE.Group();
+  const rightArm = new THREE.Mesh(armGeo, vMat);
   rightArm.position.set(0.295, 1.04, 0);
-  rightArm.add(new THREE.Mesh(C.sleeve, sleeveMat), new THREE.Mesh(C.forearm, skinMat));
   group.add(rightArm);
 
-  // 4. Pernas articuladas (coxa + joelho + canela + calçado com solado)
+  // 4. Pernas articuladas (1 único draw call por perna, geometria compartilhada)
   let leftLeg = null;
   let rightLeg = null;
   if (includeLegs) {
-    const soleMat = getMat(shoeColor === 0xF8FAFC ? 0x9CA3AF : 0xF1F5F9, 'leather');
-    leftLeg = new THREE.Mesh(C.thigh, legMat);
-    leftLeg.position.set(-0.11, 0.56, 0);
-    leftLeg.add(new THREE.Mesh(C.calf, calfMat));
+    const legParts = [
+      { geo: C.thigh, color: legHex, skinWarm: bareLegs },
+      { geo: C.calf, color: calfHex, skinWarm: bareLegs || wearsShorts }
+    ];
     if (includeShoes) {
-      const shL = new THREE.Mesh(C.shoe, getMat(shoeColor, 'leather'));
-      shL.add(new THREE.Mesh(C.sole, soleMat));
-      leftLeg.add(shL);
+      const soleHex = shoeColor === 0xF8FAFC ? 0x9CA3AF : 0xF1F5F9;
+      legParts.push(
+        { geo: C.shoe, color: shoeColor },
+        { geo: C.sole, color: soleHex }
+      );
     }
+    const legGeo = mergeColoredParts(legParts);
+    leftLeg = new THREE.Mesh(legGeo, vMat);
+    leftLeg.position.set(-0.11, 0.56, 0);
     group.add(leftLeg);
 
-    rightLeg = new THREE.Mesh(C.thigh, legMat);
+    rightLeg = new THREE.Mesh(legGeo, vMat);
     rightLeg.position.set(0.11, 0.56, 0);
-    rightLeg.add(new THREE.Mesh(C.calf, calfMat));
-    if (includeShoes) {
-      const shR = new THREE.Mesh(C.shoe, getMat(shoeColor, 'leather'));
-      shR.add(new THREE.Mesh(C.sole, soleMat));
-      rightLeg.add(shR);
-    }
     group.add(rightLeg);
   }
 
   if (sungaColor) {
-    const sunga = new THREE.Mesh(C.sunga, getMat(sungaColor));
+    let sMat = C.mats.get(`sunga_${sungaColor}`);
+    if (!sMat) {
+      sMat = new THREE.MeshStandardMaterial({ color: sungaColor, roughness: 0.85, metalness: 0.0, flatShading: false });
+      C.mats.set(`sunga_${sungaColor}`, sMat);
+    }
+    const sunga = new THREE.Mesh(C.sunga, sMat);
     sunga.position.set(0, 0.54, 0);
     group.add(sunga);
   }
@@ -817,11 +785,11 @@ export const PopulationMixin = {
 
   _ensureSharedNPCAssets() {
     if (this._sharedNPCGeos) return;
-    // ANATOMIA ESTILIZADA v2: coxa e canela separadas (bermudas mostram a perna!), joelho, tornozelo e calçado com solado
+    // ANATOMIA ESTILIZADA v3 (Compactada p/ 60 FPS): formas arredondadas limpas com ~65% menos triângulos
     const legGeo = at(RB(0.17, 0.32, 0.19, 0.07), 0, -0.15, 0);
     const calfGeo = merge(
       at(RB(0.14, 0.24, 0.155, 0.06), 0, -0.40, 0),
-      at(new THREE.SphereGeometry(0.078, 10, 8), 0, -0.29, 0.005) // joelho arredondado
+      at(new THREE.SphereGeometry(0.078, 8, 6), 0, -0.29, 0.005) // joelho arredondado
     );
     const shoeGeo = merge(
       at(RB(0.15, 0.085, 0.24, 0.04), 0, -0.525, 0.035),
@@ -831,16 +799,16 @@ export const PopulationMixin = {
 
     // Braço com ombro arredondado (deltoide) + manga; antebraço cilíndrico com MÃO esculpida
     const sleeveGeo = merge(
-      at(new THREE.SphereGeometry(0.082, 10, 8), 0, 0.0, 0),
+      at(new THREE.SphereGeometry(0.082, 8, 6), 0, 0.0, 0),
       at(RB(0.14, 0.22, 0.14, 0.06), 0, -0.10, 0)
     );
     const forearmGeo = merge(
-      at(new THREE.CapsuleGeometry(0.05, 0.20, 4, 10), 0, -0.30, 0),
+      at(new THREE.CapsuleGeometry(0.05, 0.20, 2, 6), 0, -0.30, 0),
       at(RB(0.085, 0.105, 0.065, 0.032), 0, -0.47, 0.005),          // palma
       at(RB(0.03, 0.06, 0.03, 0.012, 1), 0.045, -0.445, 0.02)        // polegar
     );
 
-    const wheelGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.08, 14);
+    const wheelGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.08, 10);
     wheelGeo.rotateZ(Math.PI / 2);
 
     // Tronco masculino em "V" (peitoral largo + cintura) e feminino com cintura marcada e quadril
@@ -854,15 +822,15 @@ export const PopulationMixin = {
       at(RB(0.41, 0.17, 0.25, 0.07), 0, -0.22, 0)
     );
 
-    // Cabeça arredondada com mandíbula/queixo suavizados
+    // Cabeça arredondada com mandíbula/queixo suavizados (crânio seg=2 mantém close-up super macio)
     const headGeo = merge(
-      at(RB(0.31, 0.30, 0.30, 0.085, 3), 0, 0.02, 0),
-      at(RB(0.26, 0.12, 0.27, 0.05, 2), 0, -0.11, 0.008)
+      at(RB(0.31, 0.30, 0.30, 0.085, 2), 0, 0.02, 0),
+      at(RB(0.26, 0.12, 0.27, 0.05, 1), 0, -0.11, 0.008)
     );
 
     // Dome helper (boné / capacete)
     const dome = (r, sy, drop) => {
-      const g = new THREE.SphereGeometry(r, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+      const g = new THREE.SphereGeometry(r, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2);
       g.scale(1, sy, 1);
       g.translate(0, -drop, 0);
       return g;
@@ -870,38 +838,38 @@ export const PopulationMixin = {
 
     // Cacheado: aglomerado orgânico de cachos
     const curlyTop = merge(
-      at(new THREE.IcosahedronGeometry(0.11, 1), 0, 0.02, 0),
-      at(new THREE.IcosahedronGeometry(0.09, 1), -0.09, 0, 0.06),
-      at(new THREE.IcosahedronGeometry(0.09, 1), 0.09, 0, 0.06),
-      at(new THREE.IcosahedronGeometry(0.095, 1), -0.09, -0.01, -0.07),
-      at(new THREE.IcosahedronGeometry(0.095, 1), 0.09, -0.01, -0.07),
-      at(new THREE.IcosahedronGeometry(0.09, 1), 0, 0.0, 0.10)
+      at(new THREE.IcosahedronGeometry(0.11, 0), 0, 0.02, 0),
+      at(new THREE.IcosahedronGeometry(0.09, 0), -0.09, 0, 0.06),
+      at(new THREE.IcosahedronGeometry(0.09, 0), 0.09, 0, 0.06),
+      at(new THREE.IcosahedronGeometry(0.095, 0), -0.09, -0.01, -0.07),
+      at(new THREE.IcosahedronGeometry(0.095, 0), 0.09, -0.01, -0.07),
+      at(new THREE.IcosahedronGeometry(0.09, 0), 0, 0.0, 0.10)
     );
 
     this._sharedNPCGeos = {
       shirt: shirtM,
       shirtF,
       chestStripe: at(RB(0.48, 0.11, 0.285, 0.05), 0, 0.0, 0),
-      collar: new THREE.CylinderGeometry(0.115, 0.135, 0.05, 14),
+      collar: new THREE.CylinderGeometry(0.115, 0.135, 0.05, 10),
       jacketLapel: RB(0.12, 0.58, 0.285, 0.045),
-      necklace: (() => { const g = new THREE.TorusGeometry(0.105, 0.014, 5, 16); g.rotateX(Math.PI / 2.4); return g; })(),
+      necklace: (() => { const g = new THREE.TorusGeometry(0.105, 0.014, 4, 10); g.rotateX(Math.PI / 2.4); return g; })(),
       pendant: new THREE.OctahedronGeometry(0.028, 0),
       chestPrint: RB(0.13, 0.10, 0.012, 0.004, 1),
       belt: RB(0.40, 0.05, 0.25, 0.02),
       buckle: new THREE.BoxGeometry(0.05, 0.04, 0.01),
-      skirt: new THREE.CylinderGeometry(0.20, 0.27, 0.30, 14, 1, true),
-      neck: new THREE.CylinderGeometry(0.072, 0.084, 0.13, 12),
+      skirt: new THREE.CylinderGeometry(0.20, 0.27, 0.30, 12, 1, false),
+      neck: new THREE.CylinderGeometry(0.072, 0.084, 0.13, 8),
       apron: RB(0.40, 0.52, 0.035, 0.015),
       armSleeve: sleeveGeo,
       armForearm: forearmGeo,
       head: headGeo,
       ear: RB(0.035, 0.085, 0.06, 0.016),
-      earring: new THREE.SphereGeometry(0.018, 6, 5),
+      earring: new THREE.SphereGeometry(0.018, 5, 4),
       eyeWhite: RB(0.07, 0.052, 0.012, 0.006, 1),
       eye: RB(0.034, 0.042, 0.012, 0.008, 1),
       eyeShine: new THREE.BoxGeometry(0.011, 0.011, 0.006),
       lash: new THREE.BoxGeometry(0.08, 0.014, 0.016),
-      cheek: new THREE.CircleGeometry(0.026, 10),
+      cheek: new THREE.CircleGeometry(0.026, 8),
       brow: RB(0.072, 0.022, 0.022, 0.008, 1),
       nose: merge(
         at(RB(0.04, 0.07, 0.04, 0.016), 0, 0, 0),
@@ -909,8 +877,8 @@ export const PopulationMixin = {
       ),
       mouth: RB(0.09, 0.022, 0.014, 0.008, 1),
       glasses: merge(
-        at(new THREE.TorusGeometry(0.036, 0.007, 4, 12), -0.068, 0, 0),
-        at(new THREE.TorusGeometry(0.036, 0.007, 4, 12), 0.068, 0, 0),
+        at(new THREE.TorusGeometry(0.036, 0.007, 4, 10), -0.068, 0, 0),
+        at(new THREE.TorusGeometry(0.036, 0.007, 4, 10), 0.068, 0, 0),
         at(new THREE.BoxGeometry(0.04, 0.008, 0.008), 0, 0.006, 0)
       ),
       mustache: RB(0.12, 0.032, 0.03, 0.012, 1),
@@ -926,46 +894,46 @@ export const PopulationMixin = {
       // Penteados & Chapéus Autênticos (formas arredondadas e volumosas)
       hairShortTop: RB(0.33, 0.10, 0.32, 0.045),
       hairShortBack: RB(0.32, 0.22, 0.07, 0.03),
-      hairAfro: new THREE.IcosahedronGeometry(0.255, 2),
+      hairAfro: new THREE.IcosahedronGeometry(0.255, 1),
       hairCurlyTop: curlyTop,
       hairCurlySide: RB(0.36, 0.20, 0.27, 0.07),
       hairLongBack: RB(0.33, 0.42, 0.10, 0.045),
-      hairBun: new THREE.SphereGeometry(0.105, 12, 10),
-      hairPonytail: new THREE.CapsuleGeometry(0.048, 0.18, 4, 8),
+      hairBun: new THREE.SphereGeometry(0.105, 8, 6),
+      hairPonytail: new THREE.CapsuleGeometry(0.048, 0.18, 2, 6),
       hairFringe: RB(0.30, 0.05, 0.05, 0.02, 1),
       headband: RB(0.335, 0.05, 0.325, 0.02),
-      turbanCrown: new THREE.SphereGeometry(0.195, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.62),
-      turbanKnot: new THREE.IcosahedronGeometry(0.075, 1),
-      panamaBrim: new THREE.CylinderGeometry(0.30, 0.32, 0.03, 18),
-      panamaCrown: new THREE.CylinderGeometry(0.16, 0.19, 0.15, 16),
-      panamaBand: new THREE.CylinderGeometry(0.185, 0.192, 0.04, 16),
-      strawHat: new THREE.CylinderGeometry(0.30, 0.46, 0.12, 16),
-      fishHat: new THREE.CylinderGeometry(0.24, 0.42, 0.14, 16),
-      farmHat: new THREE.CylinderGeometry(0.22, 0.50, 0.12, 16),
+      turbanCrown: new THREE.SphereGeometry(0.195, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.62),
+      turbanKnot: new THREE.IcosahedronGeometry(0.075, 0),
+      panamaBrim: new THREE.CylinderGeometry(0.30, 0.32, 0.03, 12),
+      panamaCrown: new THREE.CylinderGeometry(0.16, 0.19, 0.15, 10),
+      panamaBand: new THREE.CylinderGeometry(0.185, 0.192, 0.04, 10),
+      strawHat: new THREE.CylinderGeometry(0.30, 0.46, 0.12, 12),
+      fishHat: new THREE.CylinderGeometry(0.24, 0.42, 0.14, 12),
+      farmHat: new THREE.CylinderGeometry(0.22, 0.50, 0.12, 12),
       visorHat: RB(0.40, 0.08, 0.46, 0.03),
-      beretHat: (() => { const g = new THREE.SphereGeometry(0.2, 14, 8); g.scale(1, 0.32, 1.05); return g; })(),
+      beretHat: (() => { const g = new THREE.SphereGeometry(0.2, 10, 6); g.scale(1, 0.32, 1.05); return g; })(),
       capCrown: dome(0.178, 0.78, 0.06),
       capVisor: RB(0.30, 0.025, 0.17, 0.012, 1),
       backpack: RB(0.31, 0.38, 0.15, 0.06),
       crossbodyBag: RB(0.10, 0.20, 0.19, 0.03),
       strap: new THREE.BoxGeometry(0.035, 0.66, 0.02),
-      fishBasket: new THREE.CylinderGeometry(0.18, 0.14, 0.26, 10),
+      fishBasket: new THREE.CylinderGeometry(0.18, 0.14, 0.26, 8),
       fishTail: new THREE.ConeGeometry(0.08, 0.22, 4),
       farmBasket: RB(0.28, 0.20, 0.24, 0.04),
       greens: new THREE.IcosahedronGeometry(0.12, 0),
       crate: new THREE.BoxGeometry(0.32, 0.22, 0.28),
-      fruit: new THREE.SphereGeometry(0.09, 8, 6),
-      cup: new THREE.CylinderGeometry(0.08, 0.06, 0.20, 10),
+      fruit: new THREE.SphereGeometry(0.09, 6, 5),
+      cup: new THREE.CylinderGeometry(0.08, 0.06, 0.20, 8),
       straw: new THREE.CylinderGeometry(0.012, 0.012, 0.26, 4),
       shades: merge(
         at(RB(0.115, 0.06, 0.02, 0.02, 1), -0.068, 0, 0),
         at(RB(0.115, 0.06, 0.02, 0.02, 1), 0.068, 0, 0),
         at(new THREE.BoxGeometry(0.34, 0.015, 0.015), 0, 0.022, 0)
       ),
-      sunVisor: new THREE.CylinderGeometry(0.38, 0.42, 0.09, 12),
+      sunVisor: new THREE.CylinderGeometry(0.38, 0.42, 0.09, 10),
       towel: RB(0.22, 0.62, 0.32, 0.04),
       helmetCrown: dome(0.215, 0.72, 0.075),
-      helmetBrim: new THREE.CylinderGeometry(0.255, 0.255, 0.03, 18),
+      helmetBrim: new THREE.CylinderGeometry(0.255, 0.255, 0.03, 12),
       toolHandle: new THREE.CylinderGeometry(0.03, 0.03, 0.72, 6),
       pickHead: RB(0.36, 0.08, 0.08, 0.025),
       cartTub: RB(0.72, 0.36, 0.90, 0.06),
@@ -975,6 +943,50 @@ export const PopulationMixin = {
     };
     this._sharedNPCMats = new Map();
     this._sharedSkinMats = new Map();
+    this._npcVertexMat = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: false });
+    this._npcMergedCache = new Map();
+
+    // Geometrias compostas pré-fundidas compartilhadas por todos os NPCs (1 draw call por prop)
+    const G = this._sharedNPCGeos;
+    this._npcMergedCache.set('hand_fish', mergeColoredParts([
+      { geo: G.fishBasket, color: 0x78350F },
+      { geo: G.fishTail, color: 0x94A3B8, pos: [0, 0.14, 0], rot: [Math.PI, 0, 0] }
+    ]));
+    this._npcMergedCache.set('hand_farm', mergeColoredParts([
+      { geo: G.farmBasket, color: 0xA16207 },
+      { geo: G.greens, color: 0x16A34A, pos: [0, 0.12, 0] }
+    ]));
+    this._npcMergedCache.set('hand_merch', mergeColoredParts([
+      { geo: G.crate, color: 0x854D0E },
+      { geo: G.fruit, color: 0xEA580C, pos: [0, 0.12, 0] }
+    ]));
+    this._npcMergedCache.set('hand_drink', mergeColoredParts([
+      { geo: G.cup, color: 0x10B981 },
+      { geo: G.straw, color: 0xFEF08A, pos: [0.02, 0.12, 0], rot: [0, 0, -0.2] }
+    ]));
+    this._npcMergedCache.set('builder_helmet', mergeColoredParts([
+      { geo: G.helmetCrown, color: 0xFACC15, pos: [0, 1.60, 0] },
+      { geo: G.helmetBrim, color: 0xFACC15, pos: [0, 1.53, 0] }
+    ]));
+    this._npcMergedCache.set('tool_arm', mergeColoredParts([
+      { geo: G.toolHandle, color: 0x5C4033, pos: [0, -0.12, 0] },
+      { geo: G.pickHead, color: 0x94A3B8, pos: [0, 0.22, 0] }
+    ]));
+    this._npcMergedCache.set('cart_body', mergeColoredParts([
+      { geo: G.cartTub, color: 0x6C4A2D, pos: [0, 0.18, 0] },
+      { geo: G.cartHandle, color: 0x6C4A2D, pos: [-0.32, 0.35, -0.65] },
+      { geo: G.cartHandle, color: 0x6C4A2D, pos: [0.32, 0.35, -0.65] },
+      { geo: G.brickCargo, color: 0xB55338, pos: [0, 0.32, 0] }
+    ]));
+  },
+
+  _getCachedMergedGeo(key, partsBuilder) {
+    let geo = this._npcMergedCache.get(key);
+    if (!geo) {
+      geo = mergeColoredParts(partsBuilder());
+      this._npcMergedCache.set(key, geo);
+    }
+    return geo;
   },
 
   _getSharedLambertMat(color, flatShading = true) {
@@ -1092,104 +1104,75 @@ export const PopulationMixin = {
     // Saia/vestido rodado para parte das moradoras (pernas à mostra em tom de pele)
     const wearsSkirt = isFemale && !isBarraqueiro && !isBanhista && !isSoccerPlayer && (seedB % 3 === 0);
     const darkenColor = (hex, k) => new THREE.Color(hex).multiplyScalar(k).getHex();
+    const vMat = this._npcVertexMat;
 
-    // Pescoço humano conectando o tronco à cabeça
-    const neck = new THREE.Mesh(G.neck, skinMat);
-    neck.position.set(0, 0.35, 0);
-    torso.add(neck);
-
-    // Detalhes de vestuário urbano no tronco (gola, listra esportiva, camisa aberta ou cordão)
-    const cityClothesDetails = new THREE.Group();
-    torso.add(cityClothesDetails);
+    // Detalhes de vestuário urbano no tronco compactados em 1 único draw call (gola, listra, colete, cordão, cinto/saia, mochila, avental)
+    const cityParts = [];
 
     if (!isBarraqueiro && !isBanhista) {
       const styleVariant = (index + seedA) % 5;
       if (styleVariant === 0 || isSoccerPlayer) {
-        // Faixa horizontal no peito (estilo camisa listrada / time carioca)
         const stripeColors = [0xF8FAFC, 0x111827, 0xFACC15, 0xEF4444, 0x38BDF8];
         const stripeCol = isSoccerPlayer
           ? (team === 'yellow' ? 0x15803D : 0xF8FAFC)
           : stripeColors[seedB % stripeColors.length];
-        const stripe = new THREE.Mesh(G.chestStripe, this._getSharedLambertMat(stripeCol, true));
-        stripe.position.set(0, 0.06, 0);
-        if (isFemale) stripe.scale.set(0.87, 1, 0.89);
-        cityClothesDetails.add(stripe);
+        cityParts.push({
+          geo: G.chestStripe,
+          color: stripeCol,
+          pos: [0, 0.06, 0],
+          scale: isFemale ? [0.87, 1, 0.89] : null
+        });
       } else if (styleVariant === 1) {
-        // Gola polo / colarinho contrastante
-        const collar = new THREE.Mesh(G.collar, this._getSharedLambertMat(0xF8FAFC, true));
-        collar.position.set(0, 0.30, 0.02);
-        cityClothesDetails.add(collar);
+        cityParts.push({ geo: G.collar, color: 0xF8FAFC, pos: [0, 0.30, 0.02] });
       } else if (styleVariant === 2) {
-        // Camisa de botão aberta / colete leve sobre a camiseta
         const jacketColors = [0x1E293B, 0x78350F, 0x1E3A8A, 0x065F46, 0x9A3412];
-        const jMat = this._getSharedLambertMat(jacketColors[seedB % jacketColors.length], true);
-        const lapelL = new THREE.Mesh(G.jacketLapel, jMat);
-        lapelL.position.set(-0.175, -0.02, 0);
-        cityClothesDetails.add(lapelL);
-        const lapelR = new THREE.Mesh(G.jacketLapel, jMat);
-        lapelR.position.set(0.175, -0.02, 0);
-        cityClothesDetails.add(lapelR);
+        const jCol = jacketColors[seedB % jacketColors.length];
+        cityParts.push(
+          { geo: G.jacketLapel, color: jCol, pos: [-0.175, -0.02, 0] },
+          { geo: G.jacketLapel, color: jCol, pos: [0.175, -0.02, 0] }
+        );
       } else if (styleVariant === 3) {
-        // Cordão / colar artesanal no pescoço com pingente
-        const goldMat = this._getSharedLambertMat(0xFBBF24, true);
-        const necklace = new THREE.Mesh(G.necklace, goldMat);
-        necklace.position.set(0, 0.26, 0.03);
-        cityClothesDetails.add(necklace);
-        const pendant = new THREE.Mesh(G.pendant, goldMat);
-        pendant.position.set(0, 0.17, 0.142);
-        cityClothesDetails.add(pendant);
+        cityParts.push(
+          { geo: G.necklace, color: 0xFBBF24, pos: [0, 0.26, 0.03] },
+          { geo: G.pendant, color: 0xFBBF24, pos: [0, 0.17, 0.142] }
+        );
       } else {
-        // Estampa frontal (logo/arte de rua) em contraste com a camiseta
         const printCols = [0xF8FAFC, 0x111827, 0xFACC15, 0xF97316, 0x22C55E];
-        const print = new THREE.Mesh(G.chestPrint, this._getSharedLambertMat(printCols[(seedA + index) % printCols.length], true));
-        print.position.set(0, 0.13, isFemale ? 0.128 : 0.138);
-        cityClothesDetails.add(print);
+        cityParts.push({
+          geo: G.chestPrint,
+          color: printCols[(seedA + index) % printCols.length],
+          pos: [0, 0.13, isFemale ? 0.128 : 0.138]
+        });
       }
 
-      // Barra da camiseta / cinto com fivela (homens de calça) ou saia rodada (moradoras)
       if (wearsSkirt) {
         const skirtCols = [0x7C2D12, 0x1E3A8A, 0xBE185D, 0x0F766E, 0xF5F5F4, 0x6D28D9, 0xCA8A04];
-        const skirtMat = new THREE.MeshLambertMaterial({ color: skirtCols[(index + seedA) % skirtCols.length], side: THREE.DoubleSide });
-        const skirt = new THREE.Mesh(G.skirt, skirtMat);
-        skirt.position.set(0, -0.40, 0);
-        skirt.castShadow = true;
-        cityClothesDetails.add(skirt);
+        cityParts.push({ geo: G.skirt, color: skirtCols[(index + seedA) % skirtCols.length], pos: [0, -0.40, 0] });
       } else if (!isFemale && !isSoccerPlayer) {
         const beltCols = [0x3F2A1D, 0x111827, 0x57534E];
-        const belt = new THREE.Mesh(G.belt, this._getSharedLambertMat(beltCols[seedB % beltCols.length], true));
-        belt.position.set(0, -0.285, 0);
-        cityClothesDetails.add(belt);
-        const buckle = new THREE.Mesh(G.buckle, this._getSharedLambertMat(0xD4D4D8, true));
-        buckle.position.set(0, -0.285, 0.128);
-        cityClothesDetails.add(buckle);
+        cityParts.push(
+          { geo: G.belt, color: beltCols[seedB % beltCols.length], pos: [0, -0.285, 0] },
+          { geo: G.buckle, color: 0xD4D4D8, pos: [0, -0.285, 0.128] }
+        );
       }
     }
 
-    // Mochila ou bolsa tiracolo para estudantes, trilheiros e trabalhadores (35% dos civis)
+    // Mochila ou bolsa tiracolo (35% dos civis)
     if (!isBarraqueiro && !isBanhista && !isSoccerPlayer && index % 3 === 1) {
       const packColors = [0x334155, 0x991B1B, 0x1E40AF, 0x065F46, 0x92400E, 0x4C1D95];
-      const packMat = this._getSharedLambertMat(packColors[(index + seedB) % packColors.length], true);
+      const packCol = packColors[(index + seedB) % packColors.length];
+      const strapCol = darkenColor(packCol, 0.6);
       if (seedA % 2 === 0) {
-        const pack = new THREE.Mesh(G.backpack, packMat);
-        pack.position.set(0, 0.04, -0.20);
-        cityClothesDetails.add(pack);
-        // Alças da mochila passando pelos ombros
-        const strapMat = this._getSharedLambertMat(darkenColor(packColors[(index + seedB) % packColors.length], 0.6), true);
-        [-0.12, 0.12].forEach(sx => {
-          const strap = new THREE.Mesh(G.strap, strapMat);
-          strap.scale.y = 0.55;
-          strap.position.set(sx, 0.10, 0.138);
-          cityClothesDetails.add(strap);
-        });
+        cityParts.push(
+          { geo: G.backpack, color: packCol, pos: [0, 0.04, -0.20] },
+          { geo: G.strap, color: strapCol, pos: [-0.12, 0.10, 0.138], scale: [1, 0.55, 1] },
+          { geo: G.strap, color: strapCol, pos: [0.12, 0.10, 0.138], scale: [1, 0.55, 1] }
+        );
       } else {
-        const bag = new THREE.Mesh(G.crossbodyBag, packMat);
-        bag.position.set(0.26, -0.18, 0.04);
-        cityClothesDetails.add(bag);
-        // Alça transversal cruzando o peito
-        const strap = new THREE.Mesh(G.strap, this._getSharedLambertMat(darkenColor(packColors[(index + seedB) % packColors.length], 0.6), true));
-        strap.position.set(0.02, 0.06, 0.14);
-        strap.rotation.z = 0.72;
-        cityClothesDetails.add(strap);
+        cityParts.push(
+          { geo: G.crossbodyBag, color: packCol, pos: [0.26, -0.18, 0.04] },
+          { geo: G.strap, color: strapCol, pos: [0.02, 0.06, 0.14], rot: [0, 0, 0.72] }
+        );
       }
     }
 
@@ -1199,126 +1182,93 @@ export const PopulationMixin = {
       if (role.stallId === 'mate') apronColor = 0xEA580C;
       else if (role.stallId === 'acai') apronColor = 0x7E22CE;
       else if (role.stallId === 'petiscos') apronColor = 0xDC2626;
-
-      const apron = new THREE.Mesh(G.apron, this._getSharedLambertMat(apronColor, true));
-      apron.position.set(0, -0.02, 0.16);
-      torso.add(apron);
+      cityParts.push({ geo: G.apron, color: apronColor, pos: [0, -0.02, 0.16] });
     }
 
-    // 4. BRAÇOS ARTICULADOS NO OMBRO (Manga da camisa + Antebraço e Mão na cor da pele humana!)
+    const cityClothesDetails = cityParts.length > 0
+      ? new THREE.Mesh(mergeColoredParts(cityParts), vMat)
+      : new THREE.Group();
+    torso.add(cityClothesDetails);
+
+    // 4. BRAÇOS ARTICULADOS NO OMBRO (1 único draw call por braço, geometrias em cache por cor de manga/pele!)
+    const citySleeveHex = isBarraqueiro ? 0xF8FAFC : shirtColor;
     const citySleeveMat = isBarraqueiro ? this._getSharedLambertMat(0xF8FAFC, true) : cityTorsoMat;
     const beachSleeveMat = skinMat;
 
-    const leftArm = new THREE.Group();
+    const cityArmGeo = this._getCachedMergedGeo(`arm_c_${citySleeveHex}_${skinColor}`, () => [
+      { geo: G.armSleeve, color: citySleeveHex },
+      { geo: G.armForearm, color: skinColor, skinWarm: true }
+    ]);
+    const beachArmGeo = this._getCachedMergedGeo(`arm_b_${skinColor}`, () => [
+      { geo: G.armSleeve, color: skinColor, skinWarm: true },
+      { geo: G.armForearm, color: skinColor, skinWarm: true }
+    ]);
+
+    const leftArm = new THREE.Mesh(cityArmGeo, vMat);
     leftArm.position.set(-0.31, 1.06, 0);
-    const leftSleeve = new THREE.Mesh(G.armSleeve, citySleeveMat);
-    const leftForearm = new THREE.Mesh(G.armForearm, skinMat);
-    leftArm.add(leftSleeve, leftForearm);
     npcGroup.add(leftArm);
 
-    const rightArm = new THREE.Group();
+    const rightArm = new THREE.Mesh(cityArmGeo, vMat);
     rightArm.position.set(0.31, 1.06, 0);
-    const rightSleeve = new THREE.Mesh(G.armSleeve, citySleeveMat);
-    const rightForearm = new THREE.Mesh(G.armForearm, skinMat);
-    rightArm.add(rightSleeve, rightForearm);
     npcGroup.add(rightArm);
 
-    // 5. CABEÇA HUMANA ESCULPIDA COM ROSTO EXPRESSIVO (Olhos, Sobrancelhas, Nariz, Boca e Barba/Bigode opcional)
-    const head = new THREE.Mesh(G.head, skinMat);
-    head.position.y = 1.37;
-    npcGroup.add(head);
-
-    // Orelhas humanas nas laterais
-    const earL = new THREE.Mesh(G.ear, skinMat);
-    earL.position.set(-0.162, -0.005, 0.0);
-    head.add(earL);
-    const earR = new THREE.Mesh(G.ear, skinMat);
-    earR.position.set(0.162, -0.005, 0.0);
-    head.add(earR);
-
-    // Brincos dourados/prateados para parte das moradoras
-    if (isFemale && seedA % 2 === 0) {
-      const earringMat = this._getSharedLambertMat(seedB % 2 === 0 ? 0xFBBF24 : 0xE5E7EB, true);
-      [-0.168, 0.168].forEach(ex => {
-        const er = new THREE.Mesh(G.earring, earringMat);
-        er.position.set(ex, -0.055, 0.005);
-        head.add(er);
-      });
-    }
-
-    // Olhos expressivos com esclera, íris colorida e brilho (voltados para +Z)
+    // 5. CABEÇA HUMANA + PESCOÇO + ROSTO EXPRESSIVO COMPACTADOS EM 1 ÚNICO DRAW CALL!
     const irisPalette = [0x3B2414, 0x4A2C17, 0x2B1A10, 0x5B3A1E, 0x1F1A17, 0x3F5F3A, 0x35556E];
     const irisColor = (seedB % 9 < 7) ? irisPalette[seedB % 5] : irisPalette[5 + (seedA % 2)];
-    const eyeWhiteMat = this._getSharedLambertMat(0xF5F1EA, false);
-    const eyeMat = this._getSharedLambertMat(irisColor, false);
-    const shineMat = this._getSharedLambertMat(0xFFFFFF, false);
+    const hasFullBeard = !isFemale && (isElder || seedA % 4 === 0) && (seedB % 2 === 0 || isElder);
+    const hasMustache = !isFemale && !hasFullBeard && seedA % 4 === 0;
+    const lipBase = new THREE.Color(skinColor).multiplyScalar(0.62);
+    if (isFemale) lipBase.lerp(new THREE.Color(seedA % 3 === 0 ? 0xB91C1C : 0xBE5A6A), 0.45);
+    const blushHex = isFemale ? new THREE.Color(skinColor).lerp(new THREE.Color(0xE11D48), 0.22).getHex() : 0;
+
+    const headParts = [
+      { geo: G.head, color: skinColor, skinWarm: true },
+      { geo: G.neck, color: skinColor, skinWarm: true, pos: [0, -0.17, 0] },
+      { geo: G.ear, color: skinColor, skinWarm: true, pos: [-0.162, -0.005, 0] },
+      { geo: G.ear, color: skinColor, skinWarm: true, pos: [0.162, -0.005, 0] },
+      { geo: G.nose, color: skinColor, skinWarm: true, pos: [0, -0.012, 0.158] },
+      { geo: G.brow, color: hairColor, pos: [-0.068, 0.072, 0.153], rot: [0, 0, isFemale ? 0.12 : 0.06] },
+      { geo: G.brow, color: hairColor, pos: [0.068, 0.072, 0.153], rot: [0, 0, isFemale ? -0.12 : -0.06] },
+      { geo: G.mouth, color: lipBase.getHex(), pos: [0, -0.092, hasFullBeard ? 0.162 : 0.148] }
+    ];
+
+    if (isFemale && seedA % 2 === 0) {
+      const earringCol = seedB % 2 === 0 ? 0xFBBF24 : 0xE5E7EB;
+      headParts.push(
+        { geo: G.earring, color: earringCol, pos: [-0.168, -0.055, 0.005] },
+        { geo: G.earring, color: earringCol, pos: [0.168, -0.055, 0.005] }
+      );
+    }
+
     [-1, 1].forEach(side => {
       const ex = side * 0.066;
-      const white = new THREE.Mesh(G.eyeWhite, eyeWhiteMat);
-      white.position.set(ex, 0.025, 0.150);
-      head.add(white);
-      const iris = new THREE.Mesh(G.eye, eyeMat);
-      iris.position.set(ex + side * -0.006, 0.022, 0.156);
-      head.add(iris);
-      const shine = new THREE.Mesh(G.eyeShine, shineMat);
-      shine.position.set(ex + side * -0.006 + 0.008, 0.033, 0.161);
-      head.add(shine);
+      headParts.push(
+        { geo: G.eyeWhite, color: 0xF5F1EA, pos: [ex, 0.025, 0.150] },
+        { geo: G.eye, color: irisColor, pos: [ex + side * -0.006, 0.022, 0.156] },
+        { geo: G.eyeShine, color: 0xFFFFFF, pos: [ex + side * -0.006 + 0.008, 0.033, 0.161] }
+      );
       if (isFemale) {
-        // Cílios marcados
-        const lash = new THREE.Mesh(G.lash, this._getSharedLambertMat(0x111111, false));
-        lash.position.set(ex, 0.052, 0.154);
-        lash.rotation.z = side * -0.12;
-        head.add(lash);
-        // Blush suave nas bochechas
-        const blushHex = new THREE.Color(skinColor).lerp(new THREE.Color(0xE11D48), 0.22).getHex();
-        const cheek = new THREE.Mesh(G.cheek, this._getSharedLambertMat(blushHex, false));
-        cheek.position.set(side * 0.095, -0.035, 0.1515);
-        head.add(cheek);
+        headParts.push(
+          { geo: G.lash, color: 0x111111, pos: [ex, 0.052, 0.154], rot: [0, 0, side * -0.12] },
+          { geo: G.cheek, color: blushHex, pos: [side * 0.095, -0.035, 0.1515] }
+        );
       }
     });
 
-    // Sobrancelhas na cor do cabelo (levemente inclinadas = expressão simpática)
-    const browL = new THREE.Mesh(G.brow, hairMat);
-    browL.position.set(-0.068, 0.072, 0.153);
-    browL.rotation.z = isFemale ? 0.12 : 0.06;
-    head.add(browL);
-    const browR = new THREE.Mesh(G.brow, hairMat);
-    browR.position.set(0.068, 0.072, 0.153);
-    browR.rotation.z = isFemale ? -0.12 : -0.06;
-    head.add(browR);
-
-    // Nariz esculpido na cor da pele (ponte + aletas)
-    const nose = new THREE.Mesh(G.nose, skinMat);
-    nose.position.set(0, -0.012, 0.158);
-    head.add(nose);
-
-    // Barba ou bigode para uma parcela dos homens e mestres/anciãos
-    const hasFullBeard = !isFemale && (isElder || seedA % 4 === 0) && (seedB % 2 === 0 || isElder);
-    const hasMustache = !isFemale && !hasFullBeard && seedA % 4 === 0;
     if (hasFullBeard) {
-      const beard = new THREE.Mesh(G.beard, hairMat);
-      beard.position.set(0, -0.14, 0.055);
-      head.add(beard);
+      headParts.push({ geo: G.beard, color: hairColor, pos: [0, -0.14, 0.055] });
     } else if (hasMustache) {
-      const mustache = new THREE.Mesh(G.mustache, hairMat);
-      mustache.position.set(0, -0.066, 0.152);
-      head.add(mustache);
+      headParts.push({ geo: G.mustache, color: hairColor, pos: [0, -0.066, 0.152] });
     }
 
-    // Boca / Lábios com tom derivado da pele (batom suave para parte das moradoras)
-    const lipBase = new THREE.Color(skinColor).multiplyScalar(0.62);
-    if (isFemale) lipBase.lerp(new THREE.Color(seedA % 3 === 0 ? 0xB91C1C : 0xBE5A6A), 0.45);
-    const mouth = new THREE.Mesh(G.mouth, this._getSharedLambertMat(lipBase.getHex(), false));
-    mouth.position.set(0, -0.092, hasFullBeard ? 0.162 : 0.148);
-    head.add(mouth);
-
-    // Óculos de grau para anciãos e alguns estudantes
     if (isElder ? (index % 2 === 0) : (seedB % 11 === 0)) {
       const frameCols = [0x111827, 0x7C2D12, 0xB45309];
-      const glasses = new THREE.Mesh(G.glasses, this._getSharedLambertMat(frameCols[seedA % frameCols.length], false));
-      glasses.position.set(0, 0.024, 0.163);
-      head.add(glasses);
+      headParts.push({ geo: G.glasses, color: frameCols[seedA % frameCols.length], pos: [0, 0.024, 0.163] });
     }
+
+    const head = new THREE.Mesh(mergeColoredParts(headParts), vMat);
+    head.position.y = 1.37;
+    npcGroup.add(head);
 
     // Identificação de papéis profissionais especializados
     const isFishermanRole = role.title.includes('Pescador') || role.title.includes('Barqueiro');
@@ -1327,258 +1277,137 @@ export const PopulationMixin = {
     const isLighthouseRole = role.title.includes('Farol');
     const isMusicianRole = role.title.includes('Músico') || role.title.includes('Samba');
 
-    // 6. PENTEADOS AUTÊNTICOS & CHAPÉUS CARIOCAS (Fixados à cabeça para acompanhar o olhar!)
-    const hat = new THREE.Group();
-    head.add(hat);
-
-    // Base capilar natural sob todos os chapéus/bonés para nunca parecer careca por trás
-    const baseHairBack = new THREE.Mesh(G.hairShortBack, hairMat);
-    baseHairBack.position.set(0, 0.02, -0.145);
-    hat.add(baseHairBack);
+    // 6. PENTEADOS AUTÊNTICOS & CHAPÉUS CARIOCAS COMPACTADOS EM 1 ÚNICO DRAW CALL (oculta limpo quando põe capacete de obra!)
+    const hatParts = [
+      { geo: G.hairShortBack, color: hairColor, pos: [0, 0.02, -0.145] }
+    ];
 
     if (isBarraqueiro) {
       if (role.stallId === 'coco') {
-        const straw = new THREE.Mesh(G.strawHat, this._getSharedLambertMat(0xD4A373, true));
-        straw.position.y = 0.21;
-        hat.add(straw);
+        hatParts.push({ geo: G.strawHat, color: 0xD4A373, pos: [0, 0.21, 0] });
       } else {
         let visorColor = 0x15803D;
         if (role.stallId === 'acai') visorColor = 0x06B6D4;
         else if (role.stallId === 'petiscos') visorColor = 0xDC2626;
-        const hairTop = new THREE.Mesh(G.hairShortTop, hairMat);
-        hairTop.position.y = 0.17;
-        hat.add(hairTop);
-        const visor = new THREE.Mesh(G.visorHat, this._getSharedLambertMat(visorColor, false));
-        visor.position.set(0, 0.14, 0.05);
-        hat.add(visor);
+        hatParts.push(
+          { geo: G.hairShortTop, color: hairColor, pos: [0, 0.17, 0] },
+          { geo: G.visorHat, color: visorColor, pos: [0, 0.14, 0.05] }
+        );
       }
     } else if (isFishermanRole) {
-      const fHat = new THREE.Mesh(G.fishHat, this._getSharedLambertMat(0xD4A373, true));
-      fHat.position.y = 0.20;
-      hat.add(fHat);
+      hatParts.push({ geo: G.fishHat, color: 0xD4A373, pos: [0, 0.20, 0] });
     } else if (isFarmerRole) {
-      const frmHat = new THREE.Mesh(G.farmHat, this._getSharedLambertMat(0xCA8A04, true));
-      frmHat.position.y = 0.20;
-      hat.add(frmHat);
+      hatParts.push({ geo: G.farmHat, color: 0xCA8A04, pos: [0, 0.20, 0] });
     } else if (isMerchantRole) {
-      const beret = new THREE.Mesh(G.beretHat, this._getSharedLambertMat(0x059669, true));
-      beret.position.y = 0.19;
-      hat.add(beret);
+      hatParts.push({ geo: G.beretHat, color: 0x059669, pos: [0, 0.19, 0] });
     } else if (isLighthouseRole) {
-      const capCrown = new THREE.Mesh(G.capCrown, this._getSharedLambertMat(0xF8FAFC, false));
-      capCrown.position.y = 0.20;
-      hat.add(capCrown);
-      const capVisor = new THREE.Mesh(G.capVisor, this._getSharedLambertMat(0x0F172A, false));
-      capVisor.position.set(0, 0.15, 0.22);
-      hat.add(capVisor);
+      hatParts.push(
+        { geo: G.capCrown, color: 0xF8FAFC, pos: [0, 0.20, 0] },
+        { geo: G.capVisor, color: 0x0F172A, pos: [0, 0.15, 0.22] }
+      );
     } else if (isMusicianRole || (!isFemale && seedA % 9 === 0)) {
-      // Chapéu Panamá Boêmio de Sambista (Creme com fita preta ou vermelha)
-      const panamaMat = this._getSharedLambertMat(0xFEF3C7, true);
       const bandCol = (index % 2 === 0) ? 0x111827 : 0xDC2626;
-      const brim = new THREE.Mesh(G.panamaBrim, panamaMat);
-      brim.position.y = 0.17;
-      hat.add(brim);
-      const crown = new THREE.Mesh(G.panamaCrown, panamaMat);
-      crown.position.y = 0.25;
-      hat.add(crown);
-      const band = new THREE.Mesh(G.panamaBand, this._getSharedLambertMat(bandCol, false));
-      band.position.y = 0.20;
-      hat.add(band);
+      hatParts.push(
+        { geo: G.panamaBrim, color: 0xFEF3C7, pos: [0, 0.17, 0] },
+        { geo: G.panamaCrown, color: 0xFEF3C7, pos: [0, 0.25, 0] },
+        { geo: G.panamaBand, color: bandCol, pos: [0, 0.20, 0] }
+      );
     } else {
-      // Diversidade de Penteados Humanos & Bonés para Moradores
       const hairStyle = isFemale ? (seedA % 5) : (seedA % 6);
-
       if (isFemale && hairStyle === 0) {
-        // Coque Alto Carioca + Tiara colorida
-        const topHair = new THREE.Mesh(G.hairShortTop, hairMat);
-        topHair.position.y = 0.16;
-        hat.add(topHair);
-        const bun = new THREE.Mesh(G.hairBun, hairMat);
-        bun.position.set(0, 0.29, -0.06);
-        hat.add(bun);
         const bandCols = [0xF43F5E, 0xFACC15, 0x06B6D4, 0x10B981, 0xA855F7];
-        const hBand = new THREE.Mesh(G.headband, this._getSharedLambertMat(bandCols[index % bandCols.length], true));
-        hBand.position.set(0, 0.14, 0.01);
-        hat.add(hBand);
+        hatParts.push(
+          { geo: G.hairShortTop, color: hairColor, pos: [0, 0.16, 0] },
+          { geo: G.hairBun, color: hairColor, pos: [0, 0.29, -0.06] },
+          { geo: G.headband, color: bandCols[index % bandCols.length], pos: [0, 0.14, 0.01] }
+        );
       } else if (isFemale && hairStyle === 1) {
-        // Cabelo Longo Solto nos Ombros
-        const topHair = new THREE.Mesh(G.hairShortTop, hairMat);
-        topHair.position.y = 0.165;
-        hat.add(topHair);
-        const longBack = new THREE.Mesh(G.hairLongBack, hairMat);
-        longBack.position.set(0, -0.06, -0.14);
-        hat.add(longBack);
-        // Franja lateral emoldurando o rosto
-        const fringe = new THREE.Mesh(G.hairFringe, hairMat);
-        fringe.position.set(0.02, 0.125, 0.145);
-        fringe.rotation.z = -0.18;
-        hat.add(fringe);
-        [-0.155, 0.155].forEach(sx => {
-          const side = new THREE.Mesh(G.hairPonytail, hairMat);
-          side.position.set(sx, -0.02, -0.02);
-          side.scale.set(0.9, 1.15, 1.4);
-          hat.add(side);
-        });
+        hatParts.push(
+          { geo: G.hairShortTop, color: hairColor, pos: [0, 0.165, 0] },
+          { geo: G.hairLongBack, color: hairColor, pos: [0, -0.06, -0.14] },
+          { geo: G.hairFringe, color: hairColor, pos: [0.02, 0.125, 0.145], rot: [0, 0, -0.18] },
+          { geo: G.hairPonytail, color: hairColor, pos: [-0.155, -0.02, -0.02], scale: [0.9, 1.15, 1.4] },
+          { geo: G.hairPonytail, color: hairColor, pos: [0.155, -0.02, -0.02], scale: [0.9, 1.15, 1.4] }
+        );
       } else if (isFemale && hairStyle === 2) {
-        // Turbante Afro-Carioca Vibrante
         const turbCols = [0xF59E0B, 0xEC4899, 0x8B5CF6, 0x10B981, 0xEF4444];
-        const tMat = this._getSharedLambertMat(turbCols[(index + seedB) % turbCols.length], true);
-        const tCrown = new THREE.Mesh(G.turbanCrown, tMat);
-        tCrown.position.y = 0.065;
-        tCrown.scale.set(1.0, 1.05, 1.02);
-        hat.add(tCrown);
-        const tKnot = new THREE.Mesh(G.turbanKnot, tMat);
-        tKnot.position.set(0, 0.215, 0.12);
-        hat.add(tKnot);
+        const tCol = turbCols[(index + seedB) % turbCols.length];
+        hatParts.push(
+          { geo: G.turbanCrown, color: tCol, pos: [0, 0.065, 0], scale: [1.0, 1.05, 1.02] },
+          { geo: G.turbanKnot, color: tCol, pos: [0, 0.215, 0.12] }
+        );
       } else if (isFemale && hairStyle === 3) {
-        // Rabo de Cavalo (Ponytail)
-        const topHair = new THREE.Mesh(G.hairShortTop, hairMat);
-        topHair.position.y = 0.165;
-        hat.add(topHair);
-        const pony = new THREE.Mesh(G.hairPonytail, hairMat);
-        pony.position.set(0, 0.0, -0.20);
-        pony.rotation.x = 0.35;
-        hat.add(pony);
-        const scrunchie = new THREE.Mesh(G.earring, this._getSharedLambertMat([0xF43F5E, 0x06B6D4, 0xFACC15][index % 3], true));
-        scrunchie.scale.setScalar(2.2);
-        scrunchie.position.set(0, 0.11, -0.175);
-        hat.add(scrunchie);
-      } else if (hairStyle === 4 || (isFemale && hairStyle === 4)) {
-        // Black Power / Afro Volumoso Esculpido
-        const afro = new THREE.Mesh(G.hairAfro, hairMat);
-        afro.position.set(0, 0.15, -0.02);
-        hat.add(afro);
+        const scCol = [0xF43F5E, 0x06B6D4, 0xFACC15][index % 3];
+        hatParts.push(
+          { geo: G.hairShortTop, color: hairColor, pos: [0, 0.165, 0] },
+          { geo: G.hairPonytail, color: hairColor, pos: [0, 0.0, -0.20], rot: [0.35, 0, 0] },
+          { geo: G.earring, color: scCol, pos: [0, 0.11, -0.175], scale: [2.2, 2.2, 2.2] }
+        );
+      } else if (hairStyle === 4) {
+        hatParts.push({ geo: G.hairAfro, color: hairColor, pos: [0, 0.15, -0.02] });
       } else if (!isFemale && hairStyle === 0) {
-        // Corte Curto Degradê / Disfarçado (Fade Carioca)
-        const topHair = new THREE.Mesh(G.hairShortTop, hairMat);
-        topHair.position.y = 0.165;
-        hat.add(topHair);
+        hatParts.push({ geo: G.hairShortTop, color: hairColor, pos: [0, 0.165, 0] });
       } else if (!isFemale && hairStyle === 1) {
-        // Cabelo Cacheado / Crespo Volumoso
-        const curlyTop = new THREE.Mesh(G.hairCurlyTop, hairMat);
-        curlyTop.position.y = 0.18;
-        hat.add(curlyTop);
-        const curlySide = new THREE.Mesh(G.hairCurlySide, hairMat);
-        curlySide.position.set(0, 0.08, -0.02);
-        hat.add(curlySide);
+        hatParts.push(
+          { geo: G.hairCurlyTop, color: hairColor, pos: [0, 0.18, 0] },
+          { geo: G.hairCurlySide, color: hairColor, pos: [0, 0.08, -0.02] }
+        );
       } else if (!isFemale && (hairStyle === 2 || hairStyle === 3)) {
-        // Boné Carioca (para frente ou virado para trás)
         const capColors = [0x1E3A8A, 0xDC2626, 0x111827, 0x047857, 0xD97706, 0xF8FAFC];
-        const cMat = this._getSharedLambertMat(capColors[(index + seedB) % capColors.length], true);
-        const cCrown = new THREE.Mesh(G.capCrown, cMat);
-        cCrown.position.y = 0.185;
-        hat.add(cCrown);
-        const cVisor = new THREE.Mesh(G.capVisor, cMat);
+        const cCol = capColors[(index + seedB) % capColors.length];
         const backwards = (hairStyle === 3);
-        cVisor.position.set(0, 0.13, backwards ? -0.2 : 0.2);
-        hat.add(cVisor);
+        hatParts.push(
+          { geo: G.capCrown, color: cCol, pos: [0, 0.185, 0] },
+          { geo: G.capVisor, color: cCol, pos: [0, 0.13, backwards ? -0.2 : 0.2] }
+        );
       } else {
-        // Corte Natural Clássico com Faixa Esportiva opcional
-        const topHair = new THREE.Mesh(G.hairShortTop, hairMat);
-        topHair.position.y = 0.165;
-        hat.add(topHair);
+        hatParts.push({ geo: G.hairShortTop, color: hairColor, pos: [0, 0.165, 0] });
       }
     }
 
-    // 7. ACESSÓRIO DA MÃO / OFÍCIO (Cesto de peixes, horta, feira ou bebida refrescante)
-    const handItem = new THREE.Group();
-    handItem.position.set(-0.35, 0.65, 0.12);
+    const hat = new THREE.Mesh(mergeColoredParts(hatParts), vMat);
+    head.add(hat);
 
-    if (isFishermanRole) {
-      const basket = new THREE.Mesh(G.fishBasket, this._getSharedLambertMat(0x78350F, true));
-      handItem.add(basket);
-      const fishTail = new THREE.Mesh(G.fishTail, this._getSharedLambertMat(0x94A3B8, true));
-      fishTail.rotation.x = Math.PI;
-      fishTail.position.set(0, 0.14, 0);
-      handItem.add(fishTail);
-      handItem.visible = true;
-    } else if (isFarmerRole) {
-      const basket = new THREE.Mesh(G.farmBasket, this._getSharedLambertMat(0xA16207, true));
-      handItem.add(basket);
-      const greens = new THREE.Mesh(G.greens, this._getSharedLambertMat(0x16A34A, true));
-      greens.position.set(0, 0.12, 0);
-      handItem.add(greens);
-      handItem.visible = true;
-    } else if (isMerchantRole) {
-      const crate = new THREE.Mesh(G.crate, this._getSharedLambertMat(0x854D0E, true));
-      handItem.add(crate);
-      const fruit = new THREE.Mesh(G.fruit, this._getSharedLambertMat(0xEA580C, true));
-      fruit.position.set(0, 0.12, 0);
-      handItem.add(fruit);
-      handItem.visible = true;
-    } else {
-      const cup = new THREE.Mesh(G.cup, this._getSharedLambertMat(0x10B981, true));
-      handItem.add(cup);
-      const straw = new THREE.Mesh(G.straw, this._getSharedLambertMat(0xFEF08A, false));
-      straw.position.set(0.02, 0.12, 0);
-      straw.rotation.z = -0.2;
-      handItem.add(straw);
-      handItem.visible = false;
-    }
+    // 7. ACESSÓRIO DA MÃO / OFÍCIO (1 único draw call compartilhado do cache!)
+    const handKey = isFishermanRole ? 'hand_fish' : (isFarmerRole ? 'hand_farm' : (isMerchantRole ? 'hand_merch' : 'hand_drink'));
+    const handItem = new THREE.Mesh(this._npcMergedCache.get(handKey), vMat);
+    handItem.position.set(-0.35, 0.65, 0.12);
+    handItem.visible = isFishermanRole || isFarmerRole || isMerchantRole;
     npcGroup.add(handItem);
 
-    // 8. ACESSÓRIOS DE PRAIA (Óculos de sol, viseira de palha e toalha de praia)
-    const beachAccGroup = new THREE.Group();
-    const shades = new THREE.Mesh(G.shades, this._getSharedLambertMat(0x111111, false));
-    shades.position.set(0, 1.40, 0.165);
-    beachAccGroup.add(shades);
-
-    if (index % 3 === 0) {
-      const towelCol = [0xF59E0B, 0x10B981, 0xEC4899, 0x3B82F6][index % 4];
-      const towel = new THREE.Mesh(G.towel, this._getSharedLambertMat(towelCol, true));
-      towel.position.set(0.26, 0.88, 0);
-      beachAccGroup.add(towel);
-    }
+    // 8. ACESSÓRIOS DE PRAIA (1 único draw call em cache!)
+    const towelCol = (index % 3 === 0) ? [0xF59E0B, 0x10B981, 0xEC4899, 0x3B82F6][index % 4] : null;
+    const beachAccGeo = this._getCachedMergedGeo(`beachAcc_${towelCol ?? 'none'}`, () => {
+      const parts = [{ geo: G.shades, color: 0x111111, pos: [0, 1.40, 0.165] }];
+      if (towelCol !== null) parts.push({ geo: G.towel, color: towelCol, pos: [0.26, 0.88, 0] });
+      return parts;
+    });
+    const beachAccGroup = new THREE.Mesh(beachAccGeo, vMat);
     beachAccGroup.visible = false;
     npcGroup.add(beachAccGroup);
 
-    // Capacete Amarelo de Obra (Mestre de Obras / Mutirão)
-    const helmetGroup = new THREE.Group();
-    const helmetMat = this._getSharedLambertMat(0xFACC15, true);
-    const crown = new THREE.Mesh(G.helmetCrown, helmetMat);
-    crown.position.y = 1.60;
-    helmetGroup.add(crown);
-    const brim = new THREE.Mesh(G.helmetBrim, helmetMat);
-    brim.position.y = 1.53;
-    helmetGroup.add(brim);
+    // Capacete Amarelo de Obra (1 draw call em cache!)
+    const helmetGroup = new THREE.Mesh(this._npcMergedCache.get('builder_helmet'), vMat);
     helmetGroup.visible = false;
     npcGroup.add(helmetGroup);
 
-    // Ferramenta de Obra
-    const toolArm = new THREE.Group();
+    // Ferramenta de Obra (1 draw call em cache!)
+    const toolArm = new THREE.Mesh(this._npcMergedCache.get('tool_arm'), vMat);
     toolArm.position.set(0.32, 1.05, 0);
-    const handle = new THREE.Mesh(G.toolHandle, this._getSharedLambertMat(0x5C4033, false));
-    handle.position.y = -0.12;
-    toolArm.add(handle);
-    const pickHead = new THREE.Mesh(G.pickHead, this._getSharedLambertMat(0x94A3B8, true));
-    pickHead.position.y = 0.22;
-    toolArm.add(pickHead);
     toolArm.visible = false;
     npcGroup.add(toolArm);
 
-    // Carrinho de Mão da Olaria
+    // Carrinho de Mão da Olaria (corpo fundido em 1 draw call + roda giratória)
     const cartGroup = new THREE.Group();
     cartGroup.position.set(0, 0.38, 0.85);
-    const tubMat = this._getSharedLambertMat(0x6C4A2D, true);
-    const tub = new THREE.Mesh(G.cartTub, tubMat);
-    tub.position.y = 0.18;
-    cartGroup.add(tub);
+    cartGroup.add(new THREE.Mesh(this._npcMergedCache.get('cart_body'), vMat));
     const cartWheel = new THREE.Mesh(G.cartWheel, this._getSharedLambertMat(0x334155, true));
     cartWheel.position.set(0, 0.02, 0.52);
     cartGroup.add(cartWheel);
-    const handleL = new THREE.Mesh(G.cartHandle, tubMat);
-    handleL.position.set(-0.32, 0.35, -0.65);
-    cartGroup.add(handleL);
-    const handleR = new THREE.Mesh(G.cartHandle, tubMat);
-    handleR.position.set(0.32, 0.35, -0.65);
-    cartGroup.add(handleR);
-    const brickCargo = new THREE.Mesh(G.brickCargo, this._getSharedLambertMat(0xB55338, true));
-    brickCargo.position.y = 0.32;
-    cartGroup.add(brickCargo);
     cartGroup.visible = false;
     npcGroup.add(cartGroup);
 
-    // 9. PERNAS ARTICULADAS COM CALÇA / BERMUDA + CANELA EM TOM DE PELE + CALÇADOS (Tênis, Botas ou Chinelo)
+    // 9. PERNAS ARTICULADAS (1 único draw call por perna com geometrias em cache para cidade & praia!)
     const pantsPalette = [
       0x1E3A8A, // Jeans azul clássico
       0x1E293B, // Calça sarja escura
@@ -1595,36 +1424,43 @@ export const PopulationMixin = {
     }
     const cityLegMat = wearsSkirt ? skinMat : this._getSharedLambertMat(cityLegColor, true);
 
-    // Metade dos moradores e todos os atletas usam bermuda/shorts deixando a canela com a cor da pele humana!
     const wearsShortsInCity = wearsSkirt || isSoccerPlayer || (!isElder && (seedA % 2 === 0));
     const cityCalfMat = wearsShortsInCity ? skinMat : cityLegMat;
 
     const isSunga = (index % 2 === 1);
     const boardshortColors = [0x0284C7, 0x10B981, 0xF97316, 0xEC4899, 0x8B5CF6, 0xEAB308];
-    const beachLegMat = isSunga ? skinMat : this._getSharedLambertMat(boardshortColors[(index + seedA) % boardshortColors.length], true);
+    const beachLegHex = isSunga ? skinColor : boardshortColors[(index + seedA) % boardshortColors.length];
+    const beachLegMat = isSunga ? skinMat : this._getSharedLambertMat(beachLegHex, true);
 
-    // Calçados variados (tênis branco, tênis preto, chuteira, bota de couro ou chinelo) com solado contrastante
     const shoeColors = [0xF8FAFC, 0x111827, 0x78350F, 0xDC2626, 0x1E40AF, 0x334155];
     const shoeHex = shoeColors[(index + seedA) % shoeColors.length];
-    const shoeMat = this._getSharedLambertMat(shoeHex, true);
-    const soleMat = this._getSharedLambertMat(shoeHex === 0xF8FAFC ? 0x9CA3AF : (shoeHex === 0x78350F ? 0x292524 : 0xF1F5F9), true);
+    const soleHex = shoeHex === 0xF8FAFC ? 0x9CA3AF : (shoeHex === 0x78350F ? 0x292524 : 0xF1F5F9);
 
-    const leftLeg = new THREE.Mesh(G.leg, cityLegMat);
+    const cityThighHex = wearsSkirt ? skinColor : cityLegColor;
+    const cityCalfHex = wearsShortsInCity ? skinColor : cityLegColor;
+    const cityLegGeo = this._getCachedMergedGeo(
+      `leg_c_${cityThighHex}_${cityCalfHex}_${shoeHex}_${soleHex}_${wearsSkirt ? 1 : 0}_${wearsShortsInCity ? 1 : 0}`,
+      () => [
+        { geo: G.leg, color: cityThighHex, skinWarm: wearsSkirt },
+        { geo: G.calf, color: cityCalfHex, skinWarm: wearsShortsInCity },
+        { geo: G.shoe, color: shoeHex },
+        { geo: G.sole, color: soleHex }
+      ]
+    );
+    const beachLegGeo = this._getCachedMergedGeo(
+      `leg_b_${beachLegHex}_${skinColor}_${isSunga ? 1 : 0}`,
+      () => [
+        { geo: G.leg, color: beachLegHex, skinWarm: isSunga },
+        { geo: G.calf, color: skinColor, skinWarm: true }
+      ]
+    );
+
+    const leftLeg = new THREE.Mesh(cityLegGeo, vMat);
     leftLeg.position.set(-0.11, 0.58, 0);
-    const leftCalf = new THREE.Mesh(G.calf, cityCalfMat);
-    const leftShoe = new THREE.Mesh(G.shoe, shoeMat);
-    leftShoe.add(new THREE.Mesh(G.sole, soleMat));
-    leftLeg.add(leftCalf, leftShoe);
-    leftLeg.castShadow = true;
     npcGroup.add(leftLeg);
 
-    const rightLeg = new THREE.Mesh(G.leg, cityLegMat);
+    const rightLeg = new THREE.Mesh(cityLegGeo, vMat);
     rightLeg.position.set(0.11, 0.58, 0);
-    const rightCalf = new THREE.Mesh(G.calf, cityCalfMat);
-    const rightShoe = new THREE.Mesh(G.shoe, shoeMat);
-    rightShoe.add(new THREE.Mesh(G.sole, soleMat));
-    rightLeg.add(rightCalf, rightShoe);
-    rightLeg.castShadow = true;
     npcGroup.add(rightLeg);
 
     let sungaBrief = null;
@@ -1655,12 +1491,10 @@ export const PopulationMixin = {
       head,
       leftArm,
       rightArm,
-      leftSleeve,
-      rightSleeve,
-      leftCalf,
-      rightCalf,
-      leftShoe,
-      rightShoe,
+      cityArmGeo,
+      beachArmGeo,
+      cityLegGeo,
+      beachLegGeo,
       cityClothesDetails,
       hat,
       handItem,
@@ -1756,29 +1590,21 @@ export const PopulationMixin = {
     if (isBeach && !npc.isWearingBeachwear) {
       npc.isWearingBeachwear = true;
       npc.torso.material = npc.beachTorsoMat;
-      if (npc.leftSleeve && npc.beachSleeveMat) npc.leftSleeve.material = npc.beachSleeveMat;
-      if (npc.rightSleeve && npc.beachSleeveMat) npc.rightSleeve.material = npc.beachSleeveMat;
+      if (npc.leftArm && npc.beachArmGeo) npc.leftArm.geometry = npc.beachArmGeo;
+      if (npc.rightArm && npc.beachArmGeo) npc.rightArm.geometry = npc.beachArmGeo;
       if (npc.cityClothesDetails) npc.cityClothesDetails.visible = false;
-      npc.leftLeg.material = npc.beachLegMat;
-      npc.rightLeg.material = npc.beachLegMat;
-      if (npc.leftCalf && npc.skinMat) npc.leftCalf.material = npc.skinMat;
-      if (npc.rightCalf && npc.skinMat) npc.rightCalf.material = npc.skinMat;
-      if (npc.leftShoe) npc.leftShoe.visible = false;
-      if (npc.rightShoe) npc.rightShoe.visible = false;
+      if (npc.leftLeg && npc.beachLegGeo) npc.leftLeg.geometry = npc.beachLegGeo;
+      if (npc.rightLeg && npc.beachLegGeo) npc.rightLeg.geometry = npc.beachLegGeo;
       if (npc.sungaBrief) npc.sungaBrief.visible = true;
       if (npc.beachAccGroup) npc.beachAccGroup.visible = true;
     } else if (!isBeach && npc.isWearingBeachwear) {
       npc.isWearingBeachwear = false;
       npc.torso.material = npc.cityTorsoMat;
-      if (npc.leftSleeve && npc.citySleeveMat) npc.leftSleeve.material = npc.citySleeveMat;
-      if (npc.rightSleeve && npc.citySleeveMat) npc.rightSleeve.material = npc.citySleeveMat;
+      if (npc.leftArm && npc.cityArmGeo) npc.leftArm.geometry = npc.cityArmGeo;
+      if (npc.rightArm && npc.cityArmGeo) npc.rightArm.geometry = npc.cityArmGeo;
       if (npc.cityClothesDetails) npc.cityClothesDetails.visible = true;
-      npc.leftLeg.material = npc.cityLegMat;
-      npc.rightLeg.material = npc.cityLegMat;
-      if (npc.leftCalf && npc.cityCalfMat) npc.leftCalf.material = npc.cityCalfMat;
-      if (npc.rightCalf && npc.cityCalfMat) npc.rightCalf.material = npc.cityCalfMat;
-      if (npc.leftShoe) npc.leftShoe.visible = true;
-      if (npc.rightShoe) npc.rightShoe.visible = true;
+      if (npc.leftLeg && npc.cityLegGeo) npc.leftLeg.geometry = npc.cityLegGeo;
+      if (npc.rightLeg && npc.cityLegGeo) npc.rightLeg.geometry = npc.cityLegGeo;
       if (npc.sungaBrief) npc.sungaBrief.visible = false;
       if (npc.beachAccGroup) npc.beachAccGroup.visible = false;
     }

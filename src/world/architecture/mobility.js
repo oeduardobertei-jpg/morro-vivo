@@ -178,16 +178,12 @@ export const MobilityMixin = {
         st.add(waitFig.group);
       });
 
-      // Luminárias internas quentes da estação
+      // Luminárias internas quentes da estação (brilho via emissivo/Bloom sem PointLight extra)
       [-1.8, 1.8].forEach(lx => {
         const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.10, 1.2), warmBulbMat);
         lamp.position.set(lx, 4.58, 0);
         st.add(lamp);
       });
-
-      const stLight = new THREE.PointLight(0xFFE082, 1.4, 16);
-      stLight.position.set(0, 3.8, 0);
-      st.add(stLight);
 
       // Roda Motriz Gigante (Bullwheel) com raios giratórios (adicionada ao grupo dinâmico!)
       const wheelGroup = new THREE.Group();

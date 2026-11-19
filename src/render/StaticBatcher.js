@@ -48,13 +48,17 @@ export class StaticBatcher {
     this.scene = scene;
     this.enabled = opts.enabled !== false;
     this.getExcludedRoots = opts.getExcludedRoots || (() => []);
-    this.cellSize = opts.cellSize ?? 84;
-    this.calibrateSeconds = opts.calibrateSeconds ?? 2.5;
-    this.buildBudgetMs = opts.buildBudgetMs ?? 6;
+    this.onActive = opts.onActive || null;
+    this._notifiedActive = false;
+    this.cellSize = opts.cellSize ?? 140;
+    this.calibrateSeconds = opts.calibrateSeconds ?? 2.0;
+    this.buildBudgetMs = opts.buildBudgetMs ?? 8;
     this.state = 'waiting';
     this.recs = [];
+    this.recByMesh = new WeakMap();
     this.matRecs = new Map();
     this.chunks = [];
+    this.chunkById = new Map();
     this.queue = [];
     this.sharedMaterials = new Map();
     this._t = 0;
@@ -66,6 +70,7 @@ export class StaticBatcher {
 
   _eligible(mesh, excluded) {
     if (!mesh.isMesh || mesh.isInstancedMesh || mesh.isSkinnedMesh) return false;
+    if (mesh.name === 'static-batch') return false;
     const geo = mesh.geometry;
     if (!geo || !geo.attributes.position) return false;
     if (Object.keys(geo.morphAttributes || {}).length) return this._skip('morph'), false;
@@ -74,14 +79,18 @@ export class StaticBatcher {
     if (!SUPPORTED.has(mat.type)) return this._skip('material:' + mat.type), false;
     if (mat.transparent || mat.opacity < 1 || mat.alphaTest > 0 || !mat.visible) return this._skip('transparent'), false;
     if (mat.vertexColors || mat.wireframe || mat.depthWrite === false) return this._skip('special'), false;
-    if (mat.emissive && mat.emissive.getHex() !== 0) return this._skip('emissive'), false;
     for (const k of MAP_KEYS) if (mat[k]) return this._skip('textured'), false;
     if (mesh.renderOrder !== 0 || !mesh.frustumCulled) return this._skip('renderOrder'), false;
     for (let p = mesh; p; p = p.parent) {
       if (!p.visible) return this._skip('hidden'), false;
+      if (p.userData && p.userData.dynamic) return this._skip('dynamicProp'), false;
       if (excluded.has(p)) return this._skip('excludedRoot'), false;
     }
     return true;
+  }
+
+  _isEmissiveMat(mat) {
+    return !!(mat.userData?.dynamicEmissive || (mat.emissive && mat.emissive.getHex() !== 0));
   }
 
   begin() {
@@ -90,19 +99,73 @@ export class StaticBatcher {
     const excluded = new Set(this.getExcludedRoots());
     this.scene.traverse((o) => {
       if (!this._eligible(o, excluded)) return;
+      const isEmissive = this._isEmissiveMat(o.material);
       const rec = {
         mesh: o, parent: o.parent, geometry: o.geometry, material: o.material,
+        isEmissive,
         matrix: new Float32Array(o.matrixWorld.elements), dynamic: false, removed: false, chunk: null
       };
       this.recs.push(rec);
-      let mr = this.matRecs.get(o.material);
-      if (!mr) { mr = { sig: matSig(o.material, new Float32Array(14)), recs: [] }; this.matRecs.set(o.material, mr); }
-      mr.recs.push(rec);
+      this.recByMesh.set(o, rec);
+      // Materiais emissivos compartilham diretamente o material original no lote,
+      // então mudanças em emissiveIntensity (dia/noite) atualizam na GPU em O(1) sem invalidar o chunk!
+      if (!isEmissive) {
+        let mr = this.matRecs.get(o.material);
+        if (!mr) { mr = { sig: matSig(o.material, new Float32Array(14)), recs: [] }; this.matRecs.set(o.material, mr); }
+        mr.recs.push(rec);
+      }
     });
     this.stats.eligible = this.recs.length;
     this.state = 'calibrating';
     this.stats.state = 'calibrating';
     this._t = 0;
+  }
+
+  /** Incorpora novas malhas estáticas (ex.: casa recém-construída ou ampliada) aos chunks espaciais. */
+  ingestGroup(rootGroup) {
+    if (!this.enabled || !rootGroup || (this.state !== 'active' && this.state !== 'building')) return;
+    rootGroup.updateMatrixWorld(true);
+    const excluded = new Set(this.getExcludedRoots());
+    const dirty = new Set();
+
+    rootGroup.traverse((o) => {
+      if (this.recByMesh.has(o)) return;
+      if (!this._eligible(o, excluded)) return;
+      const isEmissive = this._isEmissiveMat(o.material);
+      const rec = {
+        mesh: o, parent: o.parent, geometry: o.geometry, material: o.material,
+        isEmissive,
+        matrix: new Float32Array(o.matrixWorld.elements), dynamic: false, removed: false, chunk: null
+      };
+      this.recs.push(rec);
+      this.recByMesh.set(o, rec);
+      if (!isEmissive) {
+        let mr = this.matRecs.get(o.material);
+        if (!mr) { mr = { sig: matSig(o.material, new Float32Array(14)), recs: [] }; this.matRecs.set(o.material, mr); }
+        mr.recs.push(rec);
+      }
+      const key = this._keyOf(rec);
+      const cs = isEmissive ? this.cellSize * 2 : this.cellSize;
+      const cell = `${Math.floor(rec.matrix[12] / cs)}_${Math.floor(rec.matrix[14] / cs)}`;
+      const id = key + '#' + cell;
+      let chunk = this.chunkById.get(id);
+      if (!chunk) {
+        chunk = { id, key, isEmissive, recs: [], mesh: null, material: null, built: false };
+        this.chunkById.set(id, chunk);
+        this.chunks.push(chunk);
+      }
+      chunk.recs.push(rec);
+      dirty.add(chunk);
+    });
+
+    if (dirty.size > 0) {
+      for (const ch of dirty) {
+        if (!this.queue.includes(ch)) this.queue.push(ch);
+      }
+      this.state = 'building';
+      this.stats.state = 'building';
+      this.stats.eligible = this.recs.length;
+    }
   }
 
   /** Verdadeiro se algo mudou em relação ao estado gravado. */
@@ -134,15 +197,20 @@ export class StaticBatcher {
 
   _keyOf(rec) {
     const m = rec.material, me = rec.mesh;
+    // Emissivos estáticos (ex.: janelas compartilhadas, postes solares, quiosques) agrupam pelo material exato!
+    if (rec.isEmissive) {
+      return `emissive|${m.uuid}|${me.castShadow ? 1 : 0}|${me.receiveShadow ? 1 : 0}`;
+    }
     const preset = this._resolvePreset(m) || 'basic';
     const effType = m.type === 'MeshLambertMaterial' ? 'MeshStandardMaterial' : m.type;
     const effFlat = preset !== 'basic' ? 0 : (m.flatShading ? 1 : 0);
-    const effRough = m.type === 'MeshStandardMaterial' ? Math.round((m.roughness ?? 0.85) * 20) : 'p';
-    const effMetal = m.type === 'MeshStandardMaterial' ? Math.round((m.metalness ?? 0.0) * 20) : 'p';
+    const effRough = m.type === 'MeshStandardMaterial' ? Math.round((m.roughness ?? 0.85) * 8) : 'p';
+    const effMetal = m.type === 'MeshStandardMaterial' ? Math.round((m.metalness ?? 0.0) * 8) : 'p';
     return `${effType}|${preset}|${m.side}|${effFlat}|${me.castShadow ? 1 : 0}|${me.receiveShadow ? 1 : 0}|${effRough}|${effMetal}`;
   }
 
   _sharedMaterial(key, rec) {
+    if (rec.isEmissive) return rec.material;
     let mat = this.sharedMaterials.get(key);
     if (!mat) {
       const src = rec.material;
@@ -169,28 +237,30 @@ export class StaticBatcher {
   }
 
   _plan() {
-    const buckets = new Map();
+    this.chunkById.clear();
     for (const rec of this.recs) {
       if (rec.dynamic || rec.removed) continue;
       const e = rec.matrix;
       const key = this._keyOf(rec);
-      const cell = `${Math.floor(e[12] / this.cellSize)}_${Math.floor(e[14] / this.cellSize)}`;
+      const cs = rec.isEmissive ? this.cellSize * 2 : this.cellSize;
+      const cell = `${Math.floor(e[12] / cs)}_${Math.floor(e[14] / cs)}`;
       const id = key + '#' + cell;
-      let b = buckets.get(id);
-      if (!b) { b = { key, recs: [], mesh: null, material: null, built: false }; buckets.set(id, b); }
+      let b = this.chunkById.get(id);
+      if (!b) { b = { id, key, isEmissive: rec.isEmissive, recs: [], mesh: null, material: null, built: false }; this.chunkById.set(id, b); }
       b.recs.push(rec);
     }
-    this.chunks = [...buckets.values()];
+    this.chunks = [...this.chunkById.values()];
     this.queue = this.chunks.slice();
   }
 
-  _buildGeometry(recs) {
+  _buildGeometry(recs, withColors = true) {
     let verts = 0;
     for (const r of recs) {
       const g = r.geometry;
       verts += g.index ? g.index.count : g.attributes.position.count;
     }
-    const pos = new Float32Array(verts * 3), nor = new Float32Array(verts * 3), col = new Float32Array(verts * 3);
+    const pos = new Float32Array(verts * 3), nor = new Float32Array(verts * 3);
+    const col = withColors ? new Float32Array(verts * 3) : null;
     let o = 0;
     for (const r of recs) {
       const g = r.geometry;
@@ -222,7 +292,7 @@ export class StaticBatcher {
           } else {
             nor[o] = fn.x; nor[o + 1] = fn.y; nor[o + 2] = fn.z;
           }
-          col[o] = c.r; col[o + 1] = c.g; col[o + 2] = c.b;
+          if (col) { col[o] = c.r; col[o + 1] = c.g; col[o + 2] = c.b; }
           o += 3;
         }
       }
@@ -230,7 +300,7 @@ export class StaticBatcher {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    if (col) geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     geo.computeBoundingSphere();
     geo.computeBoundingBox();
     return geo;
@@ -245,7 +315,7 @@ export class StaticBatcher {
     }
     if (!live.length) return;
     const first = live[0];
-    const mesh = new THREE.Mesh(this._buildGeometry(live), this._sharedMaterial(chunk.key, first));
+    const mesh = new THREE.Mesh(this._buildGeometry(live, !first.isEmissive), this._sharedMaterial(chunk.key, first));
     mesh.castShadow = first.mesh.castShadow;
     mesh.receiveShadow = first.mesh.receiveShadow;
     mesh.matrixAutoUpdate = false;
@@ -290,7 +360,15 @@ export class StaticBatcher {
       while (this.queue.length && performance.now() - t0 < this.buildBudgetMs) {
         this._buildChunk(this.queue.shift());
       }
-      if (!this.queue.length) { this.state = 'active'; this.stats.state = 'active'; this._refreshStats(); }
+      if (!this.queue.length) {
+        this.state = 'active';
+        this.stats.state = 'active';
+        this._refreshStats();
+        if (!this._notifiedActive && this.onActive) {
+          this._notifiedActive = true;
+          this.onActive();
+        }
+      }
       return;
     }
 

@@ -262,10 +262,6 @@ export const WestCoastMixin = {
     lamp.position.set(pos.x, pierYOffset + 3.1, pos.z + 20.2);
     pierGroup.add(lamp);
 
-    const pierLight = new THREE.PointLight(0xFFD54F, 1.8, 18);
-    pierLight.position.set(pos.x, pierYOffset + 2.9, pos.z + 20.2);
-    pierGroup.add(pierLight);
-
     // Garante listas dinâmicas para o StaticBatcher e FastPicker
     this.mobilityDynamicGroups = this.mobilityDynamicGroups || [];
     this.mobilitySelectables = this.mobilitySelectables || [];
@@ -1916,15 +1912,11 @@ export const WestCoastMixin = {
       dominoGroup.add(stool);
     });
 
-    // Lampião a querosene pendurado no centro
-    const lampMat = new THREE.MeshLambertMaterial({ color: 0xF59E0B, emissive: 0xD97706, emissiveIntensity: 0.4 });
+    // Lampião a querosene pendurado no centro (emissivo puro sem PointLight extra)
+    const lampMat = new THREE.MeshLambertMaterial({ color: 0xF59E0B, emissive: 0xD97706, emissiveIntensity: 0.7 });
     const lampMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 0.28, 6), lampMat);
     lampMesh.position.set(0, 2.35, 0);
     dominoGroup.add(lampMesh);
-
-    const warmLight = new THREE.PointLight(0xFFA200, 1.2, 12);
-    warmLight.position.set(0, 2.2, 0);
-    dominoGroup.add(warmLight);
 
     lifeGroup.add(dominoGroup);
 

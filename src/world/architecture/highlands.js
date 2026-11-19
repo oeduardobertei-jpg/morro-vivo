@@ -216,10 +216,6 @@ export const HighlandsMixin = {
     lanternR.position.set(2.8, 3.8, 0.4);
     portalGroup.add(lanternR);
 
-    const miranteLight = new THREE.PointLight(0xF59E0B, 2.2, 22);
-    miranteLight.position.set(0, 3.8, 0.5);
-    portalGroup.add(miranteLight);
-
     miranteGroup.add(portalGroup);
 
     // 7. Escadaria Monumental de Acesso em Lajes de Granito Natural conectando à Avenida Central (Route 2)
@@ -621,11 +617,7 @@ export const HighlandsMixin = {
     const beacon = new THREE.Mesh(beaconGeo, beaconMat);
     beacon.position.set(0, 15.6, 0);
     radioGroup.add(beacon);
-
-    const beaconLight = new THREE.PointLight(0xFF0000, 2.0, 24);
-    beaconLight.position.set(0, 15.6, 0);
-    radioGroup.add(beaconLight);
-    this.beaconLight = beaconLight;
+    this.beaconLight = null;
 
     // Technical radio hut (Cabine Técnica da Rádio)
     const hutMat = new THREE.MeshLambertMaterial({ color: 0x334155, flatShading: true });

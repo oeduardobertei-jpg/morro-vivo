@@ -402,10 +402,6 @@ export const CommunityMixin = {
       const lanternBulb = new THREE.Mesh(new THREE.DodecahedronGeometry(0.24, 0), new THREE.MeshBasicMaterial({ color: 0xFFD700 }));
       lanternBulb.position.set(lx > 0 ? lx - 0.5 : lx + 0.5, 3.65, -8.8);
       plazaGroup.add(lanternBulb);
-
-      const pLight = new THREE.PointLight(0xFFB74D, 1.8, 10);
-      pLight.position.set(lx > 0 ? lx - 0.5 : lx + 0.5, 3.65, -8.8);
-      plazaGroup.add(pLight);
     });
 
     // Fitinhas do Bonfim esvoaçantes suspensas na viga frontal

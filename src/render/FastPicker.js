@@ -19,6 +19,8 @@ export class FastPicker {
     this.npcs = npcs;
     this.raycaster = new THREE.Raycaster();
     this.raycaster.firstHitOnly = true;
+    // Habilita layer 31 (HIDDEN_LAYER do StaticBatcher) para que casas agrupadas continuem clicáveis em < 0.05ms!
+    this.raycaster.layers.enable(31);
 
     this._sphere = new THREE.Sphere();
     this._center = new THREE.Vector3();

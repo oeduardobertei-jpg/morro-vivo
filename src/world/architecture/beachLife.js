@@ -405,16 +405,14 @@ export const BeachLifeMixin = {
       board.position.set(0, 2.1, 0.35);
       singleKiosk.add(board);
 
-      // Warm overhead lantern for nighttime illumination
-      const lanternMat = new THREE.MeshLambertMaterial({ color: 0xFDE047, emissive: 0xF59E0B, emissiveIntensity: 0.3 });
-      const lanternMesh = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.28, 0.22), lanternMat);
+      // Warm overhead lantern (material emissivo compartilhado para 1 draw call e 0 PointLights extras!)
+      if (!this._sharedKioskLanternMat) {
+        this._sharedKioskLanternMat = new THREE.MeshLambertMaterial({ color: 0xFDE047, emissive: 0xF59E0B, emissiveIntensity: 0.3 });
+        this.kioskLamps.push({ light: null, mat: this._sharedKioskLanternMat });
+      }
+      const lanternMesh = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.30, 0.24), this._sharedKioskLanternMat);
       lanternMesh.position.set(0, 2.3, 0.45);
       singleKiosk.add(lanternMesh);
-
-      const kioskLight = new THREE.PointLight(0xFFA200, 0, 11);
-      kioskLight.position.set(0, 2.2, 0.5);
-      singleKiosk.add(kioskLight);
-      this.kioskLamps.push({ light: kioskLight, mat: lanternMat });
 
       kioskGroup.add(singleKiosk);
       this.propObstacles = this.propObstacles || [];
@@ -736,9 +734,21 @@ export const BeachLifeMixin = {
       fireInner.position.y = 0.56;
       fireGroup.add(fireInner);
 
-      const fireLight = new THREE.PointLight(0xFF6B00, 0.0, 18.0);
-      fireLight.position.set(0, 1.35, 0);
-      fireGroup.add(fireLight);
+      // Halo quente aditivo na areia ao redor da fogueira (substitui PointLight por 0ms de custo PBR por pixel!)
+      const fireGlowDisc = new THREE.Mesh(
+        new THREE.CircleGeometry(2.6, 12),
+        new THREE.MeshBasicMaterial({
+          color: 0xFF7B24,
+          transparent: true,
+          opacity: 0.24,
+          blending: THREE.AdditiveBlending,
+          depthWrite: false
+        })
+      );
+      fireGlowDisc.rotation.x = -Math.PI / 2;
+      fireGlowDisc.position.y = 0.08;
+      fireGroup.add(fireGlowDisc);
+      const fireLight = null;
 
       circleGroup.add(fireGroup);
 
@@ -1519,10 +1529,6 @@ export const BeachLifeMixin = {
     );
     beaconGlass.position.set(3.2, 3.45, 2.0);
     breakwaterGroup.add(beaconGlass);
-
-    const greenLight = new THREE.PointLight(0x22C55E, 1.5, 18);
-    greenLight.position.set(3.2, 3.5, 2.0);
-    breakwaterGroup.add(greenLight);
 
     southeastGroup.add(breakwaterGroup);
 

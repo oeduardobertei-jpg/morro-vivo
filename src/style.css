@@ -556,6 +556,27 @@ body {
   50% { transform: scale(1.22) rotate(-5deg); }
 }
 
+.cam-kbd-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.28rem 0.5rem;
+  border-radius: 7px;
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(226, 232, 240, 0.72);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  white-space: nowrap;
+  user-select: none;
+  cursor: help;
+}
+
+@media (max-width: 960px) {
+  .cam-kbd-hint { display: none; }
+}
+
 /* Inspector Floating Modal */
 .inspector-card {
   position: absolute;

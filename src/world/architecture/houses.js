@@ -105,7 +105,22 @@ function _getHouseGeo() {
     antMast: new THREE.CylinderGeometry(0.02, 0.02, 1.8, 5),
     clothPole: new THREE.CylinderGeometry(0.04, 0.04, 1.5, 4),
     clothWire: new THREE.BoxGeometry(1.7, 0.02, 0.02),
-    clothPiece: new THREE.BoxGeometry(0.35, 0.5, 0.03)
+    clothPiece: new THREE.BoxGeometry(0.35, 0.5, 0.03),
+    potBase: new THREE.CylinderGeometry(0.18, 0.13, 0.28, 6),
+    potPlant: new THREE.DodecahedronGeometry(0.23, 0),
+    planterBox: new THREE.BoxGeometry(0.96, 0.20, 0.24),
+    planterBush: new THREE.BoxGeometry(0.86, 0.18, 0.20),
+    planterBloom: new THREE.DodecahedronGeometry(0.11, 0),
+    balcPost: new THREE.BoxGeometry(0.05, 0.52, 0.05),
+    corbel: new THREE.BoxGeometry(0.16, 0.24, 0.34),
+    extStairStep: new THREE.BoxGeometry(0.64, 0.18, 0.36),
+    extStairRail: new THREE.BoxGeometry(0.05, 0.05, 2.95),
+    muralBand: new THREE.BoxGeometry(0.03, 0.72, 2.2),
+    dishCone: new THREE.ConeGeometry(0.36, 0.14, 8),
+    pergolaPost: new THREE.BoxGeometry(0.11, 1.85, 0.11),
+    pergolaBeam: new THREE.BoxGeometry(3.5, 0.09, 0.11),
+    pennantFlag: new THREE.ConeGeometry(0.14, 0.25, 3),
+    awningCanopy: new THREE.BoxGeometry(1.75, 0.07, 0.76)
   };
   return _houseGeoCache;
 }
@@ -984,17 +999,22 @@ export const HousesMixin = {
   buildStory(houseData, storyIndex) {
     const geo = _getHouseGeo();
     const storyGroup = new THREE.Group();
-    const w = 3.8 + (Math.sin(houseData.position.x * 2 + storyIndex) * 0.3);
-    const d = 3.5 + (Math.cos(houseData.position.z * 2 + storyIndex) * 0.3);
+    const houseHash = Math.abs(Math.round(houseData.position.x * 13 + houseData.position.z * 29));
+    const h2 = Math.abs(Math.round(houseData.position.x * 37 - houseData.position.z * 19));
+
+    // Proporções orgânicas variadas (sobrados estreitos, casarões largos e balanços sutis de encosta)
+    const wVar = ((houseHash % 9) - 4) * 0.11; // -0.44 .. +0.44
+    const dVar = ((h2 % 7) - 3) * 0.12;        // -0.36 .. +0.36
+    const w = Math.max(3.35, Math.min(4.35, 3.85 + wVar + Math.sin(houseData.position.x * 2 + storyIndex) * 0.12));
+    const d = Math.max(3.15, Math.min(4.05, 3.55 + dVar + Math.cos(houseData.position.z * 2 + storyIndex) * 0.10));
     const h = 2.5;
     const storyY = storyIndex * h + h / 2;
 
-    const houseHash = Math.abs(Math.round(houseData.position.x * 13 + houseData.position.z * 29));
-    const offsetX = storyIndex > 0 ? (Math.random() - 0.5) * 0.22 : 0;
-    const offsetZ = storyIndex > 0 ? (Math.random() - 0.5) * 0.22 : 0;
+    const offsetX = storyIndex > 0 ? (((houseHash + storyIndex) % 5) - 2) * 0.08 : 0;
+    const offsetZ = storyIndex > 0 ? (houseHash % 3 === 0 ? 0.16 : (((h2 + storyIndex) % 5) - 2) * 0.06) : 0;
 
     const bodyGeo = new THREE.BoxGeometry(w, h, d);
-    const isBrick = (storyIndex === 1 && Math.random() > 0.4);
+    const isBrick = (storyIndex === 1 && (houseHash % 5 < 2));
     const bodyColor = isBrick ? 0xA8543E : houseData.color;
 
     const bodyMat = getSharedStylizedMaterial(bodyColor, isBrick ? 'brick' : 'plaster', { flatShading: false });
@@ -1007,6 +1027,20 @@ export const HousesMixin = {
 
     const trimMat = getSharedStylizedMaterial(0xEAE4D7, 'plaster');
     const sillMat = getSharedStylizedMaterial(0xCFC9BC, 'stone', { flatShading: true });
+    const railMat = getSharedStylizedMaterial(0x2B323A, 'metal', { flatShading: true });
+    const potMat = getSharedStylizedMaterial(0xB95B3E, 'brick', { flatShading: true });
+    const plantMat = getSharedStylizedMaterial(0x41823D, 'foliage', { flatShading: true });
+    const awningPalette = [0xC94B3B, 0x2F74A6, 0x3D8A5A, 0xDDA63A, 0x7A4988];
+
+    // Mãos-francesas sob o balanço do 2º andar quando projetado para frente
+    if (storyIndex > 0 && offsetZ > 0.10) {
+      const corbelMat = getSharedStylizedMaterial(0x8E867B, 'stone', { flatShading: true });
+      [-w * 0.34, w * 0.34].forEach((cx) => {
+        const corbel = new THREE.Mesh(geo.corbel, corbelMat);
+        corbel.position.set(offsetX + cx, storyY - h / 2 - 0.12, offsetZ + d / 2 - 0.18);
+        storyGroup.add(corbel);
+      });
+    }
 
     if (storyIndex === 0) {
       const doorFrame = new THREE.Mesh(geo.doorFrame, trimMat);
@@ -1018,20 +1052,79 @@ export const HousesMixin = {
       door.position.set(offsetX - w * 0.22, 1.60 / 2, offsetZ + d / 2 + 0.032);
       storyGroup.add(door);
 
-      // Marquise / cobertura protetora sobre a porta de entrada
-      const canopyMat = getSharedStylizedMaterial(0x475361, 'metal', { flatShading: true });
-      const canopy = new THREE.Mesh(geo.doorCanopy, canopyMat);
-      canopy.position.set(offsetX - w * 0.22, 1.82, offsetZ + d / 2 + 0.20);
-      canopy.rotation.x = 0.16;
+      // Marquise ou toldo colorido de birosca/fachada sobre a entrada
+      const useColoredAwning = (houseHash % 3 === 0);
+      const canopyMat = useColoredAwning
+        ? getSharedStylizedMaterial(awningPalette[houseHash % awningPalette.length], 'plaster', { flatShading: true })
+        : getSharedStylizedMaterial(0x475361, 'metal', { flatShading: true });
+      const canopy = new THREE.Mesh(useColoredAwning ? geo.awningCanopy : geo.doorCanopy, canopyMat);
+      canopy.position.set(
+        offsetX - (useColoredAwning ? w * 0.14 : w * 0.22),
+        1.84,
+        offsetZ + d / 2 + (useColoredAwning ? 0.34 : 0.20)
+      );
+      canopy.rotation.x = useColoredAwning ? 0.24 : 0.16;
       canopy.castShadow = true;
       storyGroup.add(canopy);
+
+      // Vasos de cerâmica com plantas tropicais flanqueando a porta de entrada (~65% das casas)
+      if (houseHash % 3 !== 2) {
+        const potSides = houseHash % 2 === 0 ? [offsetX - w * 0.22 - 0.68, offsetX - w * 0.22 + 0.68] : [offsetX - w * 0.22 - 0.68];
+        potSides.forEach((px) => {
+          const pot = new THREE.Mesh(geo.potBase, potMat);
+          pot.position.set(px, 0.14, offsetZ + d / 2 + 0.24);
+          pot.castShadow = true;
+          storyGroup.add(pot);
+
+          const bush = new THREE.Mesh(geo.potPlant, plantMat);
+          bush.position.set(px, 0.42, offsetZ + d / 2 + 0.24);
+          bush.castShadow = true;
+          storyGroup.add(bush);
+        });
+      }
+
+      // Escada externa lateral carioca ligando o térreo ao 2º andar (~40% das casas de 2+ andares)
+      const stairSide = (h2 % 2 === 0) ? -1 : 1; // Sempre no lado oposto à extrusão em L do térreo!
+      const hasExtStair = houseData.level >= 2 && (houseHash % 5 < 2);
+      if (hasExtStair) {
+        const sx = offsetX + stairSide * (w / 2 + 0.32);
+        const stairMat = getSharedStylizedMaterial(0x888178, 'stone', { flatShading: true });
+        for (let st = 0; st < 6; st++) {
+          const t = st / 5;
+          const stepMesh = new THREE.Mesh(geo.extStairStep, stairMat);
+          stepMesh.position.set(sx, 0.30 + t * 2.05, offsetZ + d * 0.36 - t * (d * 0.72));
+          stepMesh.castShadow = true;
+          stepMesh.receiveShadow = true;
+          storyGroup.add(stepMesh);
+        }
+        const extRail = new THREE.Mesh(geo.extStairRail, railMat);
+        extRail.position.set(sx + stairSide * 0.29, 1.80, offsetZ);
+        extRail.rotation.x = 0.68;
+        storyGroup.add(extRail);
+      }
+
+      // Mural / Grafite geométrico carioca em ~22% das empenas laterais cegas (-X, evitando a escada externa)
+      if ((houseHash % 9 === 1 || houseHash % 9 === 5) && !(hasExtStair && stairSide === -1)) {
+        const muralColors = [
+          [0xE6A938, 0x2E74A6, 0xD45A46],
+          [0x3E8A5B, 0xF2BA38, 0xD9468F],
+          [0x2F85A6, 0xEAE0CE, 0xD96B43]
+        ][houseHash % 3];
+        const mx = offsetX - w / 2 - 0.02;
+        muralColors.forEach((mc, mi) => {
+          const band = new THREE.Mesh(geo.muralBand, getSharedStylizedMaterial(mc, 'plaster', { flatShading: true }));
+          band.position.set(mx, 0.62 + mi * 0.56, offsetZ + (mi - 1) * 0.14);
+          band.scale.set(1.0, 0.52, 0.62 + (mi === 1 ? 0.24 : 0));
+          storyGroup.add(band);
+        });
+      }
     }
 
     // Variedade Arquitetônica 3.0: Extrusões em L para quebrar o caixote!
-    if (Math.random() > 0.6) {
-      const extW = w * 0.45;
-      const extD = d * 0.6;
-      const isRight = Math.random() > 0.5;
+    if ((houseHash + storyIndex * 3) % 5 < 2) {
+      const extW = w * 0.44;
+      const extD = d * 0.58;
+      const isRight = ((h2 + storyIndex) % 2 === 0);
       const extX = isRight ? (offsetX + w / 2 + extW / 2 - 0.2) : (offsetX - w / 2 - extW / 2 + 0.2);
 
       const extBody = new THREE.Mesh(new THREE.BoxGeometry(extW, h, extD), bodyMat);
@@ -1040,7 +1133,7 @@ export const HousesMixin = {
       extBody.receiveShadow = true;
       storyGroup.add(extBody);
 
-      const extSlabMat = getSharedStylizedMaterial(0x88929E, 'stone', { flatShading: true });
+      const extSlabMat = getSharedStylizedMaterial(0x9A9288, 'stone', { flatShading: true });
       const extSlab = new THREE.Mesh(new THREE.BoxGeometry(extW + 0.2, 0.2, extD + 0.2), extSlabMat);
       extSlab.position.set(extX, storyY + h / 2 + 0.1, offsetZ - d / 2 + extD / 2);
       extSlab.castShadow = true;
@@ -1092,37 +1185,75 @@ export const HousesMixin = {
       addFramedWindow(offsetX - w / 2, storyY + 0.15, offsetZ, -Math.PI / 2);
     }
 
-    const slabGeo = new THREE.BoxGeometry(w + 0.22, 0.2, d + 0.22);
-    const slabMat = getSharedStylizedMaterial(0x88929E, 'stone', { flatShading: true });
+    // Friso/cintamento de laje em tom quente coordenado (quebra o aspecto cinza frio repetitivo)
+    const slabColors = [0x948C82, 0xD8CFC0, 0x868E98];
+    const slabGeo = new THREE.BoxGeometry(w + 0.24, 0.22, d + 0.24);
+    const slabMat = getSharedStylizedMaterial(slabColors[houseHash % slabColors.length], 'stone', { flatShading: true });
     const slab = new THREE.Mesh(slabGeo, slabMat);
     slab.position.set(offsetX, storyY + h / 2 + 0.1, offsetZ);
     slab.castShadow = true;
+    slab.receiveShadow = true;
     storyGroup.add(slab);
 
-    if (storyIndex > 0 && Math.random() > 0.5) {
-      // Small balcony
-      const balconyGeo = new THREE.BoxGeometry(1.6, 0.1, 0.8);
-      const balconyMat = getSharedStylizedMaterial(0x707C8A, 'stone', { flatShading: true });
-      const balcony = new THREE.Mesh(balconyGeo, balconyMat);
-      balcony.position.set(offsetX, storyY - h / 2 + 0.05, offsetZ + d / 2 + 0.4);
+    // Varanda Carioca (gradil metálico, floreira florida e toldo sombreado em ~65% dos pavimentos superiores)
+    if (storyIndex > 0 && ((houseHash + storyIndex) % 3 !== 0)) {
+      const balcW = Math.min(w * 0.68, 2.35);
+      const balcD = 0.86;
+      const balcY = storyY - h / 2 + 0.06;
+      const balcZ = offsetZ + d / 2 + balcD / 2;
+
+      const balconyMat = getSharedStylizedMaterial(0x7A7F86, 'stone', { flatShading: true });
+      const balcony = new THREE.Mesh(new THREE.BoxGeometry(balcW, 0.12, balcD), balconyMat);
+      balcony.position.set(offsetX, balcY, balcZ);
+      balcony.castShadow = true;
+      balcony.receiveShadow = true;
       storyGroup.add(balcony);
 
-      const railMat = getSharedStylizedMaterial(0x2B3038, 'metal', { flatShading: true });
-      const rail = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.08, 0.06), railMat);
-      rail.position.set(offsetX, storyY - h / 2 + 0.52, offsetZ + d / 2 + 0.75);
+      const railFrontZ = offsetZ + d / 2 + balcD - 0.06;
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(balcW, 0.07, 0.06), railMat);
+      rail.position.set(offsetX, balcY + 0.50, railFrontZ);
       storyGroup.add(rail);
 
-      const postGeo = new THREE.BoxGeometry(0.05, 0.5, 0.05);
-      [-0.75, 0, 0.75].forEach(px => {
-        const post = new THREE.Mesh(postGeo, railMat);
-        post.position.set(offsetX + px, storyY - h / 2 + 0.3, offsetZ + d / 2 + 0.75);
+      // 5 balaustres verticais de gradil
+      for (let bp = 0; bp < 5; bp++) {
+        const px = -balcW / 2 + 0.06 + (bp / 4) * (balcW - 0.12);
+        const post = new THREE.Mesh(geo.balcPost, railMat);
+        post.position.set(offsetX + px, balcY + 0.28, railFrontZ);
         storyGroup.add(post);
+      }
+
+      // Floreira florida pendurada na grade da varanda
+      const planter = new THREE.Mesh(geo.planterBox, potMat);
+      planter.position.set(offsetX, balcY + 0.44, railFrontZ + 0.10);
+      storyGroup.add(planter);
+
+      const pBush = new THREE.Mesh(geo.planterBush, plantMat);
+      pBush.position.set(offsetX, balcY + 0.58, railFrontZ + 0.10);
+      storyGroup.add(pBush);
+
+      const bloomCols = [0xD9468F, 0xF2BA38, 0xE86747, 0xF5EFE2];
+      const bMat = getSharedStylizedMaterial(bloomCols[houseHash % bloomCols.length], 'foliage', { flatShading: true });
+      [-0.30, 0, 0.30].forEach((bx) => {
+        const bl = new THREE.Mesh(geo.planterBloom, bMat);
+        bl.position.set(offsetX + bx, balcY + 0.70, railFrontZ + 0.10);
+        storyGroup.add(bl);
       });
 
-      if (Math.random() > 0.5) {
+      // Toldo inclinado colorido cobrindo a varanda em metade das casas
+      if (houseHash % 2 === 0) {
+        const balcAwningMat = getSharedStylizedMaterial(awningPalette[(houseHash + storyIndex) % awningPalette.length], 'plaster', { flatShading: true });
+        const balcAwning = new THREE.Mesh(geo.awningCanopy, balcAwningMat);
+        balcAwning.scale.set(balcW / 1.75, 1.0, 1.05);
+        balcAwning.position.set(offsetX, storyY + h / 2 - 0.20, balcZ + 0.04);
+        balcAwning.rotation.x = 0.26;
+        balcAwning.castShadow = true;
+        storyGroup.add(balcAwning);
+      }
+
+      if ((houseHash + storyIndex) % 2 === 1) {
         const miniLine = this.createClothesline();
         miniLine.scale.set(0.5, 0.5, 0.5);
-        miniLine.position.set(offsetX + 0.2, storyY - h / 2 + 0.2, offsetZ + d / 2 + 0.3);
+        miniLine.position.set(offsetX + 0.2, storyY - h / 2 + 0.2, offsetZ + d / 2 + 0.32);
         storyGroup.add(miniLine);
       }
     }
@@ -1210,38 +1341,121 @@ export const HousesMixin = {
       frontWall.position.set(0, lajeY + 0.32, 1.75);
       lajeGroup.add(frontWall);
 
-      // Caixa d'água azul tradicional carioca (Otimizado com geometria/material compartilhados)
-      if (houseData.level >= 2 || Math.random() > 0.3) {
+      // Muretas laterais parciais para dar acabamento de terraço carioca
+      const sideParapetGeo = new THREE.BoxGeometry(0.15, 0.48, 1.8);
+      [-1.92, 1.92].forEach((sx) => {
+        const sp = new THREE.Mesh(sideParapetGeo, wallMat);
+        sp.position.set(sx, lajeY + 0.28, 0.85);
+        lajeGroup.add(sp);
+      });
+
+      // Floreira colorida no parapeito frontal da laje (~55% das lajes sociais)
+      if (houseHash % 9 < 5) {
+        const potMat = getSharedStylizedMaterial(0xB95B3E, 'brick', { flatShading: true });
+        const plantMat = getSharedStylizedMaterial(0x41823D, 'foliage', { flatShading: true });
+        const bloomCols = [0xD9468F, 0xF2BA38, 0xE86747, 0xF5EFE2];
+        const bloomMat = getSharedStylizedMaterial(bloomCols[houseHash % bloomCols.length], 'foliage', { flatShading: true });
+
+        const planter = new THREE.Mesh(geo.planterBox, potMat);
+        planter.position.set(-0.6, lajeY + 0.64, 1.78);
+        lajeGroup.add(planter);
+
+        const pBush = new THREE.Mesh(geo.planterBush, plantMat);
+        pBush.position.set(-0.6, lajeY + 0.78, 1.78);
+        lajeGroup.add(pBush);
+
+        [-0.90, -0.60, -0.30].forEach((bx) => {
+          const fl = new THREE.Mesh(geo.planterBloom, bloomMat);
+          fl.position.set(bx, lajeY + 0.90, 1.78);
+          lajeGroup.add(fl);
+        });
+      }
+
+      // Caixa d'água azul tradicional carioca (alterna lado em níveis 1-2; fixa na esquerda em nível 3+ para não colidir com a churrasqueira)
+      if (houseData.level >= 2 || (houseHash % 3 !== 0)) {
+        const tankX = houseData.level >= 3 ? -1.15 : ((houseHash % 2 === 0) ? -1.15 : 1.15);
+        const tankBaseH = (houseHash % 3 === 0) ? 0.35 : 0;
+        if (tankBaseH > 0) {
+          const plinth = new THREE.Mesh(new THREE.BoxGeometry(0.95, tankBaseH, 0.95), wallMat);
+          plinth.position.set(tankX, lajeY + 0.11 + tankBaseH / 2, -0.95);
+          plinth.castShadow = true;
+          lajeGroup.add(plinth);
+        }
         const tank = new THREE.Mesh(this.sharedWaterTankGeo, this.sharedWaterTankMat);
-        tank.position.set(-1.1, lajeY + 0.7, -0.85);
+        tank.position.set(tankX, lajeY + 0.7 + tankBaseH, -0.95);
         tank.castShadow = true;
         lajeGroup.add(tank);
 
         const lid = new THREE.Mesh(this.sharedWaterTankLidGeo, this.sharedWaterTankMat);
-        lid.position.set(-1.1, lajeY + 1.25, -0.85);
+        lid.position.set(tankX, lajeY + 1.25 + tankBaseH, -0.95);
         lajeGroup.add(lid);
       }
 
-      // Clothesline (50% chance)
-      if (Math.random() > 0.5) {
+      // Pérgola leve de madeira + bandeirinhas festivas em ~35% das lajes sociais!
+      if (houseHash % 3 === 0) {
+        const woodMat = getSharedStylizedMaterial(0x6D4A35, 'wood', { flatShading: true });
+        [[-1.65, 1.35], [1.65, 1.35], [-1.65, -0.25], [1.65, -0.25]].forEach(([px, pz]) => {
+          const post = new THREE.Mesh(geo.pergolaPost, woodMat);
+          post.position.set(px, lajeY + 1.0, pz);
+          post.castShadow = true;
+          lajeGroup.add(post);
+        });
+        [1.35, 0.55, -0.25].forEach((bz) => {
+          const beam = new THREE.Mesh(geo.pergolaBeam, woodMat);
+          beam.position.set(0, lajeY + 1.92, bz);
+          beam.castShadow = true;
+          lajeGroup.add(beam);
+        });
+
+        // Cordão de bandeirinhas cariocas sob a pérgola
+        const pennantPalette = [0xE6A938, 0xD45A46, 0x3A82B5, 0x459A62, 0xD9468F];
+        for (let f = 0; f < 6; f++) {
+          const t = (f + 0.5) / 6;
+          const fx = -1.55 + t * 3.1;
+          const sag = Math.sin(t * Math.PI) * 0.22;
+          const flag = new THREE.Mesh(
+            geo.pennantFlag,
+            getSharedStylizedMaterial(pennantPalette[(houseHash + f) % pennantPalette.length], 'plaster', { flatShading: true })
+          );
+          flag.rotation.x = Math.PI; // Ponta para baixo
+          flag.position.set(fx, lajeY + 1.78 - sag, 0.95);
+          lajeGroup.add(flag);
+        }
+      } else if (houseHash % 2 === 1) {
+        // Clothesline nas lajes sem pérgola
         const lineGroup = this.createClothesline();
-        lineGroup.position.set(0.5, lajeY + 0.1, 0.2);
+        lineGroup.position.set(0.45, lajeY + 0.1, 0.25);
         lajeGroup.add(lineGroup);
       }
     }
 
-    // TV Antenna (50% chance)
-    if (Math.random() > 0.5) {
+    // Antena de TV ou Antena Parabólica estilizada (~55% das casas)
+    if (houseHash % 9 < 5) {
       const antennaGroup = new THREE.Group();
       const antMat = getSharedStylizedMaterial(0x94A3B8, 'metal');
-      const mast = new THREE.Mesh(geo.antMast, antMat);
-      mast.position.y = 0.9;
-      antennaGroup.add(mast);
-      for (let i = 0; i < 4; i++) {
-        const cross = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.8 - i * 0.15, 4), antMat);
-        cross.rotation.z = Math.PI / 2;
-        cross.position.y = 1.0 + i * 0.2;
-        antennaGroup.add(cross);
+      if (houseHash % 2 === 0) {
+        // Antena espinha-de-peixe
+        const mast = new THREE.Mesh(geo.antMast, antMat);
+        mast.position.y = 0.9;
+        antennaGroup.add(mast);
+        for (let i = 0; i < 4; i++) {
+          const cross = new THREE.Mesh(new THREE.CylinderGeometry(0.01, 0.01, 0.8 - i * 0.15, 4), antMat);
+          cross.rotation.z = Math.PI / 2;
+          cross.position.y = 1.0 + i * 0.2;
+          antennaGroup.add(cross);
+        }
+      } else {
+        // Antena parabólica estilizada apontada para o céu
+        const dishMast = new THREE.Mesh(geo.antMast, antMat);
+        dishMast.scale.set(1.2, 0.45, 1.2);
+        dishMast.position.y = 0.4;
+        antennaGroup.add(dishMast);
+
+        const dishMat = getSharedStylizedMaterial(0xDCE2E8, 'metal', { flatShading: true });
+        const dish = new THREE.Mesh(geo.dishCone, dishMat);
+        dish.position.set(0, 0.82, 0);
+        dish.rotation.set(-0.75, (houseHash % 6) * 0.5, 0);
+        antennaGroup.add(dish);
       }
       const antY = roofStyle === 'hipped' ? lajeY + 0.55 : (roofStyle === 'shed' ? lajeY + 0.35 : lajeY + 0.1);
       antennaGroup.position.set(1.5, antY, 1.0);

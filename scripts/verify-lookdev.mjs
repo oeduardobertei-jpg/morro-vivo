@@ -81,9 +81,10 @@ try {
   });
 
   console.error('[verify-lookdev] navigating:', url);
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await page.waitForFunction(() => window.__morro && window.__morro.batcher, { timeout: 30000 });
-  await page.waitForFunction(() => window.__morro.batcher.stats.state === 'active', { timeout: 25000 });
+  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
+  console.error(`[verify-lookdev] domcontentloaded (+${((Date.now() - tStart) / 1000).toFixed(1)}s)`);
+  await page.waitForFunction(() => window.__morro && window.__morro.batcher, { timeout: 45000 });
+  await page.waitForFunction(() => window.__morro.batcher.stats.state === 'active', { timeout: 30000 });
   await new Promise((r) => setTimeout(r, 1500));
 
   const setCam = async (px, py, pz, tx, ty, tz) => {
@@ -187,3 +188,4 @@ try {
 } finally {
   await browser.close();
 }
+

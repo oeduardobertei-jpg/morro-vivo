@@ -1164,25 +1164,46 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
       { x: -112, z: 12, s: 2.8, rot: 0.4 },
       { x: -106, z: 28, s: 2.2, rot: 1.2 },
       { x: 106,  z: 28, s: 2.2, rot: 1.8 },
-      { x: 112,  z: 12, s: 2.8, rot: 2.5 }
+      { x: 112,  z: 12, s: 2.8, rot: 2.5 },
+
+      // E. Paredão Granítico Esculpido do Morro do Sol (lajes angulares rasas e embutidas no gnaisse central)
+      { x: -12.0, z: 6.2,  s: 2.3, rot: 0.35, cliffFace: true, hMul: 0.42 },
+      { x: -15.2, z: 0.8,  s: 2.6, rot: 1.25, cliffFace: true, hMul: 0.46 },
+      { x: -16.8, z: -5.5, s: 2.4, rot: 2.10, cliffFace: true, hMul: 0.44 },
+      { x: -8.2,  z: 10.6, s: 2.0, rot: 0.85, cliffFace: true, hMul: 0.38 },
+      { x: -11.2, z: 12.6, s: 1.8, rot: 2.40, cliffFace: true, hMul: 0.36 },
+      { x: 5.8,   z: 9.4,  s: 1.9, rot: 0.65, cliffFace: true, hMul: 0.40 },
+      { x: 7.8,   z: 5.4,  s: 2.2, rot: 1.55, cliffFace: true, hMul: 0.44 },
+      { x: 8.8,   z: 0.6,  s: 2.0, rot: 2.30, cliffFace: true, hMul: 0.42 },
+      { x: -13.8, z: -11.0,s: 2.1, rot: 1.90, cliffFace: true, hMul: 0.40 }
     ];
 
-    const safeMonoliths = monolithCoords.filter(b =>
-      !this.isProtectedLandmark(b.x, b.z, 4.5) &&
-      (!this.allPlateaus || !this.allPlateaus.some(pl => Math.hypot(pl.x - b.x, pl.z - b.z) < 7.0))
-    );
+    const safeMonoliths = monolithCoords.filter(b => {
+      if (b.cliffFace) {
+        const distSamba = Math.hypot(b.x - (-2.0), b.z - (-4.0));
+        return distSamba > 10.5 && (!this.allPlateaus || !this.allPlateaus.some(pl => Math.hypot(pl.x - b.x, pl.z - b.z) < 5.5));
+      }
+      return !this.isProtectedLandmark(b.x, b.z, 4.5) &&
+        (!this.allPlateaus || !this.allPlateaus.some(pl => Math.hypot(pl.x - b.x, pl.z - b.z) < 7.0));
+    });
     const monolithMat = getSharedStylizedMaterial(0x747C85, 'stone', { flatShading: true });
-    const monolithGeo = new THREE.DodecahedronGeometry(1.2, 1);
+    // Dodecaedro facetado angular (detail 0) para leitura geológica de granito em vez de pedras arredondadas
+    const monolithGeo = new THREE.DodecahedronGeometry(1.2, 0);
     const monolithMesh = new THREE.InstancedMesh(monolithGeo, monolithMat, safeMonoliths.length);
     monolithMesh.castShadow = true;
     monolithMesh.receiveShadow = true;
 
     // Assentamento orgânico em lajes naturais: aspecto amplo, baixo e profundamente integrado ao relevo
     safeMonoliths.forEach((b, idx) => {
-      const y = this.getElevation(b.x, b.z) - (b.s * 0.45);
+      const hMul = b.hMul || 0.42;
+      const y = this.getElevation(b.x, b.z) - (b.s * (b.cliffFace ? 0.68 : 0.45));
       dummy.position.set(b.x, y, b.z);
-      dummy.rotation.set(0.12 + (idx % 3) * 0.06, b.rot || idx * 0.7, 0.08 + (idx % 2) * 0.05);
-      dummy.scale.set(b.s * 1.8, b.s * 0.42, b.s * 1.5);
+      dummy.rotation.set(
+        b.cliffFace ? (0.42 + (idx % 3) * 0.08) : (0.12 + (idx % 3) * 0.06),
+        b.rot || idx * 0.7,
+        0.08 + (idx % 2) * 0.05
+      );
+      dummy.scale.set(b.s * (b.cliffFace ? 1.85 : 1.8), b.s * hMul, b.s * (b.cliffFace ? 1.40 : 1.5));
       dummy.updateMatrix();
       monolithMesh.setMatrixAt(idx, dummy.matrix);
     });
@@ -1303,9 +1324,186 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
     this.group.add(shrubMesh);
 
     // ==========================================
+    // 5B. CAMADA BOTÂNICA ORGÂNICA (Tufos de Capim + Buganvílias/Ipês Floridos em 3 Draw Calls!)
+    // ==========================================
+    this.createHillsideBotanicalLayer(dummy);
+
+    // ==========================================
     // 6. ECOSSISTEMA CONTINENTAL DAS MARGENS DE EXPANSÃO (Oeste, Leste & Cordilheira Norte)
     // ==========================================
     this.createContinentalExpansionEcosystem(dummy);
+  }
+
+  /**
+   * Quebra o aspecto liso da encosta com ~1.100 tufos de vegetação rasteira ao vento
+   * e ~240 moitas floridas cariocas (buganvílias, ipês-mirins e hibiscos) em apenas 3 InstancedMeshes.
+   */
+  createHillsideBotanicalLayer(dummy) {
+    // 1. Geometria ultraleve de tufo de capim (3 lâminas cruzadas = 6 triângulos por tufo)
+    const blades = [];
+    const angles = [0, Math.PI / 3, (Math.PI * 2) / 3];
+    for (let a = 0; a < angles.length; a++) {
+      const ang = angles[a];
+      const ca = Math.cos(ang);
+      const sa = Math.sin(ang);
+      const w = 0.28;
+      const h = 0.58;
+      const lean = 0.14;
+      // Triângulo 1 (lâmina inclinada suavemente)
+      blades.push(
+        -w * ca, 0.0, -w * sa,
+         w * ca, 0.0,  w * sa,
+         lean * sa, h, -lean * ca
+      );
+      // Lâmina secundária levemente cruzada
+      blades.push(
+        -w * 0.65 * ca, 0.0, -w * 0.65 * sa,
+         w * 0.65 * ca, 0.0,  w * 0.65 * sa,
+        -lean * sa, h * 0.82, lean * ca
+      );
+    }
+    const tuftGeo = new THREE.BufferGeometry();
+    tuftGeo.setAttribute('position', new THREE.Float32BufferAttribute(blades, 3));
+    tuftGeo.computeVertexNormals();
+
+    const tuftMat = getSharedStylizedMaterial(0xFFFFFF, 'foliage', {
+      wind: 'crown',
+      side: THREE.DoubleSide,
+      flatShading: true
+    });
+
+    const hash01 = (n) => {
+      const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+      return s - Math.floor(s);
+    };
+
+    const isClearForFlora = (x, z, plateauMargin = 4.6) => {
+      if (z > 15.2 || z < -118.0) return false; // Evita praia/avenida da orla e fundo distante
+      if (Math.abs(x) < 3.6 && z > 2.5 && z < 18.5) return false; // Faixa da Escadaria Monumental
+      if (this.isProtectedLandmark(x, z, 2.2)) return false;
+      if (this.allPlateaus && this.allPlateaus.some(pl => Math.hypot(pl.x - x, pl.z - z) < plateauMargin)) return false;
+      const y = this.getElevation(x, z);
+      if (y < 2.2) return false;
+      // Checa declive para não fincar capim em paredões verticais de granito
+      const yx = this.getElevation(x + 1.0, z);
+      const yz = this.getElevation(x, z + 1.0);
+      const slope = Math.hypot(yx - y, yz - y);
+      if (slope > 0.62) return false;
+      return true;
+    };
+
+    const maxTufts = 1150;
+    const tuftPositions = [];
+    for (let i = 0; i < 2400 && tuftPositions.length < maxTufts; i++) {
+      const rx = (hash01(i * 3.1 + 1.7) - 0.5) * 290.0;
+      const rz = -114.0 + hash01(i * 5.7 + 4.3) * 129.0;
+      if (!isClearForFlora(rx, rz, 4.5)) continue;
+      tuftPositions.push({
+        x: rx,
+        y: this.getElevation(rx, rz),
+        z: rz,
+        rot: hash01(i * 7.3) * Math.PI * 2,
+        sc: 0.72 + hash01(i * 11.1) * 0.75,
+        tone: i % 4
+      });
+    }
+
+    if (tuftPositions.length > 0) {
+      const grassTuftMesh = new THREE.InstancedMesh(tuftGeo, tuftMat, tuftPositions.length);
+      grassTuftMesh.castShadow = false;
+      grassTuftMesh.receiveShadow = true;
+      const grassColors = [0x61A148, 0x4E8E3E, 0x76AA49, 0x569642];
+      const col = new THREE.Color();
+      for (let i = 0; i < tuftPositions.length; i++) {
+        const tp = tuftPositions[i];
+        dummy.position.set(tp.x, tp.y - 0.05, tp.z);
+        dummy.rotation.set(0, tp.rot, 0);
+        dummy.scale.set(tp.sc, tp.sc * (0.85 + (i % 3) * 0.16), tp.sc);
+        dummy.updateMatrix();
+        grassTuftMesh.setMatrixAt(i, dummy.matrix);
+        col.setHex(grassColors[tp.tone]);
+        grassTuftMesh.setColorAt(i, col);
+      }
+      grassTuftMesh.instanceMatrix.needsUpdate = true;
+      if (grassTuftMesh.instanceColor) grassTuftMesh.instanceColor.needsUpdate = true;
+      this.group.add(grassTuftMesh);
+    }
+
+    // 2. Moitas Floridas Tropicais (Buganvílias Magenta, Ipês-Mirins Amarelos, Hibiscos Coral & Jasmim)
+    const bushSpots = [
+      // Emoldurando o paredão central do Morro do Sol e as laterais da Escadaria Monumental
+      { x: -5.2, z: 13.5, fl: 0 }, { x: 4.5, z: 14.0, fl: 1 },
+      { x: -6.8, z: 9.2,  fl: 2 }, { x: 5.8, z: 9.8,  fl: 0 },
+      { x: -10.2, z: 5.5, fl: 1 }, { x: 7.2, z: 4.8,  fl: 2 },
+      { x: -13.2, z: -0.5, fl: 0 }, { x: 8.4, z: -1.2, fl: 1 },
+      { x: -9.5, z: 14.5, fl: 3 }, { x: 8.8, z: 13.5, fl: 0 }
+    ];
+
+    const maxBushes = 230;
+    for (let i = 0; i < 900 && bushSpots.length < maxBushes; i++) {
+      const rx = (hash01(i * 9.1 + 19.3) - 0.5) * 260.0;
+      const rz = -108.0 + hash01(i * 13.7 + 2.9) * 123.0;
+      if (!isClearForFlora(rx, rz, 5.4)) continue;
+      bushSpots.push({ x: rx, z: rz, fl: i % 4 });
+    }
+
+    if (bushSpots.length > 0) {
+      const leafGeo = new THREE.DodecahedronGeometry(0.68, 0);
+      const bloomGeo = new THREE.DodecahedronGeometry(0.24, 0);
+
+      // Reutiliza tuftMat (1 único shader PBR+wind+instanceColor para capim, arbustos e flores!)
+      const bushLeafMesh = new THREE.InstancedMesh(leafGeo, tuftMat, bushSpots.length);
+      bushLeafMesh.castShadow = true;
+      bushLeafMesh.receiveShadow = true;
+
+      const bushBloomMesh = new THREE.InstancedMesh(bloomGeo, tuftMat, bushSpots.length * 3);
+      bushBloomMesh.castShadow = false;
+
+      const leafShades = [0x3B7A36, 0x46883D, 0x316B31];
+      const bloomColors = [0xD9468F, 0xF2BA38, 0xE86747, 0xF5EFE2]; // Buganvília, Ipê-mirim, Hibisco, Jasmim
+      const col = new THREE.Color();
+
+      let bIdx = 0;
+      for (let i = 0; i < bushSpots.length; i++) {
+        const bs = bushSpots[i];
+        const by = this.getElevation(bs.x, bs.z);
+        const sc = 0.78 + hash01(i * 4.3 + 0.5) * 0.58;
+        const rot = hash01(i * 8.1) * Math.PI * 2;
+
+        dummy.position.set(bs.x, by + 0.28 * sc, bs.z);
+        dummy.rotation.set(0.15, rot, 0.1);
+        dummy.scale.set(sc * 1.18, sc * 0.78, sc * 1.12);
+        dummy.updateMatrix();
+        bushLeafMesh.setMatrixAt(i, dummy.matrix);
+        col.setHex(leafShades[i % leafShades.length]);
+        bushLeafMesh.setColorAt(i, col);
+
+        col.setHex(bloomColors[bs.fl]);
+        for (let k = 0; k < 3; k++) {
+          const ang = rot + k * 2.1;
+          const r = 0.36 * sc;
+          dummy.position.set(
+            bs.x + Math.cos(ang) * r,
+            by + (0.58 + (k % 2) * 0.14) * sc,
+            bs.z + Math.sin(ang) * r
+          );
+          dummy.rotation.set(k * 0.5, ang, 0);
+          dummy.scale.setScalar(sc * (0.85 + (k % 2) * 0.25));
+          dummy.updateMatrix();
+          bushBloomMesh.setMatrixAt(bIdx, dummy.matrix);
+          bushBloomMesh.setColorAt(bIdx, col);
+          bIdx++;
+        }
+      }
+
+      bushLeafMesh.instanceMatrix.needsUpdate = true;
+      if (bushLeafMesh.instanceColor) bushLeafMesh.instanceColor.needsUpdate = true;
+      bushBloomMesh.instanceMatrix.needsUpdate = true;
+      if (bushBloomMesh.instanceColor) bushBloomMesh.instanceColor.needsUpdate = true;
+
+      this.group.add(bushLeafMesh);
+      this.group.add(bushBloomMesh);
+    }
   }
 
   // Preenche as margens continentais e emoldura os novos bairros expandidos com árvores realistas

@@ -60,6 +60,7 @@ const savedGameData = SaveSystem.load();
 const env = new Environment(scene);
 env.initIBL(renderer);
 const terrain = new Terrain(scene);
+env.setTerrain(terrain);
 cinematicCam.setTerrain(terrain);
 const architecture = new Architecture(scene, env, terrain);
 

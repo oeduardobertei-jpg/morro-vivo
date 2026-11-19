@@ -581,11 +581,26 @@ export const RoadsMixin = {
   // Conecta organicamente os diferentes platôs residenciais às ruas pavimentadas e monumentos.
   // Modelado com degraus contínuos de pedra/cimento, patamares e muretas de proteção.
   createEstradasDeLajes() {
-    const stepGeo = new THREE.BoxGeometry(2.4, 0.22, 1.05);
-    const stepMat = getSharedStylizedMaterial(0x948D82, 'stone', { flatShading: true });
+    // Degrau de cantaria com fundação profunda (1.40m ancora firme até em paredões de 50° sem frestas!)
+    const stepGeo = new THREE.BoxGeometry(2.55, 1.40, 1.16);
+    stepGeo.translate(0, -0.58, 0);
+    // Base branca para permitir tinting exato via setColorAt tanto nos degraus de pedra quanto nos azulejos Selarón (1 único shader!)
+    const stepMat = getSharedStylizedMaterial(0xFFFFFF, 'stone', { flatShading: true });
 
-    const parapetGeo = new THREE.BoxGeometry(0.24, 0.38, 1.05);
-    const parapetMat = getSharedStylizedMaterial(0x767068, 'stone', { flatShading: true });
+    // Espelho cerâmico colorido estilo Escadaria Selarón para a subida monumental central
+    const riserGeo = new THREE.BoxGeometry(2.38, 0.42, 0.09);
+    riserGeo.translate(0, -0.10, -0.57);
+    const riserMat = stepMat;
+
+    // Mureta lateral contínua profundamente ancorada no barranco
+    const parapetGeo = new THREE.BoxGeometry(0.32, 1.68, 1.24);
+    parapetGeo.translate(0, -0.38, 0);
+    const parapetMat = getSharedStylizedMaterial(0x7C746B, 'stone', { flatShading: true });
+
+    // Corrimão metálico escuro acompanhando a inclinação real das muretas
+    const railGeo = new THREE.BoxGeometry(0.08, 0.08, 1.28);
+    railGeo.translate(0, 0.62, 0);
+    const railMat = getSharedStylizedMaterial(0x2F3640, 'metal', { flatShading: true });
 
     const postGeo = new THREE.CylinderGeometry(0.06, 0.08, 2.2, 5);
     const postMat = getSharedStylizedMaterial(0x433D36, 'metal', { flatShading: true });
@@ -600,12 +615,12 @@ export const RoadsMixin = {
 
     // 7 Escadarias Principais Dedicadas (Conectam cotas de altitude onde não passam veículos)
     const stairRoutes = [
-      // 1. Escadaria Monumental do Mirante Sul (Praia -> Mirante Sul -> Terreiro de Samba)
+      // 1. Escadaria Monumental do Mirante Sul (Praia -> Mirante Sul -> Terreiro de Samba, toque Selarón!)
       [
         { x: 0.0, z: 18.0 },
-        { x: -0.4, z: 14.0 },
-        { x: -0.8, z: 10.0 },
-        { x: -1.0, z: 5.6 }
+        { x: -0.35, z: 14.0 },
+        { x: -0.75, z: 9.5 },
+        { x: -1.1, z: 4.5 }
       ],
       // 2. Escadaria da Vila da Prainha (Píer -> Socalcos Baixos e Hortas Oeste)
       [
@@ -650,36 +665,48 @@ export const RoadsMixin = {
     ];
 
     const stepMatrices = [];
+    const riserMatrices = [];
     const parapetMatrices = [];
+    const railMatrices = [];
     const postMatrices = [];
     const lanternMatrices = [];
-    const dummy = new THREE.Object3D();
-    const dummyParapet = new THREE.Object3D();
 
-    stairRoutes.forEach(route => {
+    // CRÍTICO: ordem 'YXZ' garante que o yaw (heading) ocorra antes do pitch (slopeAngle),
+    // impedindo inversão da inclinação em escadarias voltadas para o Norte!
+    const dummy = new THREE.Object3D();
+    dummy.rotation.order = 'YXZ';
+    const dummyParapet = new THREE.Object3D();
+    dummyParapet.rotation.order = 'YXZ';
+
+    stairRoutes.forEach((route, routeIdx) => {
+      const isMonumentalCentral = (routeIdx === 0);
+
       // Lanterna discreta no patamar inferior de entrada
       if (route.length > 0) {
         const start = route[0];
         const startY = this.terrain ? this.terrain.getElevation(start.x, start.z) : 2.5;
-        dummy.position.set(start.x + 1.4, startY + 1.1, start.z);
+        dummy.position.set(start.x + 1.5, startY + 1.1, start.z);
         dummy.rotation.set(0, 0, 0);
         dummy.scale.set(1, 1, 1);
         dummy.updateMatrix();
         postMatrices.push(dummy.matrix.clone());
 
-        dummy.position.set(start.x + 1.4, startY + 2.25, start.z);
+        dummy.position.set(start.x + 1.5, startY + 2.25, start.z);
         dummy.updateMatrix();
         lanternMatrices.push(dummy.matrix.clone());
       }
 
+      let routeStepIdx = 0;
       for (let i = 0; i < route.length - 1; i++) {
         const p1 = route[i];
         const p2 = route[i + 1];
         const dist = Math.hypot(p2.x - p1.x, p2.z - p1.z);
-        // Passo confortável de ~0.95m para proporção real de degrau urbano
-        const steps = Math.max(2, Math.ceil(dist / 0.95));
+        // Passo super compacto (0.48m) na escadaria central monumental para vencer o paredão íngreme com 0 frestas
+        const stepSpacing = isMonumentalCentral ? 0.48 : 0.88;
+        const steps = Math.max(2, Math.ceil(dist / stepSpacing));
         const dx = (p2.x - p1.x) / steps;
         const dz = (p2.z - p1.z) / steps;
+        const stepRun = Math.hypot(dx, dz) || 1;
         const heading = Math.atan2(dx, dz);
 
         for (let s = 0; s < steps; s++) {
@@ -690,31 +717,60 @@ export const RoadsMixin = {
 
           if (this.isInsideLandmarkFootprint(sx, sz)) continue;
 
-          const sy = this.terrain ? this.terrain.getElevation(sx, sz) : 2.5;
-          const nextX = sx + dx * 0.5;
-          const nextZ = sz + dz * 0.5;
-          const nextY = this.terrain ? this.terrain.getElevation(nextX, nextZ) : sy;
-          const slopeAngle = -Math.atan2(nextY - sy, 0.5 * Math.hypot(dx, dz));
+          const syCenter = this.terrain ? this.terrain.getElevation(sx, sz) : 2.5;
+          const prevY = this.terrain ? this.terrain.getElevation(sx - dx * 0.55, sz - dz * 0.55) : syCenter;
+          const nextY = this.terrain ? this.terrain.getElevation(sx + dx * 0.55, sz + dz * 0.55) : syCenter;
+          const sy = Math.max(syCenter, prevY, (prevY + nextY) * 0.5);
+          const slopeAngle = -Math.atan2(nextY - prevY, 1.1 * stepRun);
+          const clampedSlope = Math.max(-0.78, Math.min(0.78, slopeAngle));
+          // Degrau quase horizontal para formar patamar legível, acompanhando suavemente ladeiras longas
+          const treadPitch = Math.max(-0.14, Math.min(0.14, slopeAngle * 0.20));
 
-          // Degrau de pedra
-          dummy.position.set(sx, sy + 0.08, sz);
-          dummy.rotation.set(Math.max(-0.45, Math.min(0.45, slopeAngle)), heading, 0);
-          dummy.scale.set(1.0, 1.0, 1.0);
+          // Degrau de cantaria (elevação +0.34m na central garante que nenhum triângulo do paredão atravesse o degrau)
+          dummy.position.set(sx, sy + (isMonumentalCentral ? 0.34 : 0.16), sz);
+          dummy.rotation.set(treadPitch, heading, 0);
+          dummy.scale.set(isMonumentalCentral ? 1.15 : 1.0, 1.0, 1.0);
           dummy.updateMatrix();
           stepMatrices.push(dummy.matrix.clone());
 
-          // Mureta de contenção lateral esquerda e direita
-          const perpX = Math.cos(heading) * 1.25;
-          const perpZ = -Math.sin(heading) * 1.25;
-          dummyParapet.position.set(sx + perpX, sy + 0.18, sz + perpZ);
-          dummyParapet.rotation.set(Math.max(-0.45, Math.min(0.45, slopeAngle)), heading, 0);
+          // Espelho colorido estilo Escadaria Selarón na subida central do Morro do Sol
+          if (isMonumentalCentral) {
+            riserMatrices.push(dummy.matrix.clone());
+          }
+
+          // Mureta de contenção lateral esquerda e direita + corrimão metálico contínuo
+          const sideDist = isMonumentalCentral ? 1.48 : 1.30;
+          const perpX = Math.cos(heading) * sideDist;
+          const perpZ = -Math.sin(heading) * sideDist;
+
+          dummyParapet.position.set(sx + perpX, sy + (isMonumentalCentral ? 0.34 : 0.18), sz + perpZ);
+          dummyParapet.rotation.set(clampedSlope, heading, 0);
           dummyParapet.scale.set(1.0, 1.0, 1.0);
           dummyParapet.updateMatrix();
           parapetMatrices.push(dummyParapet.matrix.clone());
+          railMatrices.push(dummyParapet.matrix.clone());
 
-          dummyParapet.position.set(sx - perpX, sy + 0.18, sz - perpZ);
+          dummyParapet.position.set(sx - perpX, sy + (isMonumentalCentral ? 0.34 : 0.18), sz - perpZ);
           dummyParapet.updateMatrix();
           parapetMatrices.push(dummyParapet.matrix.clone());
+          railMatrices.push(dummyParapet.matrix.clone());
+
+          // Lanternas intermediárias ao longo da Escadaria Monumental do Mirante Sul (espaçadas a cada ~4m)
+          if (isMonumentalCentral && routeStepIdx > 0 && routeStepIdx % 8 === 0) {
+            const sideSign = (routeStepIdx % 16 === 0) ? 1 : -1;
+            const lx = sx + perpX * sideSign;
+            const lz = sz + perpZ * sideSign;
+            dummy.position.set(lx, sy + 1.45, lz);
+            dummy.rotation.set(0, 0, 0);
+            dummy.scale.set(1, 1, 1);
+            dummy.updateMatrix();
+            postMatrices.push(dummy.matrix.clone());
+
+            dummy.position.set(lx, sy + 2.60, lz);
+            dummy.updateMatrix();
+            lanternMatrices.push(dummy.matrix.clone());
+          }
+          routeStepIdx++;
         }
       }
 
@@ -722,13 +778,13 @@ export const RoadsMixin = {
       if (route.length > 1) {
         const end = route[route.length - 1];
         const endY = this.terrain ? this.terrain.getElevation(end.x, end.z) : 2.5;
-        dummy.position.set(end.x - 1.4, endY + 1.1, end.z);
+        dummy.position.set(end.x - 1.5, endY + 1.1, end.z);
         dummy.rotation.set(0, 0, 0);
         dummy.scale.set(1, 1, 1);
         dummy.updateMatrix();
         postMatrices.push(dummy.matrix.clone());
 
-        dummy.position.set(end.x - 1.4, endY + 2.25, end.z);
+        dummy.position.set(end.x - 1.5, endY + 2.25, end.z);
         dummy.updateMatrix();
         lanternMatrices.push(dummy.matrix.clone());
       }
@@ -737,12 +793,13 @@ export const RoadsMixin = {
     // 1. Instanced Steps (Degraus de Pedra com variação sutil de tom)
     if (stepMatrices.length > 0) {
       const instancedSteps = new THREE.InstancedMesh(stepGeo, stepMat, stepMatrices.length);
+      instancedSteps.castShadow = true;
       instancedSteps.receiveShadow = true;
-      const baseStepColor = new THREE.Color(0x8C857B);
+      const baseStepColor = new THREE.Color(0x989084);
       const varStepColor = new THREE.Color();
       for (let i = 0; i < stepMatrices.length; i++) {
         instancedSteps.setMatrixAt(i, stepMatrices[i]);
-        const tint = (Math.sin(i * 1.7) * 0.03);
+        const tint = Math.sin(i * 1.7) * 0.035;
         varStepColor.copy(baseStepColor).addScalar(tint);
         instancedSteps.setColorAt(i, varStepColor);
       }
@@ -752,9 +809,27 @@ export const RoadsMixin = {
       this.instancedSteps = instancedSteps;
     }
 
+    // 1B. Espelhos Cerâmicos Estilo Selarón (Escadaria Monumental Central)
+    if (riserMatrices.length > 0) {
+      const selaronPalette = [0xC94B3B, 0xDFAC3C, 0x2F74A6, 0x3D8A5A, 0xEFE6D4, 0xD96C42];
+      const instancedRisers = new THREE.InstancedMesh(riserGeo, riserMat, riserMatrices.length);
+      instancedRisers.receiveShadow = true;
+      const tileCol = new THREE.Color();
+      for (let i = 0; i < riserMatrices.length; i++) {
+        instancedRisers.setMatrixAt(i, riserMatrices[i]);
+        tileCol.setHex(selaronPalette[i % selaronPalette.length]);
+        instancedRisers.setColorAt(i, tileCol);
+      }
+      instancedRisers.instanceMatrix.needsUpdate = true;
+      if (instancedRisers.instanceColor) instancedRisers.instanceColor.needsUpdate = true;
+      this.group.add(instancedRisers);
+      this.instancedRisers = instancedRisers;
+    }
+
     // 2. Instanced Parapets (Muretas de Cantaria)
     if (parapetMatrices.length > 0) {
       const instancedParapets = new THREE.InstancedMesh(parapetGeo, parapetMat, parapetMatrices.length);
+      instancedParapets.castShadow = true;
       instancedParapets.receiveShadow = true;
       for (let i = 0; i < parapetMatrices.length; i++) {
         instancedParapets.setMatrixAt(i, parapetMatrices[i]);
@@ -762,6 +837,18 @@ export const RoadsMixin = {
       instancedParapets.instanceMatrix.needsUpdate = true;
       this.group.add(instancedParapets);
       this.instancedParapets = instancedParapets;
+    }
+
+    // 2B. Corrimãos Metálicos Contínuos
+    if (railMatrices.length > 0) {
+      const instancedRails = new THREE.InstancedMesh(railGeo, railMat, railMatrices.length);
+      instancedRails.castShadow = true;
+      for (let i = 0; i < railMatrices.length; i++) {
+        instancedRails.setMatrixAt(i, railMatrices[i]);
+      }
+      instancedRails.instanceMatrix.needsUpdate = true;
+      this.group.add(instancedRails);
+      this.instancedRails = instancedRails;
     }
 
     // 3. Instanced Solar Lampposts (Postes nos patamares)

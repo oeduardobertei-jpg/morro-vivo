@@ -7,27 +7,33 @@ export const HillsidesMixin = {
   createWestHillsideExpansion() {
     const westExpGroup = new THREE.Group();
 
-    const woodDarkMat = new THREE.MeshLambertMaterial({ color: 0x45220C, flatShading: true });
-    const woodWeatheredMat = new THREE.MeshLambertMaterial({ color: 0x6B5B4D, flatShading: true });
-    const stoneFloorMat = new THREE.MeshLambertMaterial({ color: 0x3F3F46, flatShading: true });
+    const woodDarkMat = new THREE.MeshLambertMaterial({ color: 0x5C3B24, flatShading: true });
+    const woodWeatheredMat = new THREE.MeshLambertMaterial({ color: 0x856A52, flatShading: true });
+    const stoneFloorMat = new THREE.MeshLambertMaterial({ color: 0xA89B86, flatShading: true });
     const bambooMat = new THREE.MeshLambertMaterial({ color: 0xD4A373, flatShading: true });
     const thatchMat = new THREE.MeshLambertMaterial({ color: 0xA16207, flatShading: true });
     const leafGreenMat = new THREE.MeshLambertMaterial({ color: 0x22C55E, flatShading: true });
-    const darkEarthMat = new THREE.MeshLambertMaterial({ color: 0x291A10, flatShading: true });
+    const darkEarthMat = new THREE.MeshLambertMaterial({ color: 0x4A3423, flatShading: true });
 
     // 1. MIRANTE DO PÔR DO SOL & TERREIRO DE CAPOEIRA (x: -110, z: -15)
     const capY = this.terrain ? this.terrain.getElevation(-110, -15) : 5.4;
     const capGroup = new THREE.Group();
     capGroup.position.set(-110, capY, -15);
 
-    // Tablado circular de pedra portuguesa
-    const stoneDeck = new THREE.Mesh(new THREE.CylinderGeometry(5.2, 5.4, 0.45, 16), stoneFloorMat);
-    stoneDeck.position.y = 0.22;
+    // Tablado circular em pedra portuguesa quente ancorado na encosta
+    const stoneDeck = new THREE.Mesh(new THREE.CylinderGeometry(5.2, 5.8, 1.45, 16), stoneFloorMat);
+    stoneDeck.position.y = -0.35;
     stoneDeck.receiveShadow = true;
     capGroup.add(stoneDeck);
 
-    // Mureta de contenção curva voltada para o poente
-    const parapetMat = new THREE.MeshLambertMaterial({ color: 0x52525B });
+    // Anel central de madeira quente para a roda de capoeira
+    const capWoodCenter = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 0.08, 16), woodWeatheredMat);
+    capWoodCenter.position.y = 0.40;
+    capWoodCenter.receiveShadow = true;
+    capGroup.add(capWoodCenter);
+
+    // Mureta de contenção curva em pedra clara voltada para o poente
+    const parapetMat = new THREE.MeshLambertMaterial({ color: 0x8B8175, flatShading: true });
     for (let a = -2.2; a <= 2.2; a += 0.55) {
       const block = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.65, 0.35), parapetMat);
       block.position.set(Math.sin(a) * 5.1, 0.75, -Math.cos(a) * 5.1);
@@ -89,24 +95,46 @@ export const HillsidesMixin = {
 
     westExpGroup.add(capGroup);
 
-    // 2. HORTA COMUNITÁRIA EM SOCALCOS (x: -92, z: -25)
+    // 2. HORTA COMUNITÁRIA EM SOCALCOS (x: -92, z: -25 — com terraço de terra batida e cercado completo de bambu)
     const hortaY = this.terrain ? this.terrain.getElevation(-92, -25) : 8.2;
     const hortaGroup = new THREE.Group();
     hortaGroup.position.set(-92, hortaY, -25);
 
-    // Cercado de bambu
+    // Base nivelada em pedra e terra batida integrando os 4 canteiros ao morro
+    const hortaPad = new THREE.Mesh(new THREE.BoxGeometry(9.6, 1.5, 7.0), stoneFloorMat);
+    hortaPad.position.set(0, -0.72, 0);
+    hortaPad.receiveShadow = true;
+    hortaGroup.add(hortaPad);
+
+    const hortaSoilPath = new THREE.Mesh(new THREE.BoxGeometry(9.0, 0.08, 6.4), new THREE.MeshLambertMaterial({ color: 0x8F7254, flatShading: true }));
+    hortaSoilPath.position.set(0, 0.05, 0);
+    hortaSoilPath.receiveShadow = true;
+    hortaGroup.add(hortaSoilPath);
+
+    // Cercado de bambu nos 4 lados (com abertura frontal de portãozinho!)
     const fencePostsHorta = [
       [-4.5, -3.2], [4.5, -3.2], [-4.5, 3.2], [4.5, 3.2],
-      [-4.5, 0], [4.5, 0], [0, -3.2]
+      [-4.5, 0], [4.5, 0], [0, -3.2], [-1.3, 3.2], [1.3, 3.2]
     ];
     fencePostsHorta.forEach(([fx, fz]) => {
-      const stake = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.3, 4), bambooMat);
+      const stake = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.3, 4), bambooMat);
       stake.position.set(fx, 0.65, fz);
       hortaGroup.add(stake);
     });
-    const fenceRail = new THREE.Mesh(new THREE.BoxGeometry(9.0, 0.06, 0.06), bambooMat);
-    fenceRail.position.set(0, 0.95, -3.2);
-    hortaGroup.add(fenceRail);
+    const fenceRailN = new THREE.Mesh(new THREE.BoxGeometry(9.0, 0.07, 0.07), bambooMat);
+    fenceRailN.position.set(0, 0.95, -3.2);
+    hortaGroup.add(fenceRailN);
+    const fenceRailW = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 6.4), bambooMat);
+    fenceRailW.position.set(-4.5, 0.95, 0);
+    hortaGroup.add(fenceRailW);
+    const fenceRailE = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 6.4), bambooMat);
+    fenceRailE.position.set(4.5, 0.95, 0);
+    hortaGroup.add(fenceRailE);
+    [-2.9, 2.9].forEach((fx) => {
+      const fFront = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.07, 0.07), bambooMat);
+      fFront.position.set(fx, 0.95, 3.2);
+      hortaGroup.add(fFront);
+    });
 
     // 4 Canteiros de cultivo elevados com terra preta adubada
     const bedConfigs = [

@@ -262,8 +262,7 @@ export const RoadGraphMixin = {
       }
     };
 
-    // 1. Morro do Sol & Alameda do Samba (Conexão Monumental via Alameda Norte e Encostas)
-    addEdge('coast_center', 'sol_mirante'); // Escadaria Monumental: Praia Direto ao Mirante e Samba!
+    // 1. Morro do Sol & Alameda do Samba (Acesso exclusivo e seguro pela Alameda Norte — sem atalho pelo penhasco sul!)
     addEdge('sol_mirante', 'sol_plaza_center');
     addEdge('sol_plaza_center', 'sol_plaza_portico');
     addEdge('sol_plaza_portico', 'alameda_patamar_3');
@@ -476,40 +475,50 @@ export const RoadGraphMixin = {
   },
 
   // Roteador de Caminhos em Grafo (BFS Ultra-rápido):
-  // Garante trajeto 100% contínuo e conectado entre quaisquer dois pontos da cidade
-  findRoadPath(startId, targetId) {
+  // Garante trajeto 100% contínuo e conectado entre quaisquer dois pontos da cidade.
+  // O parâmetro opcional blockedTypes permite que carrinhos de mão e obras evitem atravessar a Praça do Samba.
+  findRoadPath(startId, targetId, blockedTypes = null) {
     if (startId === targetId) return [targetId];
     if (!this.roadNodesMap || !this.roadNodesMap.has(startId) || !this.roadNodesMap.has(targetId)) {
       return [targetId];
     }
 
-    const queue = [startId];
-    const visited = new Set([startId]);
-    const cameFrom = new Map();
+    const runBfs = (filterSet) => {
+      const queue = [startId];
+      const visited = new Set([startId]);
+      const cameFrom = new Map();
 
-    while (queue.length > 0) {
-      const curr = queue.shift();
-      if (curr === targetId) {
-        const path = [curr];
-        let step = curr;
-        while (cameFrom.has(step)) {
-          step = cameFrom.get(step);
-          path.unshift(step);
+      while (queue.length > 0) {
+        const curr = queue.shift();
+        if (curr === targetId) {
+          const path = [curr];
+          let step = curr;
+          while (cameFrom.has(step)) {
+            step = cameFrom.get(step);
+            path.unshift(step);
+          }
+          return path;
         }
-        return path;
-      }
 
-      const node = this.roadNodesMap.get(curr);
-      if (!node || !node.neighbors) continue;
-      for (const nbr of node.neighbors) {
-        if (!visited.has(nbr)) {
+        const node = this.roadNodesMap.get(curr);
+        if (!node || !node.neighbors) continue;
+        for (const nbr of node.neighbors) {
+          if (visited.has(nbr)) continue;
+          if (filterSet && nbr !== targetId) {
+            const nbrNode = this.roadNodesMap.get(nbr);
+            if (nbrNode && filterSet.has(nbrNode.type)) continue;
+          }
           visited.add(nbr);
           cameFrom.set(nbr, curr);
           queue.push(nbr);
         }
       }
-    }
-    return [targetId];
+      return null;
+    };
+
+    const filtered = blockedTypes ? runBfs(blockedTypes) : null;
+    if (filtered) return filtered;
+    return runBfs(null) || [targetId];
   },
 
   // Encontra o nó do grafo viário mais próximo de uma coordenada (X, Z), com penalidade de altitude 3D

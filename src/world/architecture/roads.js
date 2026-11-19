@@ -30,7 +30,7 @@ export const RoadsMixin = {
     if (Math.hypot(sx - (-110.0), sz - (-15.0)) < 6.8) return true;           // Terreiro de Capoeira
     if (Math.abs(sx - (-92.0)) < 5.2 && Math.abs(sz - (-25.0)) < 4.2) return true; // Horta em Socalcos
     if (Math.abs(sx - 112.0) < 6.0 && Math.abs(sz - (-12.0)) < 4.5) return true;   // Academia ao Ar Livre
-    if (Math.abs(sx - 13.5) < 4.5 && (Math.abs(sz - 14.0) < 4.5 || Math.abs(sz - (-16.0)) < 4.0 || Math.abs(sz - (-60.0)) < 4.5)) return true; // Estações do Bondinho
+    if (Math.abs(sx - 32.0) < 6.0 && (Math.abs(sz - 11.5) < 5.5 || Math.abs(sz - (-17.0)) < 5.0 || Math.abs(sz - (-58.0)) < 5.5)) return true; // Estações do Bondinho (Corredor Leste-Central)
     return false;
   },
 
@@ -613,16 +613,9 @@ export const RoadsMixin = {
       flatShading: true
     });
 
-    // 7 Escadarias Principais Dedicadas (Conectam cotas de altitude onde não passam veículos)
+    // 6 Escadarias Principais Dedicadas (Conectam cotas de altitude reais; removida a escada sem saída no paredão sul do Morro do Sol!)
     const stairRoutes = [
-      // 1. Escadaria Monumental do Mirante Sul (Praia -> Mirante Sul -> Terreiro de Samba, toque Selarón!)
-      [
-        { x: 0.0, z: 18.0 },
-        { x: -0.35, z: 14.0 },
-        { x: -0.75, z: 9.5 },
-        { x: -1.1, z: 4.5 }
-      ],
-      // 2. Escadaria da Vila da Prainha (Píer -> Socalcos Baixos e Hortas Oeste)
+      // 1. Escadaria da Vila da Prainha (Píer -> Socalcos Baixos e Hortas Oeste)
       [
         { x: -78.0, z: 18.0 },
         { x: -84.0, z: 8.0 },
@@ -630,33 +623,33 @@ export const RoadsMixin = {
         { x: -88.0, z: -14.0 },
         { x: -92.0, z: -25.0 }
       ],
-      // 3. Escadaria da Capoeira do Poente (Socalcos Poente -> Roda de Capoeira)
+      // 2. Escadaria da Capoeira do Poente (Socalcos Poente -> Roda de Capoeira)
       [
         { x: -95.0, z: 12.0 },
         { x: -102.0, z: 2.0 },
         { x: -110.0, z: -15.0 }
       ],
-      // 4. Escadaria do Campinho da Várzea (Calçadão da Praia -> Campinho)
+      // 3. Escadaria do Campinho da Várzea (Calçadão da Praia -> Campinho)
       [
         { x: 55.0, z: 18.0 },
         { x: 55.0, z: 13.0 },
         { x: 55.0, z: 8.0 },
         { x: 55.0, z: 4.0 }
       ],
-      // 5. Escadaria do Pipódromo do Levante (Ladeira do Levante -> Alto do Pipódromo)
+      // 4. Escadaria do Pipódromo do Levante (Ladeira do Levante -> Alto do Pipódromo)
       [
         { x: 78.0, z: -14.0 },
         { x: 82.0, z: -26.0 },
         { x: 86.0, z: -38.0 },
         { x: 88.0, z: -48.0 }
       ],
-      // 6. Escadaria de Acesso à Estação Alta do Bondinho
+      // 5. Escadaria de Acesso à Estação Alta do Bondinho (liga o Platô da Serra ao novo Terminal em X=32, Z=-58)
       [
-        { x: 0.0, z: -60.0 },
-        { x: 6.5, z: -60.0 },
-        { x: 13.5, z: -60.0 }
+        { x: 14.0, z: -58.0 },
+        { x: 21.0, z: -58.0 },
+        { x: 27.0, z: -58.0 }
       ],
-      // 7. Escadaria da Usina Solar e Nascente da Serra
+      // 6. Escadaria da Usina Solar e Nascente da Serra
       [
         { x: 0.0, z: -66.0 },
         { x: -8.0, z: -68.0 },
@@ -679,7 +672,8 @@ export const RoadsMixin = {
     dummyParapet.rotation.order = 'YXZ';
 
     stairRoutes.forEach((route, routeIdx) => {
-      const isMonumentalCentral = (routeIdx === 0);
+      // Toque Selarón agora valoriza a subida do Campinho da Várzea (acesso real e conectado entre a praia e o campinho!)
+      const isMonumentalCentral = (routeIdx === 2);
 
       // Lanterna discreta no patamar inferior de entrada
       if (route.length > 0) {

@@ -163,12 +163,20 @@ export class NPCManager {
       }
 
       // 1b. BARREIRA FÍSICA INCONDICIONAL DO PENHASCO FRONTAL DO MORRO DO SOL
-      // Impede 100% que qualquer cidadão escorregue, caminhe ou caia na face vertical frontal
+      // Impede 100% que qualquer cidadão escorregue na face sul e evita travamento contra a mureta da Praça do Samba
       const px = npc.group.position.x;
       const pz = npc.group.position.z;
-      if (!npc.isScenicMirante && px >= -12.5 && px <= 12.5 && pz >= 3.0 && pz <= 16.8) {
+      if (!npc.isScenicMirante && px >= -12.5 && px <= 12.5 && pz >= 2.2 && pz <= 16.8) {
         if (pz < 9.5) {
-          npc.group.position.z = 2.4; // Retém no platô, dentro do Terreiro/Mirante
+          npc.group.position.z = 1.4; // Retém dentro da área livre do Terreiro, longe dos bancos sul
+          // Se estava tentando sair pelo penhasco sul, redireciona suavemente pela Alameda Norte!
+          if (npc.targetPos && npc.targetPos.z > 2.5 && this.roadNodesMap) {
+            const exitNode = this.roadNodesMap.get('sol_plaza_portico') || this.roadNodesMap.get('alameda_crossroads');
+            if (exitNode) {
+              npc.targetPos.copy(exitNode.position);
+              if (npc.pathQueue) npc.pathQueue.unshift('alameda_crossroads');
+            }
+          }
         } else {
           npc.group.position.z = 17.6; // Retém na base, no calçadão litorâneo
         }
@@ -246,20 +254,90 @@ export class NPCManager {
         return;
       }
 
-      // 2. BARRAQUEIRO BEHAVIOR (Comércio nas Barracas da Praia)
+      // 2. BARRAQUEIRO BEHAVIOR (Comércio nas Barracas da Praia — gestos fluidos e naturais atrás do balcão)
       if (npc.isBarraqueiro) {
-        // Subtle food/drink prep animation behind the counter
-        npc.torso.rotation.x = Math.sin(time * 3 + npc.walkCycle) * 0.06;
-        npc.torso.rotation.y = Math.sin(time * 2 + npc.walkCycle) * 0.08;
+        const ph = npc.walkCycle || 0;
+        let customer = null;
+        if (npc.assignedStall) {
+          const cSpot = npc.assignedStall.customerSpot;
+          customer = this.npcs.find(other =>
+            other !== npc && !other.isBarraqueiro &&
+            Math.hypot(other.group.position.x - cSpot.x, other.group.position.z - cSpot.z) < 2.8
+          );
+        }
+
+        // Ciclo natural de gestos (atendendo freguês vs preparando balcão vs acenando/observando a praia)
+        const gesturePhase = (time * 0.45 + ph) % 10.0;
+        let targetTorsoX = 0.04;
+        let targetTorsoY = Math.sin(time * 0.85 + ph) * 0.10;
+        let targetTorsoZ = Math.sin(time * 1.1 + ph) * 0.03;
+        let targetHeadY = Math.sin(time * 0.72 + ph) * 0.32;
+        let targetHeadX = Math.sin(time * 1.4 + ph) * 0.05;
+        let targetArmRX = -0.36;
+        let targetArmRZ = -0.06;
+        let targetArmLX = -0.28;
+        let targetArmLZ = 0.06;
+        const breatheY = Math.sin(time * 2.1 + ph) * 0.015;
+
+        if (customer) {
+          // Atendendo freguês: inclina de leve sobre o balcão, prepara/entrega bebida com braços alternados e acena com a cabeça
+          targetTorsoX = 0.14 + Math.sin(time * 2.6 + ph) * 0.05;
+          targetTorsoY = Math.sin(time * 1.7 + ph) * 0.14;
+          targetHeadY = Math.sin(time * 1.9 + ph) * 0.18;
+          targetHeadX = 0.08 + Math.sin(time * 3.8 + ph) * 0.08;
+          targetArmRX = -0.82 + Math.sin(time * 4.2 + ph) * 0.24;
+          targetArmRZ = -0.14 + Math.cos(time * 3.4 + ph) * 0.08;
+          targetArmLX = -0.62 + Math.cos(time * 3.6 + ph) * 0.20;
+          targetArmLZ = 0.12;
+        } else if (gesturePhase < 4.5) {
+          // Limpando/organizando o balcão e cortando coco/preparando mate suavemente
+          targetTorsoX = 0.10 + Math.sin(time * 2.2 + ph) * 0.04;
+          targetHeadX = 0.14;
+          targetHeadY = Math.sin(time * 1.3 + ph) * 0.16;
+          targetArmRX = -0.68 + Math.sin(time * 3.2 + ph) * 0.18;
+          targetArmRZ = -0.12 + Math.sin(time * 2.4 + ph) * 0.12;
+          targetArmLX = -0.48 + Math.cos(time * 2.1 + ph) * 0.10;
+        } else if (gesturePhase < 6.4) {
+          // Acenando amigavelmente para banhistas passando no calçadão!
+          targetTorsoX = 0.02;
+          targetTorsoZ = -0.05;
+          targetHeadY = Math.sin(time * 1.2 + ph) * 0.28;
+          targetHeadX = -0.04;
+          targetArmRX = -2.05 + Math.sin(time * 5.8 + ph) * 0.16;
+          targetArmRZ = -0.28 + Math.sin(time * 6.5 + ph) * 0.22;
+          targetArmLX = -0.18;
+        } else {
+          // Relaxado observando o movimento do mar e da praia
+          targetTorsoX = 0.02;
+          targetHeadY = Math.sin(time * 0.65 + ph) * 0.42;
+          targetArmRX = -0.26 + Math.sin(time * 1.2 + ph) * 0.06;
+          targetArmLX = -0.26 - Math.sin(time * 1.2 + ph) * 0.06;
+        }
+
+        if (npc.torso) {
+          npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, targetTorsoX, 6.5, delta);
+          npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, targetTorsoY, 6.0, delta);
+          npc.torso.rotation.z = dampLimb(npc.torso.rotation.z, targetTorsoZ, 6.5, delta);
+          npc.torso.position.y = dampLimb(npc.torso.position.y, 0.85 + breatheY, 8.0, delta);
+        }
+        if (npc.head) {
+          npc.head.rotation.y = dampLimb(npc.head.rotation.y, targetHeadY, 5.5, delta);
+          npc.head.rotation.x = dampLimb(npc.head.rotation.x, targetHeadX, 6.5, delta);
+          npc.head.position.y = dampLimb(npc.head.position.y, 1.35 + breatheY, 8.0, delta);
+        }
+        if (npc.rightArm) {
+          npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, targetArmRX, 7.5, delta);
+          npc.rightArm.rotation.z = dampLimb(npc.rightArm.rotation.z, targetArmRZ, 7.5, delta);
+        }
+        if (npc.leftArm) {
+          npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, targetArmLX, 7.5, delta);
+          npc.leftArm.rotation.z = dampLimb(npc.leftArm.rotation.z, targetArmLZ, 7.5, delta);
+        }
+        if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, 0, 8.0, delta);
+        if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, 0, 8.0, delta);
 
         if (npc.assignedStall) {
           const cSpot = npc.assignedStall.customerSpot;
-          // Check for nearby customers at customerSpot
-          const customer = this.npcs.find(other => 
-            other !== npc && !other.isBarraqueiro && 
-            Math.hypot(other.group.position.x - cSpot.x, other.group.position.z - cSpot.z) < 2.5
-          );
-
           if (customer) {
             npc.currentAction = `Atendendo ${customer.citizenName} com ${npc.assignedStall.product}`;
             customer.currentAction = `Aproveitando ${npc.assignedStall.product} na praia`;
@@ -540,6 +618,33 @@ export class NPCManager {
             }
           }
         } else {
+          // Watchdog anti-travamento para carreteiros (nunca fica bloqueado em barreiras ou esquinas!)
+          npc.courierStuckTimer = (npc.courierStuckTimer || 0) + delta;
+          if (npc.courierStuckTimer >= 2.6) {
+            npc.courierStuckTimer = 0;
+            if (npc.courierLastPos) {
+              const moved = Math.hypot(npc.group.position.x - npc.courierLastPos.x, npc.group.position.z - npc.courierLastPos.z);
+              if (moved < 0.45 && npc.courierSite) {
+                // Redireciona pela via pavimentada mais próxima evitando a Praça do Samba
+                const avoidPlaza = new Set(['plaza', 'mirante', 'portico', 'alameda']);
+                const curNode = this.getNearestRoadNode(npc.group.position.x, npc.group.position.z, null, (n) => !avoidPlaza.has(n.type));
+                const dstNode = this.getNearestRoadNode(npc.courierSite.plateau.x, npc.courierSite.plateau.z, null, (n) => !avoidPlaza.has(n.type));
+                if (curNode && dstNode) {
+                  const newPath = this.findRoadPath(curNode.id, dstNode.id, avoidPlaza);
+                  npc.pathQueue = newPath.slice(1);
+                  const nextNd = npc.pathQueue.length > 0 ? this.roadNodesMap.get(npc.pathQueue.shift()) : dstNode;
+                  if (nextNd) npc.targetPos = nextNd.position.clone();
+                } else {
+                  const onDelivered = npc.onDelivered;
+                  this.releaseCourier(npc);
+                  if (onDelivered) onDelivered();
+                  return;
+                }
+              }
+            }
+            npc.courierLastPos = { x: npc.group.position.x, z: npc.group.position.z };
+          }
+
           const normX = dirX / dist;
           const normZ = dirZ / dist;
           npc.group.position.x += normX * npc.speed * delta;
@@ -549,8 +654,8 @@ export class NPCManager {
 
           npc.walkCycle += delta * 9;
           const swing = Math.sin(npc.walkCycle) * 0.48;
-          npc.leftLeg.rotation.x = swing;
-          npc.rightLeg.rotation.x = -swing;
+          npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, swing, 14.0, delta);
+          npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, -swing, 14.0, delta);
         }
         return;
       }

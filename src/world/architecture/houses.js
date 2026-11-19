@@ -183,18 +183,23 @@ export const HousesMixin = {
         const inOlaria = Math.abs(sh.x - -22) <= 11 && Math.abs(sh.z - -14) <= 9;
         const inSamba = Math.hypot(sh.x - (-2), sh.z - (-4)) <= 15.0; // Preservação Estrita da Praça do Samba!
         const inNascente = Math.abs(sh.x - -8) <= 12 && Math.abs(sh.z - -65) <= 12;
+        const inBondinho = Math.abs(sh.x - 32.0) <= 8.2 && sh.z <= 17.0 && sh.z >= -66.0;
+        const inTurbines =
+          Math.hypot(sh.x - (-42.0), sh.z - (-116.0)) <= 9.0 ||
+          Math.hypot(sh.x - (-16.0), sh.z - (-120.0)) <= 9.0 ||
+          Math.hypot(sh.x - 26.0, sh.z - (-116.0)) <= 9.0;
 
         let inInfra = false;
         if (this.infrastructureNodes) {
           // Retroactively demolish houses intersecting infrastructure
-          inInfra = this.infrastructureNodes.some(node => Math.hypot(node.x - sh.x, node.z - sh.z) < 4.5);
+          inInfra = this.infrastructureNodes.some(node => Math.hypot(node.x - sh.x, node.z - sh.z) < (node.r ? Math.max(4.5, node.r) : 4.5));
         }
 
         // Remove legacy collinear rows from previous expansion versions so organic village clusters replace them cleanly
         const isLegacyLinearExpansion = (Math.abs(sh.x) >= 145 || sh.z <= -135) &&
           [10, -18, -44, -72, -142, -162].includes(Math.round(sh.z));
 
-        return !(inMirante || inCampinho || inMercado || inAgro || inOlaria || inSamba || inNascente || inInfra || isLegacyLinearExpansion);
+        return !(inMirante || inCampinho || inMercado || inAgro || inOlaria || inSamba || inNascente || inBondinho || inTurbines || inInfra || isLegacyLinearExpansion);
       });
       const seenIds = new Set();
       const placedHouses = [];
@@ -1775,16 +1780,36 @@ export const HousesMixin = {
     this.group.add(galpaoGroup);
 
     // 5. TERREIRO CULTURAL DO JONGO & POMAR NOROESTE (X: -118, Z: -82)
-    const jongoGroup = makeTerrace(-118, -82, 11.0, 10.0, new THREE.MeshLambertMaterial({ color: 0xD97706, flatShading: true }));
-    const rodaRing = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 3.9, 0.18, 12), matWood);
-    rodaRing.position.y = 0.38;
-    const shadePavilion = new THREE.Mesh(new THREE.ConeGeometry(3.2, 1.8, 6), matRoofTeal);
-    shadePavilion.position.set(0, 3.1, -1.8);
-    const planterL = new THREE.Mesh(new THREE.DodecahedronGeometry(1.4, 0), matFoliage);
-    planterL.position.set(-4.0, 1.4, -3.0);
-    const planterR = new THREE.Mesh(new THREE.DodecahedronGeometry(1.4, 0), matFoliage);
-    planterR.position.set(4.0, 1.4, -3.0);
-    jongoGroup.add(rodaRing, shadePavilion, planterL, planterR);
+    // Piso em pedra/areia quente + quiosque apoiado em 6 pilares de madeira (sem cone flutuante!)
+    const jongoGroup = makeTerrace(-118, -82, 11.0, 10.0, new THREE.MeshLambertMaterial({ color: 0xB89B78, flatShading: true }));
+    const rodaRing = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 3.9, 0.18, 14), matWood);
+    rodaRing.position.set(0, 0.38, 0.8);
+    const shadePavilion = new THREE.Mesh(new THREE.ConeGeometry(3.2, 1.45, 6), matRoofTeal);
+    shadePavilion.position.set(0, 3.25, -1.8);
+    shadePavilion.castShadow = true;
+    // 6 pilares estruturais de madeira sustentando o quiosque do Jongo
+    for (let p = 0; p < 6; p++) {
+      const a = (p / 6) * Math.PI * 2;
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 2.45, 5), matWood);
+      post.position.set(Math.cos(a) * 2.45, 1.50, -1.8 + Math.sin(a) * 2.45);
+      post.castShadow = true;
+      jongoGroup.add(post);
+    }
+    // Bancos rústicos voltados para a roda
+    [-3.2, 3.2].forEach((bx) => {
+      const bench = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.42, 2.6), matWood);
+      bench.position.set(bx, 0.50, 1.2);
+      jongoGroup.add(bench);
+    });
+    const potMatJongo = new THREE.MeshLambertMaterial({ color: 0xA8543E, flatShading: true });
+    [-4.1, 4.1].forEach((px) => {
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.45, 0.65, 6), potMatJongo);
+      pot.position.set(px, 0.62, -3.2);
+      const foliage = new THREE.Mesh(new THREE.DodecahedronGeometry(0.85, 0), matFoliage);
+      foliage.position.set(px, 1.35, -3.2);
+      jongoGroup.add(pot, foliage);
+    });
+    jongoGroup.add(rodaRing, shadePavilion);
     this.group.add(jongoGroup);
 
     // 6. MIRANTE & QUIOSQUE PANORÂMICO DA SELA NORTE (X: 28, Z: -136)

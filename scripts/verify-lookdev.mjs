@@ -127,6 +127,14 @@ try {
   await setModeAndPhase('bloom', 'day');
   await snap('02_day_overview_studiofx.png');
 
+  // 2B. Corredor do Bondinho (X=32) & Morro do Sol limpo sem escadaria sem saída
+  await setCam(62, 34, 34, 24, 12, -16);
+  await snap('07_bondinho_and_morro_day.png');
+
+  // 2C. Vista Flanco Oeste -> Horizonte Leste (Turbinas, Capoeira, Horta, Jongo, Cabo e Horizonte do Mar)
+  await setCam(-165, 42, -8, -40, 12, -32);
+  await snap('08_west_coast_horizon_day.png');
+
   // 3. Close-up Encosta Oeste & Olaria - Studio FX
   await setCam(-40, 24, 8, -24, 10, -20);
   await snap('03_houses_closeup_studiofx.png');

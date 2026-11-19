@@ -481,15 +481,21 @@ export class Terrain {
     if (Math.hypot(x - 0.0, z - (-104.0)) < 6.0 + margin) return true; // Torre de Rádio
     if (Math.hypot(x - 50.0, z - (-110.0)) < 11.5 + margin) return true; // Mirante Imperial
     if (Math.abs(x - 50.0) <= 18.0 + margin && z <= -94.0 + margin && z >= -118.0 - margin) return true;
-    if (Math.hypot(x - (-36.0), z - (-92.0)) < 4.2 + margin) return true; // Turbina 1
-    if (Math.hypot(x - (-18.0), z - (-98.0)) < 4.2 + margin) return true; // Turbina 2
-    if (Math.hypot(x - 32.0, z - (-94.0)) < 4.2 + margin) return true; // Turbina 3
+    // Turbinas Eólicas na crista norte limpa (longe das estradas da Coroa das Alturas!)
+    if (Math.hypot(x - (-42.0), z - (-116.0)) < 8.5 + margin) return true; // Turbina 1
+    if (Math.hypot(x - (-16.0), z - (-120.0)) < 8.5 + margin) return true; // Turbina 2
+    if (Math.hypot(x - 26.0, z - (-116.0)) < 8.5 + margin) return true;    // Turbina 3
 
-    // 5. Estações e Torres do Bondinho (Eixo X = 13.5)
-    if (Math.abs(x - 13.5) < 5.5 + margin && Math.abs(z - 14.0) < 5.5 + margin) return true; // Estação Base Orla
-    if (Math.abs(x - 13.5) < 5.5 + margin && Math.abs(z - (-16.0)) < 4.8 + margin) return true; // Estação Central Morro
-    if (Math.abs(x - 13.5) < 5.5 + margin && Math.abs(z - (-60.0)) < 5.5 + margin) return true; // Estação Topo Serra
-    if (Math.abs(x - 13.5) < 2.6 + margin && (Math.abs(z - 1.5) < 2.6 + margin || Math.abs(z - (-31.0)) < 2.6 + margin || Math.abs(z - (-46.0)) < 2.6 + margin)) return true;
+    // 5. Corredor Panorâmico Dedicado do Bondinho (Eixo X = 32.0, Z = 15 até -64 — proteção contínua!)
+    if (Math.abs(x - 32.0) < 7.8 + margin && z <= 16.5 + margin && z >= -65.0 - margin) return true;
+
+    // 5B. Núcleos Comunitários Expandidos (Jongo, Feirinha, Coreto, Basquete, Galpão, Mirante Sela)
+    if (Math.hypot(x - (-118.0), z - (-82.0)) < 8.5 + margin) return true; // Terreiro do Jongo
+    if (Math.hypot(x - (-142.0), z - (-42.0)) < 9.0 + margin) return true; // Feirinha do Poente
+    if (Math.hypot(x - (-32.0), z - (-102.0)) < 8.5 + margin) return true; // Coreto da Serra
+    if (Math.hypot(x - 142.0, z - (-42.0)) < 9.5 + margin) return true;    // Quadra de Basquete
+    if (Math.hypot(x - 118.0, z - (-82.0)) < 8.5 + margin) return true;    // Galpão Cultural
+    if (Math.hypot(x - 28.0, z - (-136.0)) < 8.0 + margin) return true;    // Mirante Sela Norte
 
     // 6. Mirantes, Decks, Capoeira, Horta, Dominó e Rancho do Flanco Oeste (Poente)
     if (Math.hypot(x - (-78.0), z - (-50.0)) < 10.5 + margin) return true; // Mirante das Pipas (14m deck)

@@ -130,17 +130,17 @@ export class CinematicCamera {
 
       case 'bonde': {
         // LINHA DO BONDINHO & MOTOTÁXIS DA SERRA:
-        // Glides parallel to the cable car line (X=13.5, Z=14 to -60), tracking cabins and hillside roads
+        // Glides parallel to the dedicated cable car corridor (X=32.0, Z=11.5 to -58), tracking cabins and hillside views
         const s = t * 0.09;
         outCam.set(
-          38.0 + Math.cos(s) * 8.0,
+          56.0 + Math.cos(s) * 8.0,
           32.0 + Math.sin(s * 1.2) * 5.0,
-          -4.0 + Math.sin(s) * 26.0
+          -4.0 + Math.sin(s) * 24.0
         );
         outTarget.set(
-          13.5 + Math.sin(s * 0.6) * 4.0,
+          32.0 + Math.sin(s * 0.6) * 3.5,
           15.5 + Math.cos(s * 0.8) * 3.5,
-          -26.0 + Math.sin(s * 0.9) * 18.0
+          -24.0 + Math.sin(s * 0.9) * 18.0
         );
         break;
       }

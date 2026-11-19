@@ -39,9 +39,11 @@ export const WorkersMixin = {
     );
     courier.currentNodeId = 'olaria_dock';
 
-    // Roteamento inteligente por vias pavimentadas até o lote
-    const destRoadNode = this.getNearestRoadNode(siteData.plateau.x, siteData.plateau.z);
-    const courierPath = this.findRoadPath('olaria_dock', destRoadNode ? destRoadNode.id : 'olaria_dock');
+    // Roteamento inteligente por vias pavimentadas até o lote (nunca atravessa a Praça do Samba de carrinho!)
+    const avoidPlaza = new Set(['plaza', 'mirante', 'portico', 'alameda']);
+    const destRoadNode = this.getNearestRoadNode(siteData.plateau.x, siteData.plateau.z, null, (n) => !avoidPlaza.has(n.type))
+      || this.getNearestRoadNode(siteData.plateau.x, siteData.plateau.z);
+    const courierPath = this.findRoadPath('olaria_dock', destRoadNode ? destRoadNode.id : 'olaria_dock', avoidPlaza);
     courier.pathQueue = courierPath.slice(1);
     if (courier.pathQueue.length > 0) {
       courier.targetNodeId = courier.pathQueue.shift();
@@ -141,10 +143,12 @@ export const WorkersMixin = {
       npc.workerSpot = new THREE.Vector3(spotX, spotY, spotZ);
       npc.speed = 2.4; // passo firme e cadenciado
 
-      // 2. Roteamento viário: trajeto via ruas pavimentadas até a esquina da obra
+      // 2. Roteamento viário: trajeto via ruas pavimentadas até a esquina da obra (evitando cortar por dentro da Praça do Samba)
+      const avoidPlaza = new Set(['plaza', 'mirante', 'portico', 'alameda']);
       const curY = npc.group.position.y || (this.terrain ? this.terrain.getElevation(npc.group.position.x, npc.group.position.z) : 0);
       const workerStartNode = this.getNearestRoadNode(npc.group.position.x, npc.group.position.z, curY);
-      const roadPath = this.findRoadPath(workerStartNode.id, plotRoadNode ? plotRoadNode.id : workerStartNode.id);
+      const safePlotNode = this.getNearestRoadNode(siteData.plateau.x, siteData.plateau.z, plotY, (n) => !avoidPlaza.has(n.type)) || plotRoadNode;
+      const roadPath = this.findRoadPath(workerStartNode.id, safePlotNode ? safePlotNode.id : workerStartNode.id, avoidPlaza);
 
       npc.builderPathQueue = roadPath.slice(1);
       if (npc.builderPathQueue.length > 0) {

@@ -235,12 +235,12 @@ export const HighlandsMixin = {
     this.miranteImperial = miranteGroup;
   },
 
-  // 2. PARQUE EÓLICO DA CHAPADA (3 Turbinas Eólicas Elegantes nos Ventos do Norte)
+  // 2. PARQUE EÓLICO DA CHAPADA (3 Turbinas Eólicas Elegantes na Crista Norte, 100% fora das estradas!)
   createWindTurbines() {
     const turbinePositions = [
-      { x: -36, z: -92 },
-      { x: -18, z: -98 },
-      { x: 32,  z: -94 }
+      { x: -42, z: -116 },
+      { x: -16, z: -120 },
+      { x: 26,  z: -116 }
     ];
 
     const mastMat = new THREE.MeshLambertMaterial({ color: 0xE2E8F0, flatShading: true });
@@ -248,13 +248,17 @@ export const HighlandsMixin = {
     const tipMat = new THREE.MeshBasicMaterial({ color: 0xEF4444 }); // Ponta vermelha de aviação
 
     turbinePositions.forEach((pos, idx) => {
+      if (this.infrastructureNodes) {
+        this.infrastructureNodes.push({ x: pos.x, z: pos.z, r: 8.5 });
+      }
       const tGroup = new THREE.Group();
       const gy = this.terrain ? this.terrain.getElevation(pos.x, pos.z) : 12.0;
       tGroup.position.set(pos.x, gy, pos.z);
 
-      // Deep foundation base ring
-      const baseMesh = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.9, 1.2, 8), new THREE.MeshLambertMaterial({ color: 0x475569 }));
-      baseMesh.position.y = 0.4;
+      // Deep foundation base ring (ancorado fundo na encosta)
+      const baseMesh = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 2.3, 2.4, 8), new THREE.MeshLambertMaterial({ color: 0x6B665F, flatShading: true }));
+      baseMesh.position.y = -0.2;
+      baseMesh.receiveShadow = true;
       tGroup.add(baseMesh);
 
       // Tapered tower mast (15m tall)

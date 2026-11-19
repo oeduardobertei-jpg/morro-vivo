@@ -758,9 +758,9 @@ const cameraPresets = {
   bonde: {
     name: 'Linha do Bondinho da Serra',
     angles: [
-      { pos: new THREE.Vector3(42, 30, 14), target: new THREE.Vector3(13.5, 15, -22), label: 'Corredor do Teleférico & Ladeiras' },
-      { pos: new THREE.Vector3(28, 26, -8), target: new THREE.Vector3(13.5, 14, -28), label: 'A Bordo do Bondinho (Seguindo Cabine)', followCabin: true },
-      { pos: new THREE.Vector3(32, 32, -36), target: new THREE.Vector3(13.5, 19, -58), label: 'Estação Alta da Serra & Torres' }
+      { pos: new THREE.Vector3(60, 30, 14), target: new THREE.Vector3(32.0, 15, -20), label: 'Corredor do Teleférico & Ladeiras' },
+      { pos: new THREE.Vector3(46, 26, -8), target: new THREE.Vector3(32.0, 14, -26), label: 'A Bordo do Bondinho (Seguindo Cabine)', followCabin: true },
+      { pos: new THREE.Vector3(52, 32, -34), target: new THREE.Vector3(32.0, 19, -58), label: 'Estação Alta da Serra & Torres' }
     ]
   },
   serra: {

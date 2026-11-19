@@ -393,7 +393,7 @@ varying float vShoreDist;
 
 float ocShoreZ(float wx) {
   float hl = max(0.0, (abs(wx) - 310.0) / 130.0);
-  return 74.0 + sin(wx * 0.015) * 3.5 - (hl * hl * 82.0);
+  return max(-180.0, 74.0 + sin(wx * 0.015) * 3.5 - (hl * hl * 82.0));
 }
 
 float ocWaveH(vec2 p, float t) {
@@ -512,9 +512,8 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
   }
 
   createStylizedTropicalOcean() {
-    // 1. Oceano Atlântico de Alto-Mar (Open Ocean) - shader GPU compartilhado
-    // Inicia em Z = 125m (50m mar adentro), estendendo-se até o horizonte
-    const waterGeo = new THREE.PlaneGeometry(4200, 3200, 112, 96);
+    // 1. Oceano Atlântico de Alto-Mar (Open Ocean) - estendido até o horizonte sem quinas retangulares!
+    const waterGeo = new THREE.PlaneGeometry(6400, 4400, 112, 96);
     waterGeo.rotateX(-Math.PI / 2);
 
     this.waterMat = new THREE.MeshStandardMaterial({
@@ -527,20 +526,32 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
     this._applyOceanShader(this.waterMat, { isBay: false });
 
     this.waterMesh = new THREE.Mesh(waterGeo, this.waterMat);
-    this.waterMesh.position.set(0, 0.02, 1725.15);
+    this.waterMesh.position.set(0, 0.02, 2325.0);
     this.waterMesh.receiveShadow = true;
     this.group.add(this.waterMesh);
 
-    // 2. Águas Costeiras Calmas da Enseada Carioca (Bay Water Mesh)
+    // 1B. Extensões oceânicas laterais contínuas além das pontas da enseada (|X| > 625) — elimina 100% a quina de 90° no horizonte!
+    const sideOceanGeo = new THREE.PlaneGeometry(2600, 620, 16, 8);
+    sideOceanGeo.rotateX(-Math.PI / 2);
+    [-1920, 1920].forEach((sx) => {
+      const sideWater = new THREE.Mesh(sideOceanGeo, this.waterMat);
+      sideWater.position.set(sx, 0.01, -184.0);
+      sideWater.receiveShadow = true;
+      sideWater.matrixAutoUpdate = false;
+      sideWater.updateMatrix();
+      this.group.add(sideWater);
+    });
+
+    // 2. Águas Costeiras Calmas da Enseada Carioca (Bay Water Mesh estendida por toda a largura continental)
     this.createCoastalBayWater();
   }
 
   createCoastalBayWater() {
-    const xMin = -375.0;
-    const xMax = 375.0;
-    const xStep = 2.5;
+    const xMin = -645.0;
+    const xMax = 645.0;
+    const xStep = 3.0;
     const numCols = Math.round((xMax - xMin) / xStep) + 1;
-    const numRows = 12; // 12 anéis do raso (shoreZ) até z = 125.1m (encaixe exato com alto-mar)
+    const numRows = 12; // 12 anéis do raso (shoreZ) até z = 126.0m (encaixe perfeito com alto-mar)
     const positions = [];
     const indices = [];
 
@@ -549,9 +560,9 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
       for (let c = 0; c < numCols; c++) {
         const x = xMin + c * xStep;
         const headlandCurve = Math.max(0.0, (Math.abs(x) - 310.0) / 130.0);
-        const shoreZ = 74.0 + Math.sin(x * 0.015) * 3.5 - (headlandCurve * headlandCurve * 82.0);
+        const shoreZ = Math.max(-180.0, 74.0 + Math.sin(x * 0.015) * 3.5 - (headlandCurve * headlandCurve * 82.0));
 
-        const z = (shoreZ - 0.35) + rowT * (125.15 - (shoreZ - 0.35));
+        const z = (shoreZ - 0.35) + rowT * (126.5 - (shoreZ - 0.35));
         const y = -0.008 + rowT * 0.028;
 
         positions.push(x, y, z);
@@ -612,7 +623,19 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
       { x: 260,  z: 465, rx: 32, rz: 20, h: 18, hasPalmCap: true },
       { x: 320,  z: 495, rx: 18, rz: 14, h: 11, hasPalmCap: false },
       // 2. Ilha Rasa & Farol Oceânico ao Sul Profundo
-      { x: 18,   z: 540, rx: 26, rz: 16, h: 14, hasPalmCap: true, hasBeacon: true }
+      { x: 18,   z: 540, rx: 26, rz: 16, h: 14, hasPalmCap: true, hasBeacon: true },
+      // 3. Cabos & Morros Distantes Emoldurando as Extremidades Oeste e Leste da Baía (fecham o horizonte sem cortes retos!)
+      { x: -580, z: 120, rx: 110, rz: 65, h: 42, hasPalmCap: true },
+      { x: -720, z: -20, rx: 145, rz: 95, h: 64, hasPalmCap: true },
+      { x: -840, z: -210, rx: 180, rz: 120, h: 82, hasPalmCap: true },
+      { x: 580,  z: 130, rx: 115, rz: 68, h: 45, hasPalmCap: true },
+      { x: 730,  z: -15, rx: 150, rz: 98, h: 68, hasPalmCap: true },
+      { x: 850,  z: -215, rx: 185, rz: 125, h: 86, hasPalmCap: true },
+      // 4. Segunda Camada Azul-Esverdeada da Serra do Mar ao Fundo Norte (perspectiva aérea infinita!)
+      { x: -540, z: -560, rx: 220, rz: 110, h: 98,  hasPalmCap: true },
+      { x: -220, z: -610, rx: 240, rz: 120, h: 112, hasPalmCap: true },
+      { x: 140,  z: -620, rx: 250, rz: 120, h: 118, hasPalmCap: true },
+      { x: 510,  z: -570, rx: 220, rz: 115, h: 102, hasPalmCap: true }
     ];
 
     islands.forEach((isl, idx) => {

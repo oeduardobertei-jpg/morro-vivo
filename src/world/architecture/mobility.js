@@ -64,15 +64,23 @@ export const MobilityMixin = {
     const warmBulbMat = new THREE.MeshBasicMaterial({ color: 0xFEF08A });
     const redBeaconMat = new THREE.MeshBasicMaterial({ color: 0xEF4444 });
 
-    // Coordenadas da Linha do Bondinho (Eixo X = 13.5, subindo da Orla Z=14 até o Alto da Serra Z=-60)
-    const lineX = 13.5;
-    const zBase = 14.0;
-    const zMid = -16.0; // Estação Intermediária Morro do Sol
-    const zTop = -60.0;
+    // Coordenadas da Linha do Bondinho (Corredor Panorâmico Dedicado Leste-Central: X = 32.0, Z = 11.5 até Z = -58.0)
+    // 100% livre de sobreposições com o Morro do Sol, a Ladeira do Morro do Sol, o Campinho e as casas!
+    const lineX = 32.0;
+    const zBase = 11.5;
+    const zMid = -17.0; // Estação Intermediária Mirante da Encosta
+    const zTop = -58.0; // Terminal Alto da Serra Leste
 
     const yBase = this.terrain ? this.terrain.getElevation(lineX, zBase) : 2.5;
-    const yMid = this.terrain ? this.terrain.getElevation(lineX, zMid) : 13.2;
+    const yMid = this.terrain ? this.terrain.getElevation(lineX, zMid) : 11.5;
     const yTop = this.terrain ? this.terrain.getElevation(lineX, zTop) : 16.5;
+
+    // Reserva todo o corredor aéreo/terrestre do bondinho contra spawn de casas
+    if (this.infrastructureNodes) {
+      for (let cz = zBase; cz >= zTop; cz -= 5.5) {
+        this.infrastructureNodes.push({ x: lineX, z: cz, r: 7.5 });
+      }
+    }
 
     // Helper para construir Estações Terminais (Base Orla e Topo Serra)
     const buildTerminalStation = (x, y, z, accentColor, isTop) => {
@@ -272,12 +280,12 @@ export const MobilityMixin = {
     stationGroup.add(topStation);
 
     // Definição das Torres Treliçadas (Pylons) e Waypoints Aéreos do Cabo
+    // Torres em Z = -2.0 e Z = -44.0 deixam o cruzamento aéreo sobre a Ladeira da Várzea (Z ~ -31) 100% livre e elevado!
     const waypointSpecs = [
       { z: zBase, isStation: true, cableY: yBase + 4.15 },
-      { z: 1.5,   isPylon: true,   towerH: 7.4 },
+      { z: -2.0,  isPylon: true,   towerH: 8.6 },
       { z: zMid,  isStation: true, cableY: yMid + 6.15 },
-      { z: -31.0, isPylon: true,   towerH: 8.2 },
-      { z: -46.0, isPylon: true,   towerH: 7.8 },
+      { z: -44.0, isPylon: true,   towerH: 9.6 },
       { z: zTop,  isStation: true, cableY: yTop + 4.15 }
     ];
 
@@ -304,7 +312,8 @@ export const MobilityMixin = {
       warnCollar.position.y = 0.85;
       towerGroup.add(warnCollar);
 
-      // 4 Pernas metálicas inclinadas formando torre treliçada (Lattice Pylon)
+      // 4 Pernas metálicas inclinadas formando torre treliçada (orientação local via quaternion — sem bug de lookAt!)
+      const upAxis = new THREE.Vector3(0, 1, 0);
       const legOffsets = [
         [-0.55, -0.55, -0.22, -0.22],
         [0.55, -0.55, 0.22, -0.22],
@@ -314,12 +323,12 @@ export const MobilityMixin = {
       legOffsets.forEach(([bx, bz, tx, tz]) => {
         const pBot = new THREE.Vector3(bx, 0.7, bz);
         const pTop = new THREE.Vector3(tx, tH, tz);
-        const len = pBot.distanceTo(pTop);
+        const dir = pTop.clone().sub(pBot);
+        const len = dir.length();
         const mid = pBot.clone().add(pTop).multiplyScalar(0.5);
         const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.11, len, 5), darkSteelMat);
         leg.position.copy(mid);
-        leg.lookAt(towerGroup.position.clone().add(pTop));
-        leg.rotateX(Math.PI / 2);
+        leg.quaternion.setFromUnitVectors(upAxis, dir.normalize());
         towerGroup.add(leg);
       });
 

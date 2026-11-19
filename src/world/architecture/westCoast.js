@@ -843,14 +843,22 @@ export const WestCoastMixin = {
     const y = this.terrain ? this.terrain.getElevation(pos.x, pos.z) : 3.6;
     coveGroup.position.set(pos.x, y, pos.z);
 
-    // Stone terrace foundation
+    // Stone terrace foundation (arenito quente carioca + anel de madeira integrado ao relevo)
     const terrace = new THREE.Mesh(
-      new THREE.CylinderGeometry(6.5, 7.2, 1.8, 12),
-      new THREE.MeshLambertMaterial({ color: 0x524B42, flatShading: true })
+      new THREE.CylinderGeometry(6.4, 7.4, 2.0, 14),
+      new THREE.MeshLambertMaterial({ color: 0x9C8F7C, flatShading: true })
     );
-    terrace.position.y = -0.7;
+    terrace.position.y = -0.82;
     terrace.receiveShadow = true;
     coveGroup.add(terrace);
+
+    const woodRim = new THREE.Mesh(
+      new THREE.CylinderGeometry(6.15, 6.25, 0.14, 14),
+      new THREE.MeshLambertMaterial({ color: 0x82654A, flatShading: true })
+    );
+    woodRim.position.y = 0.18;
+    woodRim.receiveShadow = true;
+    coveGroup.add(woodRim);
 
     // Wooden boat dry-dock stanchions & rails
     const timberMat = new THREE.MeshLambertMaterial({ color: 0x5C4033, flatShading: true });
@@ -1920,12 +1928,46 @@ export const WestCoastMixin = {
 
     lifeGroup.add(dominoGroup);
 
-    // 2. RANCHO CAIÇARA & ESTALEIRO DA CANOA (x: -100, z: -38)
+    // 2. RANCHO CAIÇARA & ESTALEIRO DA CANOA (x: -100, z: -38 — agora sobre deck rústico com cobertura de sapé!)
     const canX = -100.0, canZ = -38.0;
     const canY = this.terrain ? this.terrain.getElevation(canX, canZ) : 4.4;
     const canoGroup = new THREE.Group();
     canoGroup.position.set(canX, canY, canZ);
     canoGroup.rotation.y = 0.25;
+
+    // Patamar de pedra/madeira assentado no solo para integrar a canoa e as redes ao terreno
+    const yardBase = new THREE.Mesh(
+      new THREE.BoxGeometry(7.6, 1.6, 6.2),
+      new THREE.MeshLambertMaterial({ color: 0x8F8372, flatShading: true })
+    );
+    yardBase.position.set(0.6, -0.72, 0.6);
+    yardBase.receiveShadow = true;
+    canoGroup.add(yardBase);
+
+    const yardDeck = new THREE.Mesh(
+      new THREE.BoxGeometry(7.2, 0.16, 5.8),
+      new THREE.MeshLambertMaterial({ color: 0x7A5C43, flatShading: true })
+    );
+    yardDeck.position.set(0.6, 0.10, 0.6);
+    yardDeck.receiveShadow = true;
+    canoGroup.add(yardDeck);
+
+    // Telheiro leve de sapé sobre 4 esteios abrigando o estaleiro da canoa
+    const shelterPostMat = new THREE.MeshLambertMaterial({ color: 0x5A3F2B, flatShading: true });
+    [[-2.7, -1.6], [2.7, -1.6], [-2.7, 1.6], [2.7, 1.6]].forEach(([sx, sz]) => {
+      const sp = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 2.75, 5), shelterPostMat);
+      sp.position.set(sx, 1.48, sz);
+      sp.castShadow = true;
+      canoGroup.add(sp);
+    });
+    const shelterRoof = new THREE.Mesh(
+      new THREE.BoxGeometry(6.2, 0.18, 4.0),
+      new THREE.MeshLambertMaterial({ color: 0xB38B4D, flatShading: true })
+    );
+    shelterRoof.position.set(0, 2.88, 0);
+    shelterRoof.rotation.x = 0.14;
+    shelterRoof.castShadow = true;
+    canoGroup.add(shelterRoof);
 
     // Dois cavaletes de carpinteiro naval
     const trestleMat = new THREE.MeshLambertMaterial({ color: 0x4E342E });

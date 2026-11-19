@@ -184,23 +184,29 @@ export const HillsidesMixin = {
 
     westExpGroup.add(hortaGroup);
 
-    // 3. TRILHA DOS PESCADORES EM DORMENTES (x: -108 a -90, z: -10 a 16)
-    const stepCount = 10;
+    // 3. TRILHA DOS PESCADORES EM DORMENTES (liga limpo Vila dos Pescadores (-95, 0) -> Terreiro de Capoeira (-110, -15))
+    const trailStartX = -100.2, trailStartZ = -5.4;
+    const trailEndX = -106.0, trailEndZ = -10.8;
+    const trailYaw = Math.atan2(trailEndX - trailStartX, trailEndZ - trailStartZ);
+    const stepCount = 6;
     for (let s = 0; s < stepCount; s++) {
       const t = s / (stepCount - 1);
-      const sx = -108 + t * 18;
-      const sz = -10 + t * 26;
-      const sy = this.terrain ? this.terrain.getElevation(sx, sz) : (5.0 - t * 4.2);
+      const sx = trailStartX + (trailEndX - trailStartX) * t;
+      const sz = trailStartZ + (trailEndZ - trailStartZ) * t;
+      const sy = this.terrain ? this.terrain.getElevation(sx, sz) : 2.2;
 
-      const sleeper = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.22, 0.75), woodDarkMat);
-      sleeper.position.set(sx, sy + 0.1, sz);
-      sleeper.rotation.y = 0.45;
+      const sleeper = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.16, 0.62), woodDarkMat);
+      sleeper.position.set(sx, sy + 0.06, sz);
+      sleeper.rotation.y = trailYaw;
+      sleeper.receiveShadow = true;
       westExpGroup.add(sleeper);
 
-      // Mourões de corda lateral
-      if (s % 3 === 0) {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.1, 4), woodWeatheredMat);
-        post.position.set(sx - 1.2, sy + 0.65, sz);
+      // Balizadores de madeira discretos nas extremidades da trilha
+      if (s === 0 || s === stepCount - 1) {
+        const perpX = Math.cos(trailYaw) * 1.15;
+        const perpZ = -Math.sin(trailYaw) * 1.15;
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.95, 5), woodWeatheredMat);
+        post.position.set(sx + perpX, sy + 0.45, sz + perpZ);
         westExpGroup.add(post);
       }
     }

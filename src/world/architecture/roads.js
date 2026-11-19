@@ -98,6 +98,10 @@ export const RoadsMixin = {
       // 11. Estrada da Sela da Serra Norte (Contorno norte profundo)
       [
         { x: -116, z: -132.0 }, { x: -62, z: -152.0 }, { x: 0, z: -156.0 }, { x: 62, z: -152.0 }, { x: 116, z: -132.0 }
+      ],
+      // 12. Ramal da Estação Alta do Bondinho (liga Estrada da Crista à entrada norte da estação em X=32, Z=-58)
+      [
+        { x: 16, z: -74.0 }, { x: 25, z: -70.5 }, { x: 32, z: -65.4 }
       ]
     ];
 
@@ -610,47 +614,24 @@ export const RoadsMixin = {
       flatShading: true
     });
 
-    // 6 Escadarias Principais Dedicadas (Conectam cotas de altitude reais; removida a escada sem saída no paredão sul do Morro do Sol!)
+    // Escadarias Pedonais Dedicadas (100% contínuas, ancoradas fora das pistas asfálticas e sem cortes em monumentos!)
+    // Removidas as antigas rotas recortadas/soltas (Capoeira sobre Vila dos Pescadores, toco do Campinho na pista,
+    // rampa solta da Estação Alta e toco da Usina Solar atravessando o entroncamento em (0, -66)).
     const stairRoutes = [
-      // 1. Escadaria da Vila da Prainha (Píer -> Socalcos Baixos e Hortas Oeste)
+      // 1. Escadaria da Vila da Prainha (Calçadão Norte -> Portão Sul da Horta Comunitária)
       [
-        { x: -78.0, z: 18.0 },
-        { x: -84.0, z: 8.0 },
-        { x: -88.0, z: -2.0 },
-        { x: -88.0, z: -14.0 },
-        { x: -92.0, z: -25.0 }
+        { x: -79.8, z: 15.6 },
+        { x: -84.2, z: 7.8 },
+        { x: -87.5, z: -1.5 },
+        { x: -88.8, z: -11.5 },
+        { x: -91.5, z: -20.4 }
       ],
-      // 2. Escadaria da Capoeira do Poente (Socalcos Poente -> Roda de Capoeira)
+      // 2. Escadaria Monumental do Pipódromo do Levante (Subida íngreme de 9,2m da Ladeira da Várzea até a entrada do Pipódromo)
       [
-        { x: -95.0, z: 12.0 },
-        { x: -102.0, z: 2.0 },
-        { x: -110.0, z: -15.0 }
-      ],
-      // 3. Escadaria do Campinho da Várzea (Calçadão da Praia -> Campinho)
-      [
-        { x: 55.0, z: 18.0 },
-        { x: 55.0, z: 13.0 },
-        { x: 55.0, z: 8.0 },
-        { x: 55.0, z: 4.0 }
-      ],
-      // 4. Escadaria do Pipódromo do Levante (Ladeira do Levante -> Alto do Pipódromo)
-      [
-        { x: 78.0, z: -14.0 },
-        { x: 82.0, z: -26.0 },
-        { x: 86.0, z: -38.0 },
-        { x: 88.0, z: -48.0 }
-      ],
-      // 5. Escadaria de Acesso à Estação Alta do Bondinho (liga o Platô da Serra ao novo Terminal em X=32, Z=-58)
-      [
-        { x: 14.0, z: -58.0 },
-        { x: 21.0, z: -58.0 },
-        { x: 27.0, z: -58.0 }
-      ],
-      // 6. Escadaria da Usina Solar e Nascente da Serra
-      [
-        { x: 0.0, z: -66.0 },
-        { x: -8.0, z: -68.0 },
-        { x: -18.0, z: -72.0 }
+        { x: 79.6, z: -16.2 },
+        { x: 83.0, z: -25.0 },
+        { x: 85.8, z: -33.6 },
+        { x: 88.0, z: -41.6 }
       ]
     ];
 
@@ -669,22 +650,29 @@ export const RoadsMixin = {
     dummyParapet.rotation.order = 'YXZ';
 
     stairRoutes.forEach((route, routeIdx) => {
-      // Toque Selarón agora valoriza a subida do Campinho da Várzea (acesso real e conectado entre a praia e o campinho!)
-      const isMonumentalCentral = (routeIdx === 2);
+      // Toque Selarón valoriza a grande subida íngreme e contínua do Pipódromo do Levante!
+      const isMonumentalCentral = (routeIdx === 1);
 
-      // Lanterna discreta no patamar inferior de entrada
-      if (route.length > 0) {
+      // Lanterna discreta no patamar inferior de entrada (posicionada na lateral real da mureta, fora de landmarks)
+      if (route.length > 1) {
         const start = route[0];
-        const startY = this.terrain ? this.terrain.getElevation(start.x, start.z) : 2.5;
-        dummy.position.set(start.x + 1.5, startY + 1.1, start.z);
-        dummy.rotation.set(0, 0, 0);
-        dummy.scale.set(1, 1, 1);
-        dummy.updateMatrix();
-        postMatrices.push(dummy.matrix.clone());
+        const nextPt = route[1];
+        const startHeading = Math.atan2(nextPt.x - start.x, nextPt.z - start.z);
+        const sideDist = isMonumentalCentral ? 1.55 : 1.38;
+        const lx = start.x + Math.cos(startHeading) * sideDist;
+        const lz = start.z - Math.sin(startHeading) * sideDist;
+        if (!this.isInsideLandmarkFootprint(lx, lz)) {
+          const startY = this.terrain ? this.terrain.getElevation(lx, lz) : 2.5;
+          dummy.position.set(lx, startY + 1.1, lz);
+          dummy.rotation.set(0, 0, 0);
+          dummy.scale.set(1, 1, 1);
+          dummy.updateMatrix();
+          postMatrices.push(dummy.matrix.clone());
 
-        dummy.position.set(start.x + 1.5, startY + 2.25, start.z);
-        dummy.updateMatrix();
-        lanternMatrices.push(dummy.matrix.clone());
+          dummy.position.set(lx, startY + 2.25, lz);
+          dummy.updateMatrix();
+          lanternMatrices.push(dummy.matrix.clone());
+        }
       }
 
       let routeStepIdx = 0;
@@ -765,19 +753,26 @@ export const RoadsMixin = {
         }
       }
 
-      // Lanterna discreta no patamar superior de chegada
+      // Lanterna discreta no patamar superior de chegada (somente fora de landmarks!)
       if (route.length > 1) {
+        const prevPt = route[route.length - 2];
         const end = route[route.length - 1];
-        const endY = this.terrain ? this.terrain.getElevation(end.x, end.z) : 2.5;
-        dummy.position.set(end.x - 1.5, endY + 1.1, end.z);
-        dummy.rotation.set(0, 0, 0);
-        dummy.scale.set(1, 1, 1);
-        dummy.updateMatrix();
-        postMatrices.push(dummy.matrix.clone());
+        const endHeading = Math.atan2(end.x - prevPt.x, end.z - prevPt.z);
+        const sideDist = isMonumentalCentral ? 1.55 : 1.38;
+        const lx = end.x - Math.cos(endHeading) * sideDist;
+        const lz = end.z + Math.sin(endHeading) * sideDist;
+        if (!this.isInsideLandmarkFootprint(lx, lz)) {
+          const endY = this.terrain ? this.terrain.getElevation(lx, lz) : 2.5;
+          dummy.position.set(lx, endY + 1.1, lz);
+          dummy.rotation.set(0, 0, 0);
+          dummy.scale.set(1, 1, 1);
+          dummy.updateMatrix();
+          postMatrices.push(dummy.matrix.clone());
 
-        dummy.position.set(end.x - 1.5, endY + 2.25, end.z);
-        dummy.updateMatrix();
-        lanternMatrices.push(dummy.matrix.clone());
+          dummy.position.set(lx, endY + 2.25, lz);
+          dummy.updateMatrix();
+          lanternMatrices.push(dummy.matrix.clone());
+        }
       }
     });
 

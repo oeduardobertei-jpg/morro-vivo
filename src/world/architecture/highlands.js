@@ -218,11 +218,11 @@ export const HighlandsMixin = {
 
     miranteGroup.add(portalGroup);
 
-    // 7. Escadaria Monumental de Acesso em Lajes de Granito Natural conectando à Avenida Central (Route 2)
+    // 7. Soleira de Granito na entrada sul conectando suavemente o deck à Estrada da Crista
     const rampMat = new THREE.MeshLambertMaterial({ color: 0x8D99AE, flatShading: true });
-    for (let s = 1; s <= 30; s++) {
-      const step = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.35, 0.85), rampMat);
-      step.position.set(0, 0.15 - s * 0.35, 7.8 + s * 0.65);
+    for (let s = 1; s <= 2; s++) {
+      const step = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.24, 0.75), rampMat);
+      step.position.set(0, 0.14 - s * 0.10, 7.8 + s * 0.65);
       step.receiveShadow = true;
       miranteGroup.add(step);
     }

@@ -444,6 +444,22 @@ export class SimulationEngine {
           this.globalMetrics.wealth += 40;
           this.factions.serra.harmony = Math.min(100, this.factions.serra.harmony + 4);
         }
+      },
+      {
+        text: '🐕 Caramelo, o Prefeito do Morro, liderou a caminhada matinal da Alameda do Samba arrancando sorrisos!',
+        type: 'culture',
+        effect: () => {
+          this.globalMetrics.culture = Math.min(100, this.globalMetrics.culture + 2);
+          if (this.factions.sol) this.factions.sol.harmony = Math.min(100, this.factions.sol.harmony + 2);
+        }
+      },
+      {
+        text: '🐈 Os gatos das lajes do Morro do Sol espantaram a preguiça e viraram xodó da vizinhança!',
+        type: 'culture',
+        effect: () => {
+          this.globalMetrics.culture = Math.min(100, this.globalMetrics.culture + 2);
+          if (this.factions.varzea) this.factions.varzea.harmony = Math.min(100, this.factions.varzea.harmony + 2);
+        }
       }
     ];
 

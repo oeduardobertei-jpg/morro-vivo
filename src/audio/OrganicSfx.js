@@ -535,11 +535,159 @@ export const OrganicSfxMixin = {
       // Nota simpática e leve de kalimba
       this.core.playMarimbaNote(76, t, 0.26, 0, dest, 0.32);
       this.core.playMarimbaNote(79, t + 0.055, 0.24, 0.08, dest, 0.34);
+    } else if (kind === 'pet') {
+      this.core.playMarimbaNote(79, t, 0.22, -0.05, dest, 0.30);
+      this.core.playMarimbaNote(83, t + 0.05, 0.22, 0.05, dest, 0.32);
     } else {
       // Bondinho / Mototáxi
       this.core.playMarimbaNote(72, t, 0.28, -0.06, dest, 0.34);
       this.core.playMarimbaNote(76, t + 0.06, 0.28, 0.06, dest, 0.36);
     }
+  },
+
+  // =========================================================================
+  // 8. SONS ORGÂNICOS DOS PETS (Caramelo & Gatos Cariocas)
+  // =========================================================================
+  playDogBark(pos) {
+    try {
+      this.resumeContext();
+      if (!this.ctx || !this.core || this.ctx.state !== 'running') return;
+
+      const t = this.ctx.currentTime + 0.01;
+      if (this._lastPetSfxTime && t - this._lastPetSfxTime < 0.35) return;
+      this._lastPetSfxTime = t;
+
+      const spatial = this.getSpatialInfo(pos, 58.0, 5.0);
+      const vol = Math.max(0.28, spatial.gain || 0.55);
+      const bus = this._makeSpatialBus(spatial, 'generalSfx');
+
+      const triggerYip = (offset, ampScale, pitchShift) => {
+        const bt = t + offset;
+        const osc = this.ctx.createOscillator();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(520 * pitchShift, bt);
+        osc.frequency.exponentialRampToValueAtTime(290 * pitchShift, bt + 0.095);
+
+        const bp = this.ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = 780;
+        bp.Q.value = 1.6;
+
+        const g = this.ctx.createGain();
+        g.gain.setValueAtTime(0.0001, bt);
+        g.gain.linearRampToValueAtTime(0.16 * ampScale * vol, bt + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.0001, bt + 0.105);
+
+        osc.connect(bp);
+        bp.connect(g);
+        this.core._routeVoice(g, bus, 0, 0.22);
+        osc.start(bt);
+        osc.stop(bt + 0.115);
+
+        if (this.core.pinkNoiseStereo) {
+          const puff = this.ctx.createBufferSource();
+          puff.buffer = this.core.pinkNoiseStereo;
+          const pBp = this.ctx.createBiquadFilter();
+          pBp.type = 'bandpass';
+          pBp.frequency.value = 900;
+          pBp.Q.value = 1.5;
+          const pGain = this.ctx.createGain();
+          pGain.gain.setValueAtTime(0.0001, bt);
+          pGain.gain.linearRampToValueAtTime(0.06 * ampScale * vol, bt + 0.01);
+          pGain.gain.exponentialRampToValueAtTime(0.0001, bt + 0.05);
+          puff.connect(pBp);
+          pBp.connect(pGain);
+          this.core._routeVoice(pGain, bus, 0, 0.18);
+          puff.start(bt, Math.random() * 4.0, 0.06);
+        }
+      };
+
+      triggerYip(0, 1.0, 1.0 + (Math.random() - 0.5) * 0.06);
+      if (Math.random() < 0.75) {
+        triggerYip(0.14, 0.82, 1.06 + (Math.random() - 0.5) * 0.05);
+      }
+    } catch (_) {}
+  },
+
+  playCatMeow(pos) {
+    try {
+      this.resumeContext();
+      if (!this.ctx || !this.core || this.ctx.state !== 'running') return;
+
+      const t = this.ctx.currentTime + 0.01;
+      if (this._lastPetSfxTime && t - this._lastPetSfxTime < 0.35) return;
+      this._lastPetSfxTime = t;
+
+      const spatial = this.getSpatialInfo(pos, 52.0, 4.0);
+      const vol = Math.max(0.28, spatial.gain || 0.55);
+      const bus = this._makeSpatialBus(spatial, 'generalSfx');
+
+      // Miadinho melódico doce (triangle + 2º harmônico sine)
+      const osc1 = this.ctx.createOscillator();
+      osc1.type = 'triangle';
+      const baseF = 520 + (Math.random() - 0.5) * 30;
+      osc1.frequency.setValueAtTime(baseF, t);
+      osc1.frequency.linearRampToValueAtTime(baseF * 1.52, t + 0.11);
+      osc1.frequency.exponentialRampToValueAtTime(470, t + 0.26);
+
+      const osc2 = this.ctx.createOscillator();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(baseF * 2, t);
+      osc2.frequency.linearRampToValueAtTime(baseF * 3.04, t + 0.11);
+      osc2.frequency.exponentialRampToValueAtTime(940, t + 0.26);
+
+      const h2Gain = this.ctx.createGain();
+      h2Gain.gain.value = 0.28;
+
+      const bp = this.ctx.createBiquadFilter();
+      bp.type = 'bandpass';
+      bp.frequency.value = 1150;
+      bp.Q.value = 2.0;
+
+      const meowGain = this.ctx.createGain();
+      meowGain.gain.setValueAtTime(0.0001, t);
+      meowGain.gain.linearRampToValueAtTime(0.14 * vol, t + 0.045);
+      meowGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.26);
+
+      osc1.connect(bp);
+      osc2.connect(h2Gain);
+      h2Gain.connect(bp);
+      bp.connect(meowGain);
+      this.core._routeVoice(meowGain, bus, 0, 0.25);
+
+      osc1.start(t);
+      osc2.start(t);
+      osc1.stop(t + 0.27);
+      osc2.stop(t + 0.27);
+
+      // Ronronar sutil AM (28 Hz sobre seno 125 Hz)
+      const pt = t + 0.20;
+      const purrCarrier = this.ctx.createOscillator();
+      purrCarrier.type = 'sine';
+      purrCarrier.frequency.value = 125;
+
+      const purrLfo = this.ctx.createOscillator();
+      purrLfo.type = 'sine';
+      purrLfo.frequency.value = 28;
+
+      const purrLfoDepth = this.ctx.createGain();
+      purrLfoDepth.gain.value = 0.055 * vol;
+
+      const purrGain = this.ctx.createGain();
+      purrGain.gain.setValueAtTime(0.0001, pt);
+      purrGain.gain.linearRampToValueAtTime(0.055 * vol, pt + 0.04);
+      purrGain.gain.exponentialRampToValueAtTime(0.0001, pt + 0.22);
+
+      purrLfo.connect(purrLfoDepth);
+      purrLfoDepth.connect(purrGain.gain);
+      purrCarrier.connect(purrGain);
+      this.core._routeVoice(purrGain, bus, 0, 0.18);
+
+      purrCarrier.start(pt);
+      purrLfo.start(pt);
+      purrCarrier.stop(pt + 0.23);
+      purrLfo.stop(pt + 0.23);
+    } catch (_) {}
   },
 
   playUiTimeShift(phase = 'day') {

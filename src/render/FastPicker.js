@@ -13,10 +13,11 @@ THREE.Mesh.prototype.raycast = acceleratedRaycast;
  * 2. Raycast de malha acelerado por BVH (three-mesh-bvh) apenas nos candidatos cujo volume foi atingido.
  */
 export class FastPicker {
-  constructor(camera, architecture, npcs) {
+  constructor(camera, architecture, npcs, pets = null) {
     this.camera = camera;
     this.arch = architecture;
     this.npcs = npcs;
+    this.pets = pets;
     this.raycaster = new THREE.Raycaster();
     this.raycaster.firstHitOnly = true;
     // Habilita layer 31 (HIDDEN_LAYER do StaticBatcher) para que casas agrupadas continuem clicáveis em < 0.05ms!
@@ -49,6 +50,33 @@ export class FastPicker {
     this.raycaster.setFromCamera(ndcVec2, this.camera);
     const ray = this.raycaster.ray;
     const camPos = this.camera.position;
+
+    // 0. Testar Pets do Morro (esfera rápida r = 0.95m)
+    const petCandidates = [];
+    if (this.pets && this.pets.pets) {
+      const pList = this.pets.pets;
+      for (let i = 0; i < pList.length; i++) {
+        const pt = pList[i];
+        if (!pt || !pt.group || !pt.group.visible) continue;
+        const pos = pt.group.position;
+        this._sphere.center.set(pos.x, pos.y + 0.35, pos.z);
+        this._sphere.radius = 0.95;
+        if (ray.intersectsSphere(this._sphere)) {
+          petCandidates.push({ pet: pt, distSq: camPos.distanceToSquared(this._sphere.center) });
+        }
+      }
+    }
+
+    petCandidates.sort((a, b) => a.distSq - b.distSq);
+    for (let i = 0; i < petCandidates.length; i++) {
+      const cand = petCandidates[i].pet;
+      this._ensureBVH(cand.group, 'petRef', cand);
+      const hits = this.raycaster.intersectObject(cand.group, true);
+      if (hits.length > 0) {
+        this.lastPickMs = performance.now() - t0;
+        return { type: 'pet', data: cand };
+      }
+    }
 
     // 1. Testar NPCs (esfera rápida r = 1.25m)
     const npcCandidates = [];

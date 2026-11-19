@@ -201,6 +201,70 @@ try {
   await setCam(4, 42, -134, -22, 24, -162);
   await snap('18_sela_norte_anfiteatro_sunset.png');
 
+  // 6L. Pets do Morro: Cachorro Caramelo & Gato na Laje (Dia)
+  await setModeAndPhase('bloom', 'day');
+  const petCamData = await page.evaluate(() => {
+    const m = window.__morro;
+    const pets = m?.pets?.pets || [];
+    const houses = (m?.architecture || m?.arch)?.houses || [];
+    const caramelo = pets[0];
+    let dogCam = null;
+    if (caramelo) {
+      m.pets.petAnimal(caramelo);
+      const p = caramelo.group.position;
+      let bestOffset = { dx: 3.6, dz: 3.8 };
+      for (const ang of [0.6, 1.4, -0.6, 2.3, -1.6, 3.0]) {
+        const dx = Math.sin(ang) * 4.4;
+        const dz = Math.cos(ang) * 4.4;
+        const cx = p.x + dx;
+        const cz = p.z + dz;
+        const blocked = houses.some((h) => {
+          const hp = h.position || h.meshGroup?.position;
+          return hp && Math.hypot(cx - hp.x, cz - hp.z) < 4.5;
+        });
+        if (!blocked) {
+          bestOffset = { dx, dz };
+          break;
+        }
+      }
+      dogCam = {
+        cx: p.x + bestOffset.dx,
+        cy: p.y + 2.35,
+        cz: p.z + bestOffset.dz,
+        tx: p.x,
+        ty: p.y + 0.35,
+        tz: p.z
+      };
+    }
+    const roofCat = pets.find((pt) => pt.isRooftop) || pets.find((pt) => pt.species === 'cat');
+    let catCam = null;
+    if (roofCat) {
+      const p = roofCat.group.position;
+      const rotY = roofCat.rooftopHouse?.meshGroup?.rotation?.y || 0;
+      const fx = Math.sin(rotY);
+      const fz = Math.cos(rotY);
+      catCam = {
+        cx: p.x + fx * 3.8 + fz * 1.4,
+        cy: p.y + 1.85,
+        cz: p.z + fz * 3.8 - fx * 1.4,
+        tx: p.x,
+        ty: p.y + 0.25,
+        tz: p.z
+      };
+    }
+    return { dogCam, catCam };
+  });
+  if (petCamData?.dogCam) {
+    const d = petCamData.dogCam;
+    await setCam(d.cx, d.cy, d.cz, d.tx, d.ty, d.tz);
+    await snap('19_pets_caramelo_closeup.png');
+  }
+  if (petCamData?.catCam) {
+    const c = petCamData.catCam;
+    await setCam(c.cx, c.cy, c.cz, c.tx, c.ty, c.tz);
+    await snap('20_pets_cat_rooftop_closeup.png');
+  }
+
   // 7. Teste funcional rápido: WASD move câmera + FastPicker clica casa agrupada
   await setCam(-45, 42, 108, 0, 8, -10);
   const beforePos = await page.evaluate(() => window.__morro.controls.target.toArray());
@@ -460,6 +524,100 @@ try {
       )
     };
 
+    const petList = m.pets?.pets || [];
+    const dogs = petList.filter((p) => p.species === 'dog');
+    const cats = petList.filter((p) => p.species === 'cat');
+    const rooftopCats = cats.filter((p) => p.isRooftop);
+    const groundPets = petList.filter((p) => !p.isRooftop);
+
+    let floatingGroundPets = 0;
+    let insideHouseGroundPets = 0;
+    const petSamples = [];
+
+    for (const pet of groundPets) {
+      const px = pet.group.position.x;
+      const py = pet.group.position.y;
+      const pz = pet.group.position.z;
+      const floorY = m.npcs?.getFloorElevation ? m.npcs.getFloorElevation(px, pz) : py;
+      const dy = Math.abs(py - floorY);
+      if (dy > 0.25) floatingGroundPets++;
+
+      let insideHouse = false;
+      for (const h of houses) {
+        const hp = h.position || h.meshGroup?.position;
+        if (!hp) continue;
+        const rot = h.meshGroup ? h.meshGroup.rotation.y : 0;
+        const dx = px - hp.x;
+        const dz = pz - hp.z;
+        const cos = Math.cos(-rot);
+        const sin = Math.sin(-rot);
+        const lx = dx * cos - dz * sin;
+        const lz = dx * sin + dz * cos;
+        const hw = (h.footprintW || h.width || 3.4) * 0.5;
+        const hd = (h.footprintD || h.depth || 3.4) * 0.5;
+        if (Math.abs(lx) < hw - 0.25 && Math.abs(lz) < hd - 0.25) {
+          insideHouse = true;
+          break;
+        }
+      }
+      if (insideHouse) insideHouseGroundPets++;
+
+      if (petSamples.length < 5) {
+        petSamples.push({
+          id: pet.id,
+          name: pet.name,
+          species: pet.species,
+          dy: Number(dy.toFixed(3)),
+          insideHouse
+        });
+      }
+    }
+
+    for (const rCat of rooftopCats) {
+      petSamples.push({
+        id: rCat.id,
+        name: rCat.name,
+        species: rCat.species,
+        isRooftop: true,
+        hasHouse: Boolean(rCat.rooftopHouse),
+        roofStyle: rCat.rooftopHouse?.roofStyle || null,
+        y: Number(rCat.group.position.y.toFixed(2)),
+        lajeTopY: rCat.rooftopHouse?.lajeTopY != null ? Number(rCat.rooftopHouse.lajeTopY.toFixed(2)) : null
+      });
+    }
+
+    let petInteractOk = false;
+    if (m.pets && petList.length > 0) {
+      const targetPet = petList[0];
+      const beforeCuddles = targetPet.cuddles || 0;
+      const res = m.pets.petAnimal(targetPet);
+      petInteractOk = Boolean(
+        res &&
+        (targetPet.cuddles || 0) > beforeCuddles &&
+        (targetPet.joyTimer || 0) > 0
+      );
+    }
+
+    const petAudit = {
+      totalPets: petList.length,
+      dogsCount: dogs.length,
+      catsCount: cats.length,
+      rooftopCatsCount: rooftopCats.length,
+      floatingGroundPets,
+      insideHouseGroundPets,
+      petInteractOk,
+      samples: petSamples,
+      ok: (
+        petList.length === 13 &&
+        dogs.length === 7 &&
+        cats.length === 6 &&
+        rooftopCats.length === 3 &&
+        floatingGroundPets === 0 &&
+        insideHouseGroundPets === 0 &&
+        petInteractOk
+      )
+    };
+
     return {
       fpsMaquete: Number(fpsMaquete.toFixed(1)),
       fpsStudioFX: Number(fpsStudioFX.toFixed(1)),
@@ -467,6 +625,7 @@ try {
       pointLightCount,
       npcAudit,
       spatialAudit,
+      petAudit,
       perf: m.perf.snapshot(),
       cull: m.culler.stats,
       batch: m.batcher.stats,
@@ -478,7 +637,7 @@ try {
   });
 
   console.log(JSON.stringify({ outDir, wasdMovedDist, pickCheck, audioCheck, metrics, errors, warningCount: warnings.length }, null, 2));
-  if (errors.length > 0 || !metrics.npcAudit?.ok || !metrics.spatialAudit?.ok) process.exitCode = 1;
+  if (errors.length > 0 || !metrics.npcAudit?.ok || !metrics.spatialAudit?.ok || !metrics.petAudit?.ok) process.exitCode = 1;
 } finally {
   await browser.close();
 }

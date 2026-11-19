@@ -1637,6 +1637,8 @@ export const HousesMixin = {
 
     houseData.meshGroup.add(lajeGroup);
     houseData.laje = lajeGroup;
+    houseData.roofStyle = roofStyle;
+    houseData.lajeTopY = lajeY + 0.11;
   },
 
   createClothesline() {

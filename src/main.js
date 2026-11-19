@@ -5,6 +5,7 @@ import { Terrain } from './world/Terrain.js';
 import { Environment } from './world/Environment.js';
 import { Architecture } from './world/Architecture.js';
 import { NPCManager } from './world/NPCs.js';
+import { PetManager } from './world/Pets.js';
 import { SimulationEngine, ACTION_COSTS } from './simulation/Simulation.js';
 import { IDEOLOGIES } from './simulation/PoliticsEngine.js';
 import { AmbientSoundtrack } from './audio/Soundtrack.js';
@@ -79,6 +80,9 @@ npcs.setEnvironment(env);
 npcs.spawnInitialPopulation();
 architecture.setNPCManager(npcs);
 
+const pets = new PetManager(scene, terrain, architecture, npcs);
+pets.setEnvironment(env);
+
 const simulation = new SimulationEngine(architecture, npcs, savedGameData);
 const soundtrack = new AmbientSoundtrack();
 soundtrack.setCamera(camera, controls);
@@ -86,6 +90,8 @@ soundtrack.setEnvironment(env);
 architecture.setSoundtrack(soundtrack);
 npcs.setSoundtrack(soundtrack);
 npcs.setSimulation(simulation);
+pets.setSoundtrack(soundtrack);
+pets.spawnInitialPets();
 
 // Unblock browser Web Audio autoplay policy on any user interaction
 const unlockAudio = () => {
@@ -238,7 +244,7 @@ function updateKeyboardCamera(dt) {
 }
 
 // Fast BVH + Sphere Pre-filtered Raycaster for instant object picking (< 0.1ms)
-const fastPicker = new FastPicker(camera, architecture, npcs);
+const fastPicker = new FastPicker(camera, architecture, npcs, pets);
 const mouse = new THREE.Vector2();
 
 window.addEventListener('click', (event) => {
@@ -256,7 +262,10 @@ window.addEventListener('click', (event) => {
   if (soundtrack && soundtrack.playUiSelect) {
     soundtrack.playUiSelect(hit.type);
   }
-  if (hit.type === 'npc') {
+  if (hit.type === 'pet') {
+    pets.greetOnSelect(hit.data);
+    showPetInspector(hit.data);
+  } else if (hit.type === 'npc') {
     showCitizenInspector(hit.data);
   } else if (hit.type === 'mobility') {
     showMobilityInspector(hit.data);
@@ -387,6 +396,70 @@ function showCitizenInspector(npc) {
       animateCameraTo(
         new THREE.Vector3(p.x - 5.5, p.y + 4.8, p.z + 8.5),
         new THREE.Vector3(p.x, p.y + 1, p.z)
+      );
+    };
+  }
+}
+
+function showPetInspector(pet) {
+  const icon = pet.species === 'dog' ? '🐕' : '🐈';
+  const moodText = pet.joyTimer > 0
+    ? (pet.species === 'dog' ? 'Super feliz abanando o rabo! 💛' : 'Ronronando feliz da vida! 💚')
+    : (pet.isRooftop ? 'Lagarteando tranquilo no sol da laje' : 'Curioso e amigo da comunidade');
+
+  inspectorContent.innerHTML = `
+    <h3 style="font-family: var(--font-title); font-size: 1.15rem; color: #FFF; margin-bottom: 0.4rem;">
+      ${icon} ${pet.name}
+    </h3>
+    <div style="font-size: 0.8rem; color: var(--color-gold); margin-bottom: 0.6rem; font-weight: 700;">
+      ${pet.role} • ${pet.coatName}
+    </div>
+    <div style="font-size: 0.82rem; line-height: 1.6; color: var(--color-text-dim);">
+      <div>• <strong>Atividade:</strong> <span id="pet-action-val">${pet.currentAction}</span></div>
+      <div>• <strong>Humor:</strong> <span id="pet-mood-val">${moodText}</span></div>
+      <div>• <strong>Carinhos Recebidos:</strong> <strong id="pet-cuddle-count" style="color: #FDE047;">❤️ ${pet.cuddles || 0}</strong></div>
+    </div>
+    <div style="margin-top: 0.8rem; display: flex; gap: 0.45rem;">
+      <button id="btn-pet-cuddle" class="btn-icon" style="flex: 1; justify-content: center; background: #D97706;">
+        💛 Fazer Carinho
+      </button>
+      <button id="btn-focus-pet" class="btn-icon" style="flex: 1; justify-content: center; background: var(--color-primary);">
+        🎥 Seguir Pet
+      </button>
+    </div>
+  `;
+
+  inspectorCard.classList.add('visible');
+
+  const btnCuddle = document.getElementById('btn-pet-cuddle');
+  if (btnCuddle) {
+    btnCuddle.onclick = () => {
+      const res = pets.petAnimal(pet);
+      if (res && res.grantedHarmony) {
+        simulation.globalMetrics.culture = Math.min(100, (simulation.globalMetrics.culture || 90) + 1);
+        simulation.notifyUpdate();
+        if (pet.cuddles === 1 || pet.cuddles % 3 === 0) {
+          simulation.addEvent(`${icon} ${pet.name} (${pet.role}) recebeu carinho e animou a vizinhança (+1% Harmonia)!`, 'culture');
+        }
+      }
+      const cCount = document.getElementById('pet-cuddle-count');
+      const aVal = document.getElementById('pet-action-val');
+      const mVal = document.getElementById('pet-mood-val');
+      if (cCount) cCount.innerText = `❤️ ${pet.cuddles || 0}`;
+      if (aVal) aVal.innerText = pet.currentAction;
+      if (mVal) mVal.innerText = pet.species === 'dog' ? 'Super feliz abanando o rabo! 💛' : 'Ronronando feliz da vida! 💚';
+    };
+  }
+
+  const btnFocus = document.getElementById('btn-focus-pet');
+  if (btnFocus) {
+    btnFocus.onclick = () => {
+      followTargetGroup = pet.group;
+      followOffset.set(-3.8, 3.2, 5.8);
+      const p = pet.group.position;
+      animateCameraTo(
+        new THREE.Vector3(p.x - 3.8, p.y + 3.2, p.z + 5.8),
+        new THREE.Vector3(p.x, p.y + 0.45, p.z)
       );
     };
   }
@@ -857,6 +930,7 @@ if (btnNewWorld && modalNewWorld) {
 
   modalConfirmReset.onclick = () => {
     simulation.resetToNewWorld();
+    pets.resetForNewWorld();
     setGameSpeed(1);
     modalNewWorld.style.display = 'none';
   };
@@ -1315,9 +1389,10 @@ adaptiveQualityReady = true;
 const batcher = new StaticBatcher(scene, {
   cellSize: 210,
   enabled: !urlParams.has('nobatch'),
-  // Apenas NPCs e veículos móveis ficam fora do batch estático; casas estáticas entram no batch e continuam clicáveis via FastPicker (layer 31)!
+  // Apenas NPCs, pets e veículos móveis ficam fora do batch estático; casas estáticas entram no batch e continuam clicáveis via FastPicker (layer 31)!
   getExcludedRoots: () => [
     ...npcs.npcs.map((n) => n.group),
+    ...pets.pets.map((p) => p.group),
     ...(architecture.mobilityDynamicGroups || [])
   ].filter(Boolean),
   onActive: () => {
@@ -1367,8 +1442,9 @@ function animate() {
   perf.measure('npcs', () => {
     try {
       npcs.update(gameDelta);
+      pets.update(gameDelta);
     } catch (npcErr) {
-      console.warn('NPCs update error:', npcErr);
+      console.warn('NPCs/Pets update error:', npcErr);
     }
   });
 
@@ -1426,6 +1502,7 @@ window.__morro = {
   simulation,
   setSpeed: setGameSpeed,
   npcs,
+  pets,
   architecture,
   perf,
   culler,

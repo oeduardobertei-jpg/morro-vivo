@@ -71,6 +71,28 @@ export const RoadGraphMixin = {
       return (this.terrain ? this.terrain.getElevation(-88.0, -48.0) : 5.2) + 0.22; // Deck da Mesa de Dominó
     }
 
+    // 6. Terraços e Largos dos Núcleos de Bairro Expandidos (Oeste, Leste e Sela Norte)
+    const hubTerraces = [
+      { cx: -142.0, cz: -42.0,  hw: 6.0,  hd: 4.5,  off: 0.34 }, // Feirinha do Poente
+      { cx: 142.0,  cz: -42.0,  hw: 6.5,  hd: 4.5,  off: 0.34 }, // Quadra de Basquete
+      { cx: -32.0,  cz: -102.0, hw: 5.5,  hd: 5.5,  off: 0.34 }, // Coreto da Serra
+      { cx: 118.0,  cz: -82.0,  hw: 5.75, hd: 4.25, off: 0.34 }, // Galpão Cultural
+      { cx: -118.0, cz: -82.0,  hw: 5.5,  hd: 5.0,  off: 0.34 }, // Terreiro do Jongo
+      { cx: 28.0,   cz: -136.0, hw: 5.25, hd: 4.0,  off: 0.34 }, // Mirante Sela Norte
+      { cx: -216.0, cz: -14.0,  hw: 6.0,  hd: 5.0,  off: 0.34 }, // Capela Caiçara Poente
+      { cx: 216.0,  cz: -14.0,  hw: 6.5,  hd: 5.0,  off: 0.34 }, // Praça da Bocha Levante
+      { cx: -66.0,  cz: -132.0, hw: 6.0,  hd: 4.5,  off: 0.34 }, // Sítio Agroecológico Sela
+      { cx: -2.0,   cz: -170.0, hw: 6.0,  hd: 4.75, off: 0.34 }, // Anfiteatro Sela Norte
+      { cx: -62.0,  cz: -66.0,  hw: 4.3,  hd: 4.3,  off: 0.22 }, // Largo do Ipê Oeste
+      { cx: 56.0,   cz: -64.0,  hw: 4.3,  hd: 4.3,  off: 0.22 }  // Largo do Ipê Leste
+    ];
+    for (let i = 0; i < hubTerraces.length; i++) {
+      const ht = hubTerraces[i];
+      if (Math.abs(x - ht.cx) <= ht.hw && Math.abs(z - ht.cz) <= ht.hd) {
+        return (this.terrain ? this.terrain.getElevation(ht.cx, ht.cz) : 6.0) + ht.off;
+      }
+    }
+
     // Padrão: Elevação da malha de terreno
     return this.terrain ? this.terrain.getElevation(x, z) : 0;
   },
@@ -250,7 +272,22 @@ export const RoadGraphMixin = {
       { id: 'exp_n_w1', x: -62.0,  z: -152.0, type: 'crista', desc: 'Caminho Sinuoso da Sela Oeste' },
       { id: 'exp_n_center', x: 0.0, z: -156.0, type: 'crista', desc: 'Largo da Venda da Sela da Serra' },
       { id: 'exp_n_e1', x: 62.0,   z: -152.0, type: 'crista', desc: 'Caminho Sinuoso da Sela Leste' },
-      { id: 'exp_n_e2', x: 116.0,  z: -132.0, type: 'crista', desc: 'Vila da Sela — Vertente Levante' }
+      { id: 'exp_n_e2', x: 116.0,  z: -132.0, type: 'crista', desc: 'Vila da Sela — Vertente Levante' },
+
+      // 17. Circuito Sela-Vales & Acessos dos Marcos Policêntricos (Sprint 8)
+      { id: 'nw_climb_1', x: -160.0, z: -45.0,  type: 'street', desc: 'Subida Noroeste da Feirinha' },
+      { id: 'nw_climb_2', x: -140.0, z: -90.0,  type: 'street', desc: 'Curva Noroeste do Jongo' },
+      { id: 'ne_climb_1', x: 160.0,  z: -45.0,  type: 'street', desc: 'Subida Nordeste da Quadra' },
+      { id: 'ne_climb_2', x: 140.0,  z: -90.0,  type: 'street', desc: 'Curva Nordeste do Galpão' },
+      { id: 'sela_spine_1', x: 11.0, z: -124.0, type: 'crista', desc: 'Ramal Central da Sela' },
+      { id: 'mid_ring_w_1', x: -52.0, z: -62.0, type: 'street', desc: 'Anel Médio do Poente' },
+      { id: 'mid_ring_w_2', x: -96.0, z: -98.0, type: 'street', desc: 'Alto do Jongo Poente' },
+      { id: 'mid_ring_e_1', x: 54.0,  z: -56.0, type: 'street', desc: 'Anel Médio do Levante' },
+      { id: 'mid_ring_e_2', x: 96.0,  z: -98.0, type: 'street', desc: 'Alto do Galpão Levante' },
+      { id: 'hub_capela_poente', x: -216.0, z: -8.5,   type: 'viela',  desc: 'Adro da Capela Caiçara do Poente' },
+      { id: 'hub_praca_levante', x: 216.0,  z: -8.5,   type: 'viela',  desc: 'Calçadão da Praça da Bocha' },
+      { id: 'hub_sitio_sela',    x: -66.0,  z: -138.5, type: 'viela',  desc: 'Entrada do Sítio Agroecológico' },
+      { id: 'hub_anfiteatro_sela', x: -2.0, z: -163.0, type: 'viela',  desc: 'Esplanada do Anfiteatro da Sela' }
     ];
 
     const nodeMap = new Map();
@@ -483,6 +520,29 @@ export const RoadGraphMixin = {
     addEdge('exp_n_e1', 'exp_n_e2');
     addEdge('mirante_imp_0', 'exp_n_e1');
     addEdge('east_trail_crista', 'exp_n_e2');
+
+    // 14. Conexões do Circuito Completo Sela <-> Vales <-> Marcos (Sprint 8)
+    addEdge('exp_w_1', 'nw_climb_1');
+    addEdge('nw_climb_1', 'nw_climb_2');
+    addEdge('nw_climb_2', 'exp_n_w2');
+    addEdge('exp_e_1', 'ne_climb_1');
+    addEdge('ne_climb_1', 'ne_climb_2');
+    addEdge('ne_climb_2', 'exp_n_e2');
+    addEdge('torre_radio', 'sela_spine_1');
+    addEdge('high_crista_e', 'sela_spine_1');
+    addEdge('sela_spine_1', 'exp_n_center');
+    addEdge('mid_w_5', 'mid_ring_w_1');
+    addEdge('mid_ring_w_1', 'mid_ring_w_2');
+    addEdge('mid_ring_w_2', 'nw_climb_2');
+    addEdge('mid_e_5', 'mid_ring_e_1');
+    addEdge('mid_ring_e_1', 'mid_ring_e_2');
+    addEdge('mid_ring_e_2', 'ne_climb_2');
+    addEdge('exp_w_3', 'hub_capela_poente');
+    addEdge('coast_exp_w_2', 'hub_capela_poente');
+    addEdge('exp_e_3', 'hub_praca_levante');
+    addEdge('coast_exp_e_2', 'hub_praca_levante');
+    addEdge('exp_n_w1', 'hub_sitio_sela');
+    addEdge('exp_n_center', 'hub_anfiteatro_sela');
 
     this.roadNodes = Array.from(nodeMap.values());
     this.roadNodesMap = nodeMap;

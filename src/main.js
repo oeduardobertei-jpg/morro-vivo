@@ -870,7 +870,8 @@ const cameraPresets = {
     angles: [
       { pos: new THREE.Vector3(-58, 62, 138), target: new THREE.Vector3(0, 14, -22), label: 'Baía & Anfiteatro Carioca' },
       { pos: new THREE.Vector3(72, 58, 128), target: new THREE.Vector3(-8, 14, -24), label: 'Panorama Leste-Oeste' },
-      { pos: new THREE.Vector3(0, 74, 155), target: new THREE.Vector3(0, 15, -30), label: 'Grande Maquete Continental' }
+      { pos: new THREE.Vector3(0, 74, 155), target: new THREE.Vector3(0, 15, -30), label: 'Grande Maquete Continental' },
+      { pos: new THREE.Vector3(0, 148, 225), target: new THREE.Vector3(0, 12, -45), label: 'Vista Aérea Continental 360°' }
     ]
   },
   prainha: {
@@ -878,7 +879,8 @@ const cameraPresets = {
     angles: [
       { pos: new THREE.Vector3(-46, 20, 114), target: new THREE.Vector3(-80, 2.2, 84), label: 'Píer dos Pescadores, Farol & Frota no Mar' },
       { pos: new THREE.Vector3(-114, 23, 120), target: new THREE.Vector3(-76, 1.8, 92), label: 'Baía dos Cardumes, Canoas & Cais do Poente' },
-      { pos: new THREE.Vector3(-82, 14, 62), target: new THREE.Vector3(-78, 1.5, 112), label: 'Vista do Píer para o Mar Fundo & Cardumes' }
+      { pos: new THREE.Vector3(-82, 14, 62), target: new THREE.Vector3(-78, 1.5, 112), label: 'Vista do Píer para o Mar Fundo & Cardumes' },
+      { pos: new THREE.Vector3(-185, 36, 42), target: new THREE.Vector3(-212, 8, -16), label: 'Vale do Poente & Capela Caiçara' }
     ]
   },
   morro: {
@@ -910,7 +912,8 @@ const cameraPresets = {
     angles: [
       { pos: new THREE.Vector3(24, 52, -58), target: new THREE.Vector3(48, 28, -102), label: 'Mirante da Vista Imperial & Bandeira' },
       { pos: new THREE.Vector3(-18, 50, -62), target: new THREE.Vector3(0, 29, -104), label: 'Torre de Rádio Comunitária & Eólicas' },
-      { pos: new THREE.Vector3(48, 46, -68), target: new THREE.Vector3(-12, 25, -96), label: 'Pipódromo dos Ventos & Crista Norte' }
+      { pos: new THREE.Vector3(48, 46, -68), target: new THREE.Vector3(-12, 25, -96), label: 'Pipódromo dos Ventos & Crista Norte' },
+      { pos: new THREE.Vector3(4, 42, -134), target: new THREE.Vector3(-22, 24, -162), label: 'Sela da Serra, Sítio & Anfiteatro Norte' }
     ]
   },
   varzea: {
@@ -918,7 +921,8 @@ const cameraPresets = {
     angles: [
       { pos: new THREE.Vector3(82, 26, 44), target: new THREE.Vector3(60, 6, 4), label: 'Campinho da Pelada & Feira Cultural' },
       { pos: new THREE.Vector3(42, 18, 28), target: new THREE.Vector3(62, 5.5, 4), label: 'Arquibancada da Pelada & Mototáxis' },
-      { pos: new THREE.Vector3(138, 24, 82), target: new THREE.Vector3(105, 5, 28), label: 'Escola de Surfe & Orla Leste' }
+      { pos: new THREE.Vector3(138, 24, 82), target: new THREE.Vector3(105, 5, 28), label: 'Escola de Surfe & Orla Leste' },
+      { pos: new THREE.Vector3(185, 36, 42), target: new THREE.Vector3(212, 8, -16), label: 'Vale do Levante & Praça da Bocha' }
     ]
   }
 };
@@ -1309,6 +1313,7 @@ const quality = new AdaptiveQuality(renderer, {
 });
 adaptiveQualityReady = true;
 const batcher = new StaticBatcher(scene, {
+  cellSize: 210,
   enabled: !urlParams.has('nobatch'),
   // Apenas NPCs e veículos móveis ficam fora do batch estático; casas estáticas entram no batch e continuam clicáveis via FastPicker (layer 31)!
   getExcludedRoots: () => [

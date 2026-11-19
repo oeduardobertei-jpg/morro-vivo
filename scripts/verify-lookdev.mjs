@@ -183,6 +183,24 @@ try {
   await setCam(-12.5, plazaY + 9.5, 6.5, -1.5, plazaY + 1.0, -4.0);
   await snap('14_samba_night_npcs_closeup.png');
 
+  // 6H. Panorâmica Aérea Continental Equilibrada — Sprint 8 (Dia)
+  await setModeAndPhase('bloom', 'day');
+  await setCam(0, 145, 225, 0, 10, -45);
+  await snap('15_continental_aerial_balance_day.png');
+
+  // 6I. Vale do Poente & Capela Caiçara do Pontal (Dia)
+  await setCam(-182, 24, 24, -214, 7, -14);
+  await snap('16_vale_poente_capela_day.png');
+
+  // 6J. Vale do Levante & Praça da Bocha / Chafariz (Dia)
+  await setCam(182, 24, 24, 214, 7, -14);
+  await snap('17_vale_levante_praca_sela_day.png');
+
+  // 6K. Sela Norte: Anfiteatro de Pedra, Sítio Agroecológico & Circuito (Pôr do Sol)
+  await setModeAndPhase('bloom', 'sunset');
+  await setCam(4, 42, -134, -22, 24, -162);
+  await snap('18_sela_norte_anfiteatro_sunset.png');
+
   // 7. Teste funcional rápido: WASD move câmera + FastPicker clica casa agrupada
   await setCam(-45, 42, 108, 0, 8, -10);
   const beforePos = await page.evaluate(() => window.__morro.controls.target.toArray());
@@ -279,6 +297,7 @@ try {
   });
 
   // 8. Telemetria estabilizada (Panorâmica Dia em ambos os modos)
+  await setModeAndPhase('maquete', 'day');
   await setCam(-45, 42, 108, 0, 8, -10);
   const metrics = await page.evaluate(async () => {
     const m = window.__morro;
@@ -306,8 +325,9 @@ try {
     m.scene.traverse((o) => { if (o.isPointLight) pointLightCount++; });
 
     // Auditoria automática de colisão, flutuação e posicionamento especial dos NPCs
-    const houses = (m.arch && m.arch.houses) || [];
-    const props = (m.arch && m.arch.propObstacles) || [];
+    const arch = m.architecture || m.arch;
+    const houses = (arch && arch.houses) || [];
+    const props = (arch && arch.propObstacles) || [];
     const npcs = (m.npcs && m.npcs.npcs) || [];
     const insideHouse = [];
     const insideProp = [];
@@ -410,12 +430,43 @@ try {
       )
     };
 
+    // Auditoria espacial de ocupação policêntrica (Sprint 8)
+    let housesWestWing = 0;
+    let housesEastWing = 0;
+    let housesNorthSela = 0;
+    let houseOverlapCount = 0;
+    for (let i = 0; i < houses.length; i++) {
+      const p1 = houses[i].position;
+      if (p1.x < -120) housesWestWing++;
+      if (p1.x > 120) housesEastWing++;
+      if (p1.z < -115) housesNorthSela++;
+      for (let j = i + 1; j < houses.length; j++) {
+        const p2 = houses[j].position;
+        if (Math.hypot(p1.x - p2.x, p1.z - p2.z) < 6.5) houseOverlapCount++;
+      }
+    }
+    const spatialAudit = {
+      housesTotal: houses.length,
+      housesWestWing,
+      housesEastWing,
+      housesNorthSela,
+      houseOverlapCount,
+      ok: (
+        houses.length >= 48 &&
+        housesWestWing >= 8 &&
+        housesEastWing >= 8 &&
+        housesNorthSela >= 6 &&
+        houseOverlapCount === 0
+      )
+    };
+
     return {
       fpsMaquete: Number(fpsMaquete.toFixed(1)),
       fpsStudioFX: Number(fpsStudioFX.toFixed(1)),
       maqueteRenderInfo,
       pointLightCount,
       npcAudit,
+      spatialAudit,
       perf: m.perf.snapshot(),
       cull: m.culler.stats,
       batch: m.batcher.stats,
@@ -427,7 +478,7 @@ try {
   });
 
   console.log(JSON.stringify({ outDir, wasdMovedDist, pickCheck, audioCheck, metrics, errors, warningCount: warnings.length }, null, 2));
-  if (errors.length > 0 || !metrics.npcAudit?.ok) process.exitCode = 1;
+  if (errors.length > 0 || !metrics.npcAudit?.ok || !metrics.spatialAudit?.ok) process.exitCode = 1;
 } finally {
   await browser.close();
 }

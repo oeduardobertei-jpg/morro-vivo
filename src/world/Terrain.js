@@ -427,6 +427,24 @@ export class Terrain {
       elevation = elevation * t + getNaturalElevation(96, -28) * (1 - t);
     }
 
+    // U. Novos Núcleos Policêntricos dos Vales, Sela Norte e Bolsões Intermediários (Sprint 8)
+    const polycentricTerraces = [
+      { cx: -216.0, cz: -14.0,  r: 15.0, flat: 9.0 }, // Capela Caiçara do Pontal Oeste
+      { cx: 216.0,  cz: -14.0,  r: 15.0, flat: 9.0 }, // Praça do Chafariz & Bocha do Levante
+      { cx: -66.0,  cz: -132.0, r: 15.0, flat: 9.0 }, // Sítio Agroecológico da Sela Oeste
+      { cx: -2.0,   cz: -170.0, r: 15.0, flat: 9.0 }, // Anfiteatro de Pedra da Sela Norte
+      { cx: -62.0,  cz: -66.0,  r: 9.5,  flat: 5.5 }, // Largo do Ipê Oeste
+      { cx: 56.0,   cz: -64.0,  r: 9.5,  flat: 5.5 }  // Largo do Ipê Leste
+    ];
+    for (let u = 0; u < polycentricTerraces.length; u++) {
+      const pt = polycentricTerraces[u];
+      const distT = Math.hypot(x - pt.cx, z - pt.cz);
+      if (distT < pt.r) {
+        const t = smoothBlend(Math.max(0, Math.min(1, (distT - pt.flat) / (pt.r - pt.flat))));
+        elevation = elevation * t + getNaturalElevation(pt.cx, pt.cz) * (1 - t);
+      }
+    }
+
     // Smooth sandy beach slope into the water:
     // Spans from calçadão edge (z ~ 16, y ~ 0.82m) down to the water's edge (shoreZ ~ 74, y ~ 0.0m)
     const headlandAdvance = smoothBlend(Math.max(0.0, Math.min(1.0, (Math.abs(x) - 335.0) / 60.0))) * 18.0;
@@ -489,13 +507,19 @@ export class Terrain {
     // 5. Corredor Panorâmico Dedicado do Bondinho (Eixo X = 32.0, Z = 15 até -64 — proteção contínua!)
     if (Math.abs(x - 32.0) < 7.8 + margin && z <= 16.5 + margin && z >= -65.0 - margin) return true;
 
-    // 5B. Núcleos Comunitários Expandidos (Jongo, Feirinha, Coreto, Basquete, Galpão, Mirante Sela)
+    // 5B. Núcleos Comunitários Expandidos (Jongo, Feirinha, Coreto, Basquete, Galpão, Mirante Sela + Sprint 8)
     if (Math.hypot(x - (-118.0), z - (-82.0)) < 8.5 + margin) return true; // Terreiro do Jongo
     if (Math.hypot(x - (-142.0), z - (-42.0)) < 9.0 + margin) return true; // Feirinha do Poente
     if (Math.hypot(x - (-32.0), z - (-102.0)) < 8.5 + margin) return true; // Coreto da Serra
     if (Math.hypot(x - 142.0, z - (-42.0)) < 9.5 + margin) return true;    // Quadra de Basquete
     if (Math.hypot(x - 118.0, z - (-82.0)) < 8.5 + margin) return true;    // Galpão Cultural
     if (Math.hypot(x - 28.0, z - (-136.0)) < 8.0 + margin) return true;    // Mirante Sela Norte
+    if (Math.hypot(x - (-216.0), z - (-14.0)) < 9.5 + margin) return true; // Capela Caiçara do Pontal Oeste
+    if (Math.hypot(x - 216.0, z - (-14.0)) < 10.0 + margin) return true;   // Praça do Chafariz & Bocha do Levante
+    if (Math.hypot(x - (-66.0), z - (-132.0)) < 9.5 + margin) return true; // Sítio Agroecológico da Sela Oeste
+    if (Math.hypot(x - (-2.0), z - (-170.0)) < 9.5 + margin) return true;  // Anfiteatro de Pedra da Sela Norte
+    if (Math.hypot(x - (-62.0), z - (-66.0)) < 6.0 + margin) return true;  // Largo Comunitário Oeste
+    if (Math.hypot(x - 56.0, z - (-64.0)) < 6.0 + margin) return true;     // Largo Comunitário Leste
 
     // 6. Mirantes, Decks, Capoeira, Horta, Dominó e Rancho do Flanco Oeste (Poente)
     if (Math.hypot(x - (-78.0), z - (-50.0)) < 10.5 + margin) return true; // Mirante das Pipas (14m deck)
@@ -1248,7 +1272,14 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
       { x: -42, z: -32 }, { x: -54, z: -50 }, { x: -62, z: -28 }, { x: -74, z: -58 },
       // Encosta Central do Morro do Sol (Casas e Escadaria)
       { x: -11, z: 8 },   { x: 12, z: 8 },    { x: -8, z: 0 },    { x: 9, z: 0 },
-      { x: -15, z: -2 },  { x: 15, z: -2 }
+      { x: -15, z: -2 },  { x: 15, z: -2 },
+      // Vales do Poente, Levante & Sela da Serra Norte (Sprint 8)
+      { x: -165, z: -8 },  { x: -182, z: -34 }, { x: -202, z: -52 }, { x: -224, z: -28 },
+      { x: -242, z: -12 }, { x: -252, z: -48 },
+      { x: 165,  z: -8 },  { x: 182,  z: -34 }, { x: 202,  z: -52 }, { x: 224,  z: -28 },
+      { x: 242,  z: -12 }, { x: 252,  z: -48 },
+      { x: -96,  z: -126 },{ x: -72,  z: -148 }, { x: -28,  z: -158 }, { x: 28,   z: -158 },
+      { x: 74,   z: -148 },{ x: 98,   z: -126 }
     ];
 
     const bananaLeafMat = getSharedStylizedMaterial(0x479948, 'foliage', {
@@ -1395,8 +1426,10 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
     };
 
     const isClearForFlora = (x, z, plateauMargin = 4.6) => {
-      if (z > 15.2 || z < -118.0) return false; // Evita praia/avenida da orla e fundo distante
+      if (z > 15.2 || z < -184.0) return false; // Evita praia/avenida da orla e cordilheira extrema
       if (Math.abs(x) < 3.6 && z > 2.5 && z < 18.5) return false; // Faixa da Escadaria Monumental
+      if (Math.abs(z - (-154.0)) < 4.5 && Math.abs(x) < 120.0) return false; // Faixa da Estrada da Sela Norte
+      if (Math.abs(z - (-98.0)) < 4.2 && Math.abs(x) > 60.0 && Math.abs(x) < 142.0) return false; // Anéis médios Leste/Oeste
       if (this.isProtectedLandmark(x, z, 2.2)) return false;
       if (this.allPlateaus && this.allPlateaus.some(pl => Math.hypot(pl.x - x, pl.z - z) < plateauMargin)) return false;
       const y = this.getElevation(x, z);
@@ -1409,11 +1442,11 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
       return true;
     };
 
-    const maxTufts = 1150;
+    const maxTufts = 1650;
     const tuftPositions = [];
-    for (let i = 0; i < 2400 && tuftPositions.length < maxTufts; i++) {
-      const rx = (hash01(i * 3.1 + 1.7) - 0.5) * 290.0;
-      const rz = -114.0 + hash01(i * 5.7 + 4.3) * 129.0;
+    for (let i = 0; i < 3800 && tuftPositions.length < maxTufts; i++) {
+      const rx = (hash01(i * 3.1 + 1.7) - 0.5) * 560.0;
+      const rz = -180.0 + hash01(i * 5.7 + 4.3) * 195.0;
       if (!isClearForFlora(rx, rz, 4.5)) continue;
       tuftPositions.push({
         x: rx,
@@ -1456,10 +1489,10 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
       { x: -9.5, z: 14.5, fl: 3 }, { x: 8.8, z: 13.5, fl: 0 }
     ];
 
-    const maxBushes = 230;
-    for (let i = 0; i < 900 && bushSpots.length < maxBushes; i++) {
-      const rx = (hash01(i * 9.1 + 19.3) - 0.5) * 260.0;
-      const rz = -108.0 + hash01(i * 13.7 + 2.9) * 123.0;
+    const maxBushes = 320;
+    for (let i = 0; i < 1400 && bushSpots.length < maxBushes; i++) {
+      const rx = (hash01(i * 9.1 + 19.3) - 0.5) * 560.0;
+      const rz = -178.0 + hash01(i * 13.7 + 2.9) * 193.0;
       if (!isClearForFlora(rx, rz, 5.4)) continue;
       bushSpots.push({ x: rx, z: rz, fl: i % 4 });
     }
@@ -1470,7 +1503,7 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
 
       // Reutiliza tuftMat (1 único shader PBR+wind+instanceColor para capim, arbustos e flores!)
       const bushLeafMesh = new THREE.InstancedMesh(leafGeo, tuftMat, bushSpots.length);
-      bushLeafMesh.castShadow = true;
+      bushLeafMesh.castShadow = false;
       bushLeafMesh.receiveShadow = true;
 
       const bushBloomMesh = new THREE.InstancedMesh(bloomGeo, tuftMat, bushSpots.length * 3);
@@ -1636,6 +1669,14 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
     addForestCluster(68,   -108, 30,  22, 12, 19);
     addForestCluster(-188, -125, 38,  24, 15, 20);
     addForestCluster(188,  -125, 38,  24, 15, 21);
+    addForestCluster(-258, -78,  36,  26, 11, 22);
+    addForestCluster(258,  -78,  36,  26, 11, 23);
+    addForestCluster(-262, -135, 42,  28, 12, 24);
+    addForestCluster(262,  -135, 42,  28, 12, 25);
+    addForestCluster(-105, -172, 34,  20, 10, 26);
+    addForestCluster(105,  -172, 34,  20, 10, 27);
+    addForestCluster(-46,  -174, 28,  16, 10, 28);
+    addForestCluster(46,   -174, 28,  16, 10, 29);
 
     if (treePlacements.length > 0) {
       const count = treePlacements.length;
@@ -1653,8 +1694,8 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
       branchGeo.rotateZ(0.58);
       const branchInst = new THREE.InstancedMesh(branchGeo, trunkMat, count * 2);
 
-      // Copas Folhosas Multi-Camadas (3 agrupamentos orgânicos achatados por árvore: Base Esquerda, Base Direita e Topo)
-      const foliageGeo = new THREE.IcosahedronGeometry(1.75, 1);
+      // Copas Folhosas Multi-Camadas (low-poly facetado com detail=0 para 60 FPS fluidos no Main + Shadow Pass)
+      const foliageGeo = new THREE.IcosahedronGeometry(1.75, 0);
       const foliageMat = createStylizedMaterial({ color: 0xFFFFFF, flatShading: true }, 'foliage', { wind: 'crown' });
       const crownInst = new THREE.InstancedMesh(foliageGeo, foliageMat, count * 3);
       crownInst.castShadow = true;

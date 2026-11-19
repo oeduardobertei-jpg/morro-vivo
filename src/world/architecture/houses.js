@@ -386,44 +386,87 @@ export const HousesMixin = {
       { x: 74,   z: -126, faction: 'serra', level: 1 }
     ];
 
-    const isNewWorldStart = !savedHouses || savedHouses.length === 0;
-    continentalFrontierPioneers.forEach((fp, i) => {
-      // Em um Novo Mundo, o mapa inicia limpo e focado no Morro do Sol e nas vilas fundadoras;
-      // os confins territoriais são conquistados organicamente pelos mutirões ativos dos NPCs!
-      if (isNewWorldStart) {
-        return;
-      }
-      // Micro-deslocamento orgânico determinístico para quebrar qualquer alinhamento matemático
-      const jx = fp.x + Math.sin(i * 17.3 + fp.z * 0.7) * 2.1;
-      const jz = fp.z + Math.cos(i * 23.1 + fp.x * 0.5) * 2.1;
+    // 28 núcleos fundadores policêntricos para Novo Mundo (espalham vida orgânica pelos 4 quadrantes sem bloat)
+    const newWorldPolycentricNuclei = [
+      // 1. Vale do Poente (9 casas: X = -152..-252, fora das palmeiras)
+      { x: -152, z: 7,    faction: 'prainha', level: 2 },
+      { x: -172, z: 10,   faction: 'prainha', level: 1 },
+      { x: -184, z: 6,    faction: 'prainha', level: 2 },
+      { x: -204, z: 8,    faction: 'prainha', level: 1 },
+      { x: -230, z: -8,   faction: 'prainha', level: 2 },
+      { x: -226, z: 10,   faction: 'prainha', level: 2 },
+      { x: -252, z: 6,    faction: 'prainha', level: 1 },
+      { x: -242, z: -42,  faction: 'prainha', level: 2 },
+      { x: -192, z: -56,  faction: 'prainha', level: 2 },
 
-      if (this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(jx, jz, 2.8)) {
+      // 2. Encosta Oeste / Jongo / Galpão Oeste (3 casas: X = -122..-128)
+      { x: -124, z: -8,   faction: 'prainha', level: 2 },
+      { x: -122, z: -38,  faction: 'prainha', level: 1 },
+      { x: -128, z: -64,  faction: 'prainha', level: 2 },
+
+      // 3. Vale do Levante (9 casas: X = 152..252, fora das palmeiras)
+      { x: 152,  z: 7,    faction: 'varzea', level: 2 },
+      { x: 172,  z: 10,   faction: 'varzea', level: 1 },
+      { x: 184,  z: 6,    faction: 'varzea', level: 2 },
+      { x: 204,  z: 8,    faction: 'varzea', level: 1 },
+      { x: 230,  z: -8,   faction: 'varzea', level: 2 },
+      { x: 226,  z: 10,   faction: 'varzea', level: 2 },
+      { x: 252,  z: 6,    faction: 'varzea', level: 1 },
+      { x: 242,  z: -42,  faction: 'varzea', level: 2 },
+      { x: 192,  z: -56,  faction: 'varzea', level: 2 },
+
+      // 4. Sela Norte & Ombros da Serra (7 casas: Z = -136..-144)
+      { x: -112, z: -144, faction: 'serra', level: 2 },
+      { x: -84,  z: -136, faction: 'serra', level: 1 },
+      { x: -48,  z: -138, faction: 'serra', level: 2 },
+      { x: -18,  z: -144, faction: 'serra', level: 2 },
+      { x: 18,   z: -144, faction: 'serra', level: 2 },
+      { x: 52,   z: -138, faction: 'serra', level: 1 },
+      { x: 86,   z: -136, faction: 'serra', level: 2 }
+    ];
+
+    const isNewWorldStart = !savedHouses || savedHouses.length === 0;
+    const placeFrontierLot = (fp, i, { landmarkMargin, infraClearance, houseClearance, idPrefix }) => {
+      const jx = fp.x + Math.sin(i * 17.3 + fp.z * 0.7) * 1.6;
+      const jz = fp.z + Math.cos(i * 23.1 + fp.x * 0.5) * 1.6;
+
+      if (this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(jx, jz, landmarkMargin)) {
         return;
       }
-      if (this.infrastructureNodes && this.infrastructureNodes.some(node => Math.hypot(node.x - jx, node.z - jz) < 4.2)) {
+      if (this.infrastructureNodes && this.infrastructureNodes.some(node => Math.hypot(node.x - jx, node.z - jz) < infraClearance)) {
         return;
       }
-      // Check if any existing house is already near this pioneer lot (< 10 meters)
-      const hasCloseHouse = this.houses.some(h => Math.hypot(h.position.x - jx, h.position.z - jz) < 10.0);
-      if (!hasCloseHouse) {
-        const plat = plateaus.find(p => Math.hypot(p.x - jx, p.z - jz) < 5.0) || {
-          id: `frontier_${fp.faction}_${i + 1}`,
-          faction: fp.faction,
-          order: i,
-          x: jx,
-          y: this.terrain ? this.terrain.getElevation(jx, jz) : 4.0,
-          z: jz
-        };
-        const lvl = isNewWorldStart ? 1 : (fp.level || 1);
-        const paletteItem = this.palette[(i * 3 + 2) % this.palette.length];
-        const house = this.buildHouse(plat, lvl, paletteItem);
-        if (house) {
-          house.residents = lvl === 2 ? 6 : 4;
-          house.wealth = lvl === 2 ? 250 : 150;
-          this.houses.push(house);
-        }
+      if (this.houses.some(h => Math.hypot(h.position.x - jx, h.position.z - jz) < houseClearance)) {
+        return;
       }
-    });
+
+      const plat = plateaus.find(p => Math.hypot(p.x - jx, p.z - jz) < 5.0) || {
+        id: `${idPrefix}_${fp.faction}_${i + 1}`,
+        faction: fp.faction,
+        order: i,
+        x: jx,
+        y: this.terrain ? this.terrain.getElevation(jx, jz) : 4.0,
+        z: jz
+      };
+      const lvl = fp.level || 1;
+      const paletteItem = this.palette[(i * 3 + 2) % this.palette.length];
+      const house = this.buildHouse(plat, lvl, paletteItem);
+      if (house) {
+        house.residents = lvl === 2 ? 6 : 4;
+        house.wealth = lvl === 2 ? 250 : 150;
+        this.houses.push(house);
+      }
+    };
+
+    if (isNewWorldStart) {
+      newWorldPolycentricNuclei.forEach((fp, i) => {
+        placeFrontierLot(fp, i, { landmarkMargin: 3.2, infraClearance: 4.6, houseClearance: 8.8, idPrefix: 'poly' });
+      });
+    } else {
+      continentalFrontierPioneers.forEach((fp, i) => {
+        placeFrontierLot(fp, i, { landmarkMargin: 2.8, infraClearance: 4.2, houseClearance: 10.0, idPrefix: 'frontier' });
+      });
+    }
 
     // Criar o Cinturão da Mata Atlântica APÓS todas as casas e vilas estarem posicionadas,
     // garantindo que NENHUMA árvore ou rocha brote sobre ou dentro de casas existentes!
@@ -513,23 +556,31 @@ export const HousesMixin = {
     if (preferredFaction) {
       const factionLots = available.filter(p => p.faction === preferredFaction);
       if (factionLots.length > 0) {
+        let candidatePool = factionLots;
+        if (preferredFaction !== 'sol') {
+          const isOuterFrontier = (pt) => Math.abs(pt.x) > 120 || pt.z < -115;
+          const frontierLots = factionLots.filter(isOuterFrontier);
+          const innerLots = factionLots.filter(pt => !isOuterFrontier(pt));
+          if (frontierLots.length > 0 && innerLots.length > 0) {
+            candidatePool = (Math.random() < 0.50) ? frontierLots : innerLots;
+          }
+        }
         const factionHouses = this.houses.filter(h => (h.faction || 'sol') === preferredFaction);
         if (factionHouses.length > 0) {
-          factionLots.sort((a, b) => {
+          candidatePool.sort((a, b) => {
             const minDistA = Math.min(...factionHouses.map(h => Math.hypot(h.position.x - a.x, h.position.z - a.z)));
             const minDistB = Math.min(...factionHouses.map(h => Math.hypot(h.position.x - b.x, h.position.z - b.z)));
             return minDistA - minDistB;
           });
-          const topFactionPool = factionLots.slice(0, Math.min(3, factionLots.length));
+          const topFactionPool = candidatePool.slice(0, Math.min(3, candidatePool.length));
           return topFactionPool[Math.floor(Math.random() * topFactionPool.length)];
         }
-        return factionLots[Math.floor(Math.random() * factionLots.length)];
+        return candidatePool[Math.floor(Math.random() * candidatePool.length)];
       }
     }
 
-    // 1. FOCO PRIMÁRIO: ADENSAR O MORRO CENTRAL (MORRO DO SOL)
-    // 70% das novas moradias concentram-se no Morro do Sol enquanto houver lotes vagos nele!
-    const shouldBuildCenter = centralCandidates.length > 0 && (outerCandidates.length === 0 || Math.random() < 0.70);
+    // 1. CRESCIMENTO EQUILIBRADO: 30% no Morro Central (Sol) e 70% adensando os vales/extremos
+    const shouldBuildCenter = centralCandidates.length > 0 && (outerCandidates.length === 0 || Math.random() < 0.30);
 
     if (shouldBuildCenter) {
       const solHouses = this.houses.filter(h => isCentral(h.position));
@@ -1664,45 +1715,69 @@ export const HousesMixin = {
 
   createExpandedNeighborhoodHubs() {
     const getElev = (x, z) => this.terrain ? this.terrain.getElevation(x, z) : 6.0;
-    const matStone = new THREE.MeshLambertMaterial({ color: 0x78716C, flatShading: true });
-    const matConcrete = new THREE.MeshLambertMaterial({ color: 0xCBD5E1, flatShading: true });
-    const matWood = new THREE.MeshLambertMaterial({ color: 0x8B5A2B, flatShading: true });
-    const matCourtBlue = new THREE.MeshLambertMaterial({ color: 0x0284C7, flatShading: true });
-    const matCourtOrange = new THREE.MeshLambertMaterial({ color: 0xEA580C, flatShading: true });
-    const matLine = new THREE.MeshLambertMaterial({ color: 0xE2E8F0, flatShading: true });
-    const matRoofRed = new THREE.MeshLambertMaterial({ color: 0xC2410C, flatShading: true });
-    const matRoofTeal = new THREE.MeshLambertMaterial({ color: 0x0F766E, flatShading: true });
-    const matWater = new THREE.MeshLambertMaterial({ color: 0x38BDF8, flatShading: true });
-    const matFoliage = new THREE.MeshLambertMaterial({ color: 0x2D6A4F, flatShading: true });
+    this.propObstacles = this.propObstacles || [];
+    const matStone = getSharedStylizedMaterial(0x78716C, 'stone', { flatShading: true });
+    const matConcrete = getSharedStylizedMaterial(0xCBD5E1, 'plaster', { flatShading: true });
+    const matWood = getSharedStylizedMaterial(0x8B5A2B, 'wood', { flatShading: true });
+    const matCourtBlue = getSharedStylizedMaterial(0x0284C7, 'plaster', { flatShading: true });
+    const matCourtOrange = getSharedStylizedMaterial(0xEA580C, 'plaster', { flatShading: true });
+    const matLine = getSharedStylizedMaterial(0xE2E8F0, 'plaster', { flatShading: true });
+    const matRoofRed = getSharedStylizedMaterial(0xC2410C, 'brick', { flatShading: true });
+    const matRoofTeal = getSharedStylizedMaterial(0x0F766E, 'ceramic', { flatShading: true });
+    const matWater = getSharedStylizedMaterial(0x38BDF8, 'water', { flatShading: true });
+    const matFoliage = getSharedStylizedMaterial(0x2D6A4F, 'foliage', { flatShading: true });
 
-    // Helper para criar fundação nivelada nas encostas
+    const matFoundationStone = getSharedStylizedMaterial(0x645E58, 'stone', { flatShading: true });
+    const sharedHubGeoSet = new Set([this.sharedWaterTankGeo].filter(Boolean));
+
     const makeTerrace = (x, z, w, d, topMat) => {
       const g = new THREE.Group();
       const yC = getElev(x, z);
       const yMin = Math.min(
         yC,
-        getElev(x - w * 0.45, z - d * 0.45),
-        getElev(x + w * 0.45, z - d * 0.45),
-        getElev(x - w * 0.45, z + d * 0.45),
-        getElev(x + w * 0.45, z + d * 0.45)
+        getElev(x - w * 0.5, z - d * 0.5),
+        getElev(x + w * 0.5, z - d * 0.5),
+        getElev(x - w * 0.5, z + d * 0.5),
+        getElev(x + w * 0.5, z + d * 0.5)
       );
-      const baseH = Math.max(1.8, (yC - yMin) + 1.4);
-      const base = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, baseH, d + 0.6), matStone);
-      base.position.y = -baseH * 0.5 + 0.15;
+      const baseH = Math.max(4.5, (yC - yMin) + 3.8);
+      const base = new THREE.Mesh(new THREE.BoxGeometry(w - 0.15, baseH, d - 0.15), matFoundationStone);
+      base.position.y = -baseH * 0.5 + 0.14;
       base.receiveShadow = true;
       base.castShadow = true;
       g.add(base);
 
-      const top = new THREE.Mesh(new THREE.BoxGeometry(w, 0.25, d), topMat || matConcrete);
+      const top = new THREE.Mesh(new THREE.BoxGeometry(w + 0.3, 0.28, d + 0.3), topMat || matConcrete);
       top.position.y = 0.22;
       top.receiveShadow = true;
       g.add(top);
+
+      // Escadinha frontal acolhedora conectando o piso do terraço ao gramado
+      for (let st = 0; st < 3; st++) {
+        const step = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.38, 0.45), matFoundationStone);
+        step.position.set(0, 0.04 - st * 0.20, d * 0.5 + 0.32 + st * 0.42);
+        step.receiveShadow = true;
+        g.add(step);
+      }
 
       g.position.set(x, yC, z);
       if (this.infrastructureNodes) {
         this.infrastructureNodes.push({ x, z, r: Math.max(w, d) * 0.65 });
       }
       return g;
+    };
+
+    const freezeHub = (g) => {
+      _compactStaticChildren(g, sharedHubGeoSet);
+      g.traverse((c) => {
+        if (c.isMesh) {
+          c.matrixAutoUpdate = false;
+          c.updateMatrix();
+        }
+      });
+      g.matrixAutoUpdate = false;
+      g.updateMatrix();
+      this.group.add(g);
     };
 
     // 1. QUADRA DE BASQUETE DE RUA & ARQUIBANCADA DO LEVANTE (X: 142, Z: -42)
@@ -1724,14 +1799,15 @@ export const HousesMixin = {
       rim.rotation.x = Math.PI / 2;
       rim.position.set(hx > 0 ? hx - 0.68 : hx + 0.68, 2.65, 0);
       courtGroup.add(pole, board, rim);
+      this.propObstacles.push({ x: 142 + hx, z: -42, r: 0.65 });
     });
-    // Arquibancada comunitária ao norte da quadra
     for (let s = 0; s < 3; s++) {
       const step = new THREE.Mesh(new THREE.BoxGeometry(10.5, 0.45 * (s + 1), 0.9), matConcrete);
       step.position.set(0, 0.35 + s * 0.22, -3.2 - s * 0.85);
       courtGroup.add(step);
     }
-    this.group.add(courtGroup);
+    this.propObstacles.push({ x: 142, z: -46.0, hw: 5.5, hd: 1.8, rotY: 0 });
+    freezeHub(courtGroup);
 
     // 2. FEIRINHA ORGÂNICA & PÉRGOLA DO POENTE (X: -142, Z: -42)
     const fairGroup = makeTerrace(-142, -42, 12.0, 9.0, matConcrete);
@@ -1741,17 +1817,17 @@ export const HousesMixin = {
       const sz = -2.2 + Math.floor(i / 2) * 4.4;
       const counter = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.9, 1.4), matWood);
       counter.position.set(sx, 0.75, sz);
-      const canopyMat = new THREE.MeshLambertMaterial({ color: stallColors[i], flatShading: true });
+      const canopyMat = getSharedStylizedMaterial(stallColors[i], 'fabric', { flatShading: true });
       const canopy = new THREE.Mesh(new THREE.ConeGeometry(2.1, 0.9, 4), canopyMat);
       canopy.rotation.y = Math.PI / 4;
       canopy.position.set(sx, 2.35, sz);
       fairGroup.add(counter, canopy);
+      this.propObstacles.push({ x: -142 + sx, z: -42 + sz, hw: 1.65, hd: 0.95, rotY: 0 });
     }
-    // Pérgola central de madeira
     const pergTop = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.2, 4.2), matWood);
     pergTop.position.set(0, 2.6, 0);
     fairGroup.add(pergTop);
-    this.group.add(fairGroup);
+    freezeHub(fairGroup);
 
     // 3. PRAÇA DO CORETO & CHAFARIZ DA SERRA (X: -32, Z: -102)
     const coretoGroup = makeTerrace(-32, -102, 11.0, 11.0, matConcrete);
@@ -1769,32 +1845,31 @@ export const HousesMixin = {
     const fountainPool = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.5, 0.45, 8), matWater);
     fountainPool.position.set(0, 0.95, 0);
     coretoGroup.add(fountainPool);
-    this.group.add(coretoGroup);
+    this.propObstacles.push({ x: -32, z: -102, r: 3.7 });
+    freezeHub(coretoGroup);
 
     // 4. GALPÃO CULTURAL DE GRAFITE & OFICINA NORDESTE (X: 118, Z: -82)
     const galpaoGroup = makeTerrace(118, -82, 11.5, 8.5, matConcrete);
-    const hallBody = new THREE.Mesh(new THREE.BoxGeometry(8.2, 3.4, 5.4), new THREE.MeshLambertMaterial({ color: 0xF59E0B, flatShading: true }));
+    const hallBody = new THREE.Mesh(new THREE.BoxGeometry(8.2, 3.4, 5.4), getSharedStylizedMaterial(0xF59E0B, 'plaster', { flatShading: true }));
     hallBody.position.set(-1.0, 1.95, -0.5);
     hallBody.castShadow = true;
     const hallRoof = new THREE.Mesh(new THREE.BoxGeometry(8.8, 0.35, 6.0), matRoofTeal);
     hallRoof.position.set(-1.0, 3.75, -0.5);
-    // Painel mural colorido na fachada sul
     const muralA = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.0, 0.15), matCourtBlue);
     muralA.position.set(-2.6, 2.0, 2.22);
     const muralB = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.0, 0.15), matCourtOrange);
     muralB.position.set(0.4, 2.0, 2.22);
     galpaoGroup.add(hallBody, hallRoof, muralA, muralB);
-    this.group.add(galpaoGroup);
+    this.propObstacles.push({ x: 117.0, z: -82.5, hw: 4.3, hd: 2.9, rotY: 0 });
+    freezeHub(galpaoGroup);
 
     // 5. TERREIRO CULTURAL DO JONGO & POMAR NOROESTE (X: -118, Z: -82)
-    // Piso em pedra/areia quente + quiosque apoiado em 6 pilares de madeira (sem cone flutuante!)
-    const jongoGroup = makeTerrace(-118, -82, 11.0, 10.0, new THREE.MeshLambertMaterial({ color: 0xB89B78, flatShading: true }));
+    const jongoGroup = makeTerrace(-118, -82, 11.0, 10.0, getSharedStylizedMaterial(0xB89B78, 'stone', { flatShading: true }));
     const rodaRing = new THREE.Mesh(new THREE.CylinderGeometry(3.8, 3.9, 0.18, 14), matWood);
     rodaRing.position.set(0, 0.38, 0.8);
     const shadePavilion = new THREE.Mesh(new THREE.ConeGeometry(3.2, 1.45, 6), matRoofTeal);
     shadePavilion.position.set(0, 3.25, -1.8);
     shadePavilion.castShadow = true;
-    // 6 pilares estruturais de madeira sustentando o quiosque do Jongo
     for (let p = 0; p < 6; p++) {
       const a = (p / 6) * Math.PI * 2;
       const post = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 2.45, 5), matWood);
@@ -1802,22 +1877,24 @@ export const HousesMixin = {
       post.castShadow = true;
       jongoGroup.add(post);
     }
-    // Bancos rústicos voltados para a roda
     [-3.2, 3.2].forEach((bx) => {
       const bench = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.42, 2.6), matWood);
       bench.position.set(bx, 0.50, 1.2);
       jongoGroup.add(bench);
+      this.propObstacles.push({ x: -118 + bx, z: -80.8, hw: 0.45, hd: 1.45, rotY: 0 });
     });
-    const potMatJongo = new THREE.MeshLambertMaterial({ color: 0xA8543E, flatShading: true });
+    const potMatJongo = getSharedStylizedMaterial(0xA8543E, 'brick', { flatShading: true });
     [-4.1, 4.1].forEach((px) => {
       const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.45, 0.65, 6), potMatJongo);
       pot.position.set(px, 0.62, -3.2);
       const foliage = new THREE.Mesh(new THREE.DodecahedronGeometry(0.85, 0), matFoliage);
       foliage.position.set(px, 1.35, -3.2);
       jongoGroup.add(pot, foliage);
+      this.propObstacles.push({ x: -118 + px, z: -85.2, r: 0.85 });
     });
     jongoGroup.add(rodaRing, shadePavilion);
-    this.group.add(jongoGroup);
+    this.propObstacles.push({ x: -118, z: -83.8, r: 2.6 });
+    freezeHub(jongoGroup);
 
     // 6. MIRANTE & QUIOSQUE PANORÂMICO DA SELA NORTE (X: 28, Z: -136)
     const miranteSela = makeTerrace(28, -136, 10.5, 8.0, matWood);
@@ -1826,6 +1903,206 @@ export const HousesMixin = {
     const kioskCounter = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.0, 1.2), matStone);
     kioskCounter.position.set(0, 0.8, -1.0);
     miranteSela.add(kioskRoof, kioskCounter);
-    this.group.add(miranteSela);
+    this.propObstacles.push({ x: 28, z: -137.0, hw: 1.85, hd: 0.85, rotY: 0 });
+    freezeHub(miranteSela);
+
+    // 7. CAPELA CAIÇARA & LARGO DO PONTAL OESTE (X: -216, Z: -14)
+    const matWhitePlaster = getSharedStylizedMaterial(0xF4F1EA, 'plaster', { flatShading: true });
+    const matTurquoise = getSharedStylizedMaterial(0x0E7490, 'wood', { flatShading: true });
+    const matGold = getSharedStylizedMaterial(0xEAB308, 'metal', { flatShading: true });
+    const matWarmGlow = getSharedStylizedMaterial(0xFEF08A, 'ceramic', { emissive: 0xF59E0B, emissiveIntensity: 0.55 });
+    const chapelGroup = makeTerrace(-216, -14, 12.0, 10.0, matStone);
+    const chapelBody = new THREE.Mesh(new THREE.BoxGeometry(4.8, 3.4, 6.0), matWhitePlaster);
+    chapelBody.position.set(0, 2.02, -1.2);
+    chapelBody.castShadow = true;
+    const chapelRoofL = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.22, 6.4), matRoofRed);
+    chapelRoofL.position.set(-1.25, 4.1, -1.2);
+    chapelRoofL.rotation.z = 0.42;
+    const chapelRoofR = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.22, 6.4), matRoofRed);
+    chapelRoofR.position.set(1.25, 4.1, -1.2);
+    chapelRoofR.rotation.z = -0.42;
+    const bellTower = new THREE.Mesh(new THREE.BoxGeometry(1.5, 5.4, 1.5), matWhitePlaster);
+    bellTower.position.set(0, 3.0, 2.05);
+    bellTower.castShadow = true;
+    const bellCap = new THREE.Mesh(new THREE.ConeGeometry(1.15, 1.25, 4), matRoofRed);
+    bellCap.rotation.y = Math.PI / 4;
+    bellCap.position.set(0, 6.3, 2.05);
+    const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.34, 0.42, 6), matGold);
+    bell.position.set(0, 4.9, 2.55);
+    const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.9, 0.12), matGold);
+    crossV.position.set(0, 7.2, 2.05);
+    const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.12, 0.12), matGold);
+    crossH.position.set(0, 7.35, 2.05);
+    const chDoor = new THREE.Mesh(new THREE.BoxGeometry(1.3, 2.0, 0.14), matTurquoise);
+    chDoor.position.set(0, 1.35, 2.82);
+    chapelGroup.add(chapelBody, chapelRoofL, chapelRoofR, bellTower, bellCap, bell, crossV, crossH, chDoor);
+    [-2.42, 2.42].forEach(wx => {
+      for (let zOff of [-2.4, 0.0]) {
+        const win = new THREE.Mesh(new THREE.BoxGeometry(0.10, 1.0, 0.85), matTurquoise);
+        win.position.set(wx, 2.15, zOff - 0.6);
+        chapelGroup.add(win);
+      }
+    });
+    [-4.1, 4.1].forEach(bx => {
+      const bench = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.44, 2.1), matWood);
+      bench.position.set(bx, 0.56, 1.8);
+      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.34, 0.52, 6), potMatJongo);
+      pot.position.set(bx * 0.85, 0.6, -2.5);
+      const bloom = new THREE.Mesh(new THREE.DodecahedronGeometry(0.55, 0), getSharedStylizedMaterial(0xD9468F, 'foliage', { flatShading: true }));
+      bloom.position.set(bx * 0.85, 1.12, -2.5);
+      chapelGroup.add(bench, pot, bloom);
+      this.propObstacles.push({ x: -216 + bx, z: -12.2, hw: 0.45, hd: 1.25, rotY: 0 });
+    });
+    this.propObstacles.push({ x: -216, z: -15.2, hw: 2.8, hd: 3.4, rotY: 0 });
+    freezeHub(chapelGroup);
+
+    // 8. PRAÇA DO CHAFARIZ & CANCHA DE BOCHA DO LEVANTE (X: 216, Z: -14)
+    const bochaPlaza = makeTerrace(216, -14, 13.0, 10.0, matStone);
+    const fountainRim = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.95, 0.55, 8), matConcrete);
+    fountainRim.position.set(-2.8, 0.62, 0);
+    const fountainWater = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.42, 8), matWater);
+    fountainWater.position.set(-2.8, 0.72, 0);
+    const fountainSpire = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.42, 1.5, 6), matConcrete);
+    fountainSpire.position.set(-2.8, 1.25, 0);
+    const sandMat = getSharedStylizedMaterial(0xDFC99B, 'stone', { flatShading: true });
+    const bochaLane = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.16, 2.4), sandMat);
+    bochaLane.position.set(2.5, 0.42, 0);
+    [-1.25, 1.25].forEach(bz => {
+      const curb = new THREE.Mesh(new THREE.BoxGeometry(5.4, 0.34, 0.22), matWood);
+      curb.position.set(2.5, 0.52, bz);
+      bochaPlaza.add(curb);
+    });
+    [-0.9, 0.6, 1.4].forEach((bx, bi) => {
+      const ball = new THREE.Mesh(new THREE.DodecahedronGeometry(0.14, 0), bi === 1 ? matCourtOrange : matCourtBlue);
+      ball.position.set(2.5 + bx, 0.56, (bi - 1) * 0.35);
+      bochaPlaza.add(ball);
+    });
+    [-3.5, 3.5].forEach(px => {
+      const pBeam = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.12, 0.3), matWood);
+      pBeam.position.set(px * 0.4, 2.55, -3.2);
+      const bBench = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.44, 0.55), matWood);
+      bBench.position.set(px * 0.5, 0.56, 3.2);
+      bochaPlaza.add(pBeam, bBench);
+    });
+    const pergPostL = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 2.3, 5), matWood);
+    pergPostL.position.set(-2.6, 1.45, -3.2);
+    const pergPostR = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 2.3, 5), matWood);
+    pergPostR.position.set(2.6, 1.45, -3.2);
+    const pergSpan = new THREE.Mesh(new THREE.BoxGeometry(5.8, 0.18, 1.2), getSharedStylizedMaterial(0xD9468F, 'foliage', { flatShading: true }));
+    pergSpan.position.set(0, 2.68, -3.2);
+    bochaPlaza.add(fountainRim, fountainWater, fountainSpire, bochaLane, pergPostL, pergPostR, pergSpan);
+    this.propObstacles.push(
+      { x: 213.2, z: -14.0, r: 1.85 },
+      { x: 218.5, z: -14.0, hw: 2.8, hd: 1.6, rotY: 0 }
+    );
+    freezeHub(bochaPlaza);
+
+    // 9. SÍTIO AGROECOLÓGICO & ESTUFAS DA SELA OESTE (X: -66, Z: -132)
+    const sitioGroup = makeTerrace(-66, -132, 12.0, 9.0, getSharedStylizedMaterial(0x7A5C3D, 'stone', { flatShading: true }));
+    const glassCanopyMat = getSharedStylizedMaterial(0xE0F2FE, 'ceramic', { flatShading: true });
+    [-2.6, 2.6].forEach(gx => {
+      const ghBase = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.35, 5.2), matWood);
+      ghBase.position.set(gx, 0.52, -0.5);
+      const ghCrop = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.45, 4.4), matFoliage);
+      ghCrop.position.set(gx, 0.85, -0.5);
+      const ghArch = new THREE.Mesh(new THREE.CylinderGeometry(1.55, 1.55, 5.0, 7, 1, false, 0, Math.PI), glassCanopyMat);
+      ghArch.rotation.z = Math.PI / 2;
+      ghArch.rotation.y = Math.PI / 2;
+      ghArch.position.set(gx, 1.25, -0.5);
+      sitioGroup.add(ghBase, ghCrop, ghArch);
+    });
+    const toolShed = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.8, 1.8), matRoofRed);
+    toolShed.position.set(0, 1.2, 3.0);
+    const shedCap = new THREE.Mesh(new THREE.ConeGeometry(2.0, 0.9, 4), matWood);
+    shedCap.rotation.y = Math.PI / 4;
+    shedCap.position.set(0, 2.55, 3.0);
+    const tankTower = new THREE.Mesh(this.sharedWaterTankGeo, this.sharedWaterTankMat);
+    tankTower.position.set(4.5, 2.1, 2.8);
+    const tankStand = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 1.2), matWood);
+    tankStand.position.set(4.5, 0.9, 2.8);
+    sitioGroup.add(toolShed, shedCap, tankTower, tankStand);
+    this.propObstacles.push(
+      { x: -68.6, z: -132.5, hw: 2.1, hd: 3.1, rotY: 0 },
+      { x: -63.4, z: -132.5, hw: 2.1, hd: 3.1, rotY: 0 },
+      { x: -66.0, z: -129.0, hw: 1.6, hd: 1.2, rotY: 0 }
+    );
+    freezeHub(sitioGroup);
+
+    // 10. ANFITEATRO DE PEDRA & MIRANTE CULTURAL DA SELA NORTE (X: -2, Z: -170)
+    const amphiGroup = makeTerrace(-2, -170, 12.0, 9.5, matStone);
+    for (let t = 0; t < 3; t++) {
+      const arc = new THREE.Mesh(new THREE.BoxGeometry(9.6 - t * 1.4, 0.45 * (3 - t), 1.05), matConcrete);
+      arc.position.set(0, 0.42 + (2 - t) * 0.22, -3.2 + t * 1.15);
+      amphiGroup.add(arc);
+    }
+    const stageDeck = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.42, 2.6), matWood);
+    stageDeck.position.set(0, 0.56, 2.0);
+    amphiGroup.add(stageDeck);
+    [-2.1, 2.1].forEach((px, idx) => {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 2.6, 5), matWood);
+      pole.position.set(px, 1.85, 2.8);
+      const sconce = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18, 0), matWarmGlow);
+      sconce.position.set(px, 3.15, 2.8);
+      amphiGroup.add(pole, sconce);
+      if (idx === 0) {
+        const ribbon = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.08, 0.08), matCourtOrange);
+        ribbon.position.set(0, 3.05, 2.8);
+        amphiGroup.add(ribbon);
+      }
+    });
+    this.propObstacles.push(
+      { x: -2.0, z: -173.2, r: 1.4 },
+      { x: -2.0, z: -168.0, hw: 2.4, hd: 1.4, rotY: 0 }
+    );
+    freezeHub(amphiGroup);
+
+    // 11 & 12. DOIS LARGOS DE BAIRRO COM IPÊ FLORIDO (Oeste Amarelo -62,-66 | Leste Rosa 56,-64)
+    const pocketPlazas = [
+      { cx: -62, cz: -66, bloomColor: 0xFACC15 },
+      { cx: 56,  cz: -64, bloomColor: 0xEC4899 }
+    ];
+    pocketPlazas.forEach((pp) => {
+      const largo = new THREE.Group();
+      const yL = getElev(pp.cx, pp.cz);
+      largo.position.set(pp.cx, yL, pp.cz);
+
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 4.9, 1.6, 8), matStone);
+      pad.position.y = -0.58;
+      pad.receiveShadow = true;
+      largo.add(pad);
+
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, 2.4, 6), matWood);
+      trunk.position.y = 1.4;
+      trunk.castShadow = true;
+      const ipeMat = getSharedStylizedMaterial(pp.bloomColor, 'foliage', { flatShading: true });
+      const crown1 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.45, 0), ipeMat);
+      crown1.position.set(0, 3.1, 0);
+      crown1.castShadow = true;
+      const crown2 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.05, 0), ipeMat);
+      crown2.position.set(0.7, 2.6, 0.4);
+      largo.add(trunk, crown1, crown2);
+
+      [-2.6, 2.6].forEach((bx) => {
+        const b = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.42, 0.52), matWood);
+        b.position.set(bx, 0.43, 1.2);
+        largo.add(b);
+      });
+      const bica = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.34, 0.9, 6), matConcrete);
+      bica.position.set(0, 0.66, -2.6);
+      const bicaPool = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.16, 6), matWater);
+      bicaPool.position.set(0, 0.30, -2.6);
+      largo.add(bica, bicaPool);
+
+      if (this.infrastructureNodes) {
+        this.infrastructureNodes.push({ x: pp.cx, z: pp.cz, r: 5.2 });
+      }
+      this.propObstacles.push(
+        { x: pp.cx, z: pp.cz, r: 1.35 },
+        { x: pp.cx - 2.6, z: pp.cz + 1.2, r: 0.7 },
+        { x: pp.cx + 2.6, z: pp.cz + 1.2, r: 0.7 },
+        { x: pp.cx, z: pp.cz - 2.6, r: 0.7 }
+      );
+      freezeHub(largo);
+    });
   }
 };

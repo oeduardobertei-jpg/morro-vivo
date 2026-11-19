@@ -55,9 +55,9 @@ export class SimulationEngine {
       this.npcs.npcs.forEach(n => this.politics.ensureNPCPolitics(n));
     }
 
-    // Inicia imediatamente obras ativas no Morro Central (Sol) e nas sementes das extremidades
+    // Inicia imediatamente obras ativas nos 4 macro-distritos (Sol, Prainha, Várzea e Serra)
     if (this.arch && this.arch.activeConstructions && this.arch.activeConstructions.length < 4) {
-      ['sol', 'sol', 'prainha', 'varzea'].forEach(fac => {
+      ['sol', 'prainha', 'varzea', 'serra'].forEach(fac => {
         if (this.arch.activeConstructions.length >= 4) return;
         this.arch.spawnNewHouse(fac, (completedHouse) => {
           const actualFaction = completedHouse.faction || fac;
@@ -333,8 +333,17 @@ export class SimulationEngine {
     const spawnRate = 0.75;
 
     if (isWorkHours && Math.random() < spawnRate && this.arch.activeConstructions.length < maxConstructions) {
-      // 70% das novas ordens de mutirão focam no Morro do Sol (Coração Vivo)
-      const chosenFaction = Math.random() < 0.70 ? 'sol' : ['prainha', 'varzea', 'serra'][Math.floor(Math.random() * 3)];
+      // Seleção equilibrada entre os 4 distritos com bônus para quem tem menos moradias
+      const counts = { sol: 0, prainha: 0, varzea: 0, serra: 0 };
+      this.arch.houses.forEach(h => {
+        const fk = h.faction || 'sol';
+        if (counts[fk] !== undefined) counts[fk]++;
+      });
+      const leastFaction = Object.entries(counts).sort((a, b) => a[1] - b[1])[0][0];
+      const r = Math.random();
+      const chosenFaction = (r < 0.35)
+        ? leastFaction
+        : (r < 0.54 ? 'prainha' : (r < 0.73 ? 'varzea' : (r < 0.89 ? 'serra' : 'sol')));
 
       const buildResult = this.arch.spawnNewHouse(chosenFaction, (completedHouse) => {
         if (!completedHouse) return;

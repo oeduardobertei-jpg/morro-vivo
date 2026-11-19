@@ -688,6 +688,44 @@ export const MobilityMixin = {
           { x: 75, z: 18 },
           { x: 92, z: 14 }
         ]
+      },
+      {
+        id: 'moto_4',
+        driverName: 'Bira do Poente',
+        routeDesc: 'Expresso Vale do Poente ↔ Capela & Pontal',
+        tankColor: 0x10B981,
+        passengerShirt: 0xF97316,
+        speed: 4.2,
+        waypoints: [
+          { x: -78, z: 18 },
+          { x: -115, z: 12 },
+          { x: -135, z: -20 },
+          { x: -154, z: -16 },
+          { x: -186, z: -22 },
+          { x: -216, z: -34 },
+          { x: -244, z: -22 },
+          { x: -266, z: 6 },
+          { x: -278, z: 18 }
+        ]
+      },
+      {
+        id: 'moto_5',
+        driverName: 'Dedé do Levante',
+        routeDesc: 'Expresso Vale do Levante ↔ Dunas & Bocha',
+        tankColor: 0x0EA5E9,
+        passengerShirt: 0xEC4899,
+        speed: 4.2,
+        waypoints: [
+          { x: 78, z: 18 },
+          { x: 115, z: 12 },
+          { x: 135, z: -20 },
+          { x: 154, z: -16 },
+          { x: 186, z: -22 },
+          { x: 216, z: -34 },
+          { x: 244, z: -22 },
+          { x: 266, z: 6 },
+          { x: 278, z: 18 }
+        ]
       }
     ];
 

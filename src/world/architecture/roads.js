@@ -31,6 +31,12 @@ export const RoadsMixin = {
     if (Math.abs(sx - (-92.0)) < 5.2 && Math.abs(sz - (-25.0)) < 4.2) return true; // Horta em Socalcos
     if (Math.abs(sx - 112.0) < 6.0 && Math.abs(sz - (-12.0)) < 4.5) return true;   // Academia ao Ar Livre
     if (Math.abs(sx - 32.0) < 6.0 && (Math.abs(sz - 11.5) < 5.5 || Math.abs(sz - (-17.0)) < 5.0 || Math.abs(sz - (-58.0)) < 5.5)) return true; // Estações do Bondinho (Corredor Leste-Central)
+    if (Math.hypot(sx - (-216.0), sz - (-14.0)) < 9.5) return true; // Capela Caiçara do Pontal Oeste
+    if (Math.hypot(sx - 216.0, sz - (-14.0)) < 10.0) return true;   // Praça da Bocha do Vale do Levante
+    if (Math.hypot(sx - (-66.0), sz - (-132.0)) < 9.5) return true; // Sítio Agroecológico Sela Oeste
+    if (Math.hypot(sx - (-2.0), sz - (-170.0)) < 9.5) return true;  // Anfiteatro de Pedra Sela Norte
+    if (Math.hypot(sx - (-62.0), sz - (-66.0)) < 6.0) return true;  // Largo Comunitário Oeste
+    if (Math.hypot(sx - 56.0, sz - (-64.0)) < 6.0) return true;     // Largo Comunitário Leste
     return false;
   },
 
@@ -102,6 +108,28 @@ export const RoadsMixin = {
       // 12. Ramal da Estação Alta do Bondinho (liga Estrada da Crista à entrada norte da estação em X=32, Z=-58)
       [
         { x: 16, z: -74.0 }, { x: 25, z: -70.5 }, { x: 32, z: -65.4 }
+      ],
+      // 13. Subida Noroeste (Vale do Poente -> Vila da Sela Oeste, fechando anel noroeste)
+      [
+        { x: -154, z: -16.0 }, { x: -162, z: -34.0 }, { x: -158, z: -56.0 },
+        { x: -144, z: -80.0 }, { x: -132, z: -108.0 }, { x: -116, z: -132.0 }
+      ],
+      // 14. Subida Nordeste (Vale do Levante -> Vila da Sela Leste, fechando anel nordeste)
+      [
+        { x: 154, z: -16.0 }, { x: 162, z: -34.0 }, { x: 158, z: -56.0 },
+        { x: 144, z: -80.0 }, { x: 132, z: -108.0 }, { x: 116, z: -132.0 }
+      ],
+      // 15. Ramal Central da Sela Norte (liga Coroa das Alturas -> Largo/Anfiteatro da Sela)
+      [
+        { x: 0, z: -96.0 }, { x: 10, z: -104.0 }, { x: 12, z: -120.0 }, { x: 8, z: -138.0 }, { x: 0, z: -156.0 }
+      ],
+      // 16. Anel Médio Oeste (Ladeira da Prainha -> Largo Oeste -> Sela Poente)
+      [
+        { x: -35, z: -30.0 }, { x: -48, z: -56.0 }, { x: -66, z: -80.0 }, { x: -96, z: -98.0 }, { x: -136, z: -98.0 }
+      ],
+      // 17. Anel Médio Leste (Ladeira da Várzea -> Largo Leste -> Sela Levante)
+      [
+        { x: 46, z: -26.0 }, { x: 54, z: -52.0 }, { x: 68, z: -84.0 }, { x: 96, z: -98.0 }, { x: 136, z: -98.0 }
       ]
     ];
 
@@ -887,7 +915,15 @@ export const RoadsMixin = {
       { x: 195, z: -55 }, // Encosta do Levante Expandida
       { x: -65, z: -155 },// Sela da Serra Oeste
       { x: 65, z: -155 }, // Sela da Serra Leste
-      { x: 0, z: -165 }   // Mirante da Sela Norte
+      { x: 0, z: -165 },  // Mirante da Sela Norte
+      { x: -216, z: -24 },// Capela do Pontal Oeste
+      { x: 216, z: -24 }, // Praça da Bocha do Levante
+      { x: -66, z: -142 },// Sítio Agroecológico da Sela
+      { x: -2, z: -160 }, // Anfiteatro da Sela Norte
+      { x: -62, z: -72 }, // Largo do Ipê Oeste
+      { x: 56, z: -70 },  // Largo do Ipê Leste
+      { x: -158, z: -56 },// Subida Noroeste
+      { x: 158, z: -56 }  // Subida Nordeste
     ];
 
     // Geometrias e materiais compartilhados (permite batching em 1 draw call e 0 PointLights extras por poste!)

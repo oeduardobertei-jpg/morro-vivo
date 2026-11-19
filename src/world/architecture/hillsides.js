@@ -1013,7 +1013,15 @@ export const HillsidesMixin = {
       { x: -44, z: -22, rot: 0.15 },
       { x: 44,  z: -22, rot: -0.15 },
       { x: -70, z: -44, rot: 0.3 },
-      { x: 70,  z: -44, rot: -0.3 }
+      { x: 70,  z: -44, rot: -0.3 },
+      { x: -158, z: -2,  rot: 0.2 },
+      { x: -194, z: -20, rot: -0.15 },
+      { x: -234, z: -2,  rot: 0.25 },
+      { x: 158,  z: -2,  rot: -0.2 },
+      { x: 194,  z: -20, rot: 0.15 },
+      { x: 234,  z: -2,  rot: -0.25 },
+      { x: -82,  z: -144, rot: 0.1 },
+      { x: 82,   z: -144, rot: -0.1 }
     ];
 
     waterTankSpots.forEach(spot => {
@@ -1080,7 +1088,15 @@ export const HillsidesMixin = {
       { x: -36, z: -15, rot: 0.2 },
       { x: 36,  z: -15, rot: -0.2 },
       { x: -52, z: -34, rot: 0.35 },
-      { x: 52,  z: -34, rot: -0.35 }
+      { x: 52,  z: -34, rot: -0.35 },
+      { x: -162, z: -6,  rot: 0.25 },
+      { x: -204, z: -14, rot: -0.3 },
+      { x: -238, z: -12, rot: 0.15 },
+      { x: 162,  z: -6,  rot: -0.25 },
+      { x: 204,  z: -14, rot: 0.3 },
+      { x: 238,  z: -12, rot: -0.15 },
+      { x: -44,  z: -148, rot: 0.2 },
+      { x: 44,   z: -148, rot: -0.2 }
     ];
 
     const clothesColors = [0xFF5964, 0x35A7FF, 0xFFE74C, 0xFFFFFF, 0x10B981, 0xEC4899];
@@ -1188,7 +1204,13 @@ export const HillsidesMixin = {
       { x: 12,  z: -8,  rot: -0.15 },
       { x: -20, z: -21, rot: 0.25 },
       { x: 20,  z: -21, rot: -0.25 },
-      { x: -4,  z: -30, rot: 0.0 }
+      { x: -4,  z: -30, rot: 0.0 },
+      { x: -178, z: -4,  rot: 0.2 },
+      { x: -224, z: -22, rot: -0.2 },
+      { x: 178,  z: -4,  rot: -0.2 },
+      { x: 224,  z: -22, rot: 0.2 },
+      { x: -72,  z: -152, rot: 0.1 },
+      { x: 72,   z: -152, rot: -0.1 }
     ];
 
     const benchSeatGeo = new THREE.BoxGeometry(1.5, 0.10, 0.45);

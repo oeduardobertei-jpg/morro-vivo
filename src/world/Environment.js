@@ -45,7 +45,7 @@ export class Environment {
   setupLightingAndSky() {
     // Crisp summer Rio azure sky initially
     this.scene.background = new THREE.Color('#58B4E3');
-    this.scene.fog = new THREE.Fog('#9FD8EE', 210, 1280);
+    this.scene.fog = new THREE.Fog('#A8DBF0', 190, 1180);
 
     // Ambient Hemisphere Light (Sky vs Ground bounce)
     this.hemiLight = new THREE.HemisphereLight(0xE1F5FE, 0x2E7D32, 0.85);
@@ -67,27 +67,33 @@ export class Environment {
     this.dirLight.shadow.normalBias = 0.035;
     this.scene.add(this.dirLight);
 
-    // Sun disc visible in sky dome
+    // Referência invisível preservada p/ compatibilidade (Sol e Lua HDR agora brilham direto no SkyDome)
     const sunGeo = new THREE.SphereGeometry(22, 16, 16);
     const sunMat = new THREE.MeshBasicMaterial({ color: 0xFFF9C4, fog: false });
     this.sunMesh = new THREE.Mesh(sunGeo, sunMat);
     this.sunMesh.position.copy(this.dirLight.position).multiplyScalar(4.8);
+    this.sunMesh.visible = false;
     this.group.add(this.sunMesh);
   }
 
   /**
-   * Domo celeste procedural com gradiente de perspectiva aérea (horizonte -> zênite)
-   * e halo solar/crepuscular suave sincronizado com a névoa.
+   * Domo celeste procedural v2 com gradiente de 4 faixas, Sol e Lua HDR luminosos
+   * e hemisfério inferior vedado na cor do mar distante (elimina 100% o limbo).
    */
   createSkyDome() {
-    const skyGeo = new THREE.SphereGeometry(1480, 28, 16);
+    const skyGeo = new THREE.SphereGeometry(1950, 32, 20);
     this.skyUniforms = {
-      uTopColor: { value: new THREE.Color('#3B97D8') },
-      uMidColor: { value: new THREE.Color('#6BC0EB') },
-      uHorizonColor: { value: new THREE.Color('#BFE7F7') },
+      uTopColor: { value: new THREE.Color('#2B82D4') },
+      uMidColor: { value: new THREE.Color('#66B9EC') },
+      uLowColor: { value: new THREE.Color('#A6DEF5') },
+      uHorizonColor: { value: new THREE.Color('#D4EFFA') },
+      uSeaHorizonColor: { value: new THREE.Color('#4A9BC2') },
       uSunDir: { value: new THREE.Vector3(-0.5, 0.78, 0.36).normalize() },
-      uSunGlowColor: { value: new THREE.Color('#FFF3C4') },
-      uSunGlowStrength: { value: 0.42 }
+      uMoonDir: { value: new THREE.Vector3(0.5, 0.65, -0.35).normalize() },
+      uSunGlowColor: { value: new THREE.Color('#FFF4C8') },
+      uSunGlowStrength: { value: 0.42 },
+      uSunDiscStrength: { value: 0.72 },
+      uMoonStrength: { value: 0.0 }
     };
 
     const skyMat = new THREE.ShaderMaterial({
@@ -105,27 +111,50 @@ export class Environment {
       fragmentShader: `
         uniform vec3 uTopColor;
         uniform vec3 uMidColor;
+        uniform vec3 uLowColor;
         uniform vec3 uHorizonColor;
+        uniform vec3 uSeaHorizonColor;
         uniform vec3 uSunDir;
+        uniform vec3 uMoonDir;
         uniform vec3 uSunGlowColor;
         uniform float uSunGlowStrength;
+        uniform float uSunDiscStrength;
+        uniform float uMoonStrength;
         varying vec3 vWorldDir;
 
         void main() {
           vec3 d = normalize(vWorldDir);
           float h = clamp(d.y, 0.0, 1.0);
 
-          // Gradiente atmosférico de 3 faixas (horizonte úmido carioca -> céu médio -> zênite profundo)
-          vec3 col = mix(uHorizonColor, uMidColor, smoothstep(0.0, 0.24, h));
-          col = mix(col, uTopColor, smoothstep(0.20, 0.78, h));
+          // Gradiente atmosférico de 4 faixas acima do horizonte
+          vec3 skyCol = mix(uHorizonColor, uLowColor, smoothstep(0.0, 0.11, h));
+          skyCol = mix(skyCol, uMidColor, smoothstep(0.08, 0.34, h));
+          skyCol = mix(skyCol, uTopColor, smoothstep(0.26, 0.82, h));
 
-          // Halo quente solar/crepuscular próximo ao disco celeste
+          // Hemisfério inferior vedado na cor do mar distante (nunca exibe limbo escuro ou laranja cru)
+          vec3 col = d.y >= 0.0
+            ? skyCol
+            : mix(uHorizonColor, uSeaHorizonColor, smoothstep(0.0, 0.14, -d.y));
+
+          // Sol HDR procedural com espalhamento atmosférico e disco brilhante (AgX mantém ouro-creme natural)
           float sunDot = max(dot(d, normalize(uSunDir)), 0.0);
-          float broadHalo = pow(sunDot, 5.0) * 0.45 * uSunGlowStrength;
-          float tightHalo = pow(sunDot, 36.0) * 0.65 * uSunGlowStrength;
-          float horizonBand = exp(-abs(d.y) * 9.0) * (0.28 + 0.45 * pow(sunDot, 2.0)) * uSunGlowStrength;
+          float broadHalo = pow(sunDot, 3.5) * 0.46;
+          float tightHalo = pow(sunDot, 18.0) * 0.72;
+          float corona = pow(sunDot, 110.0) * 1.25;
+          float sunDisc = smoothstep(0.9978, 0.9989, sunDot) * 3.1;
+          float horizonBand = exp(-abs(d.y) * 8.5) * (0.30 + 0.50 * pow(sunDot, 2.0));
+          float aboveHorizon = smoothstep(-0.04, 0.025, d.y);
 
-          col += uSunGlowColor * (broadHalo + tightHalo + horizonBand * 0.5);
+          col += uSunGlowColor * (broadHalo + tightHalo + horizonBand * 0.45) * uSunGlowStrength;
+          col += vec3(1.0, 0.96, 0.86) * (corona + sunDisc) * uSunDiscStrength * aboveHorizon;
+
+          // Lua HDR procedural com halo prateado suave
+          float moonDot = max(dot(d, normalize(uMoonDir)), 0.0);
+          float moonHalo = pow(moonDot, 16.0) * 0.22 + pow(moonDot, 140.0) * 0.55;
+          float moonDisc = smoothstep(0.9990, 0.9995, moonDot) * 1.85;
+          float moonAbove = smoothstep(-0.02, 0.04, d.y);
+          col += vec3(0.84, 0.92, 1.0) * (moonHalo + moonDisc) * uMoonStrength * moonAbove;
+
           gl_FragColor = vec4(col, 1.0);
         }
       `
@@ -184,7 +213,15 @@ export class Environment {
       { x: -290, y: 68,  z: 25,   s: 1.10, spd: 2.05 },
       { x: 300,  y: 66,  z: 35,   s: 1.15, spd: 2.10 },
       { x: -140, y: 92,  z: -120, s: 1.05, spd: 1.95 },
-      { x: 150,  y: 94,  z: -115, s: 1.10, spd: 2.00 }
+      { x: 150,  y: 94,  z: -115, s: 1.10, spd: 2.00 },
+      // Cúmulos no horizonte oceânico sul/sudoeste/sudeste (enquadrados no Pôr do Sol do Mirante!)
+      { x: -440, y: 72,  z: 215,  s: 1.85, spd: 1.15 },
+      { x: -280, y: 84,  z: 340,  s: 2.10, spd: 1.00 },
+      { x: -115, y: 76,  z: 420,  s: 2.25, spd: 0.90 },
+      { x: 55,   y: 88,  z: 465,  s: 2.35, spd: 0.85 },
+      { x: 230,  y: 78,  z: 390,  s: 2.05, spd: 1.05 },
+      { x: 410,  y: 70,  z: 255,  s: 1.80, spd: 1.20 },
+      { x: -375, y: 108, z: 365,  s: 2.40, spd: 0.92 }
     ];
 
     const puffLayouts = [
@@ -337,7 +374,7 @@ export class Environment {
   }
 
   createStarsAndMoon() {
-    // 1. Crescent / Full Silver Luminous Moon for the Tropical Night
+    // 1. Referência invisível mantida p/ compatibilidade (Lua HDR brilha no SkyDome)
     const moonGeo = new THREE.SphereGeometry(18, 16, 16);
     const moonMat = new THREE.MeshBasicMaterial({ color: 0xEEF6FF, fog: false });
     this.moonMesh = new THREE.Mesh(moonGeo, moonMat);
@@ -345,25 +382,38 @@ export class Environment {
     this.moonMesh.visible = false;
     this.group.add(this.moonMesh);
 
-    // 2. Twinkling Low-Poly Starfield (220 stars scattered across the wide celestial dome)
+    // 2. Campo estelar com variação sutil de cor (sempre acima de 12° sobre o horizonte!)
     const starGeo = new THREE.BufferGeometry();
-    const starCount = 220;
+    const starCount = 240;
     const starPositions = new Float32Array(starCount * 3);
+    const starColors = new Float32Array(starCount * 3);
+    const starPalette = [
+      new THREE.Color(0xFFFFFF),
+      new THREE.Color(0xFFF1CC),
+      new THREE.Color(0xCFE6FF)
+    ];
 
     for (let i = 0; i < starCount; i++) {
       const theta = Math.random() * Math.PI * 2;
-      const phi = Math.acos(Math.random() * 0.75 + 0.25); // Only upper hemisphere above horizon
-      const radius = 860 + Math.random() * 120;
+      const phi = Math.acos(Math.random() * 0.72 + 0.22);
+      const radius = 1280 + Math.random() * 170;
 
       starPositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
       starPositions[i * 3 + 1] = radius * Math.cos(phi);
       starPositions[i * 3 + 2] = radius * Math.sin(phi) * Math.sin(theta);
+
+      const c = starPalette[i % starPalette.length];
+      starColors[i * 3] = c.r;
+      starColors[i * 3 + 1] = c.g;
+      starColors[i * 3 + 2] = c.b;
     }
 
     starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+    starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
     this.starMat = new THREE.PointsMaterial({
       color: 0xFFFFFF,
-      size: 3.2,
+      vertexColors: true,
+      size: 3.6,
       transparent: true,
       opacity: 0.0,
       fog: false
@@ -376,11 +426,16 @@ export class Environment {
   _applyOceanShader(mat, { isBay = false } = {}) {
     mat.userData = mat.userData || {};
     mat.userData.isOceanShader = true;
-    mat.customProgramCacheKey = () => (isBay ? 'morro_ocean_bay_v1' : 'morro_ocean_deep_v1');
+    mat.customProgramCacheKey = () => (isBay ? 'morro_ocean_bay_v2' : 'morro_ocean_deep_v2');
 
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = SHARED_SHADER_UNIFORMS.uTime;
       shader.uniforms.uNightFactor = SHARED_SHADER_UNIFORMS.uNightFactor;
+      shader.uniforms.uSunsetFactor = SHARED_SHADER_UNIFORMS.uSunsetFactor;
+      shader.uniforms.uSunDir = SHARED_SHADER_UNIFORMS.uSunDir;
+      shader.uniforms.uHorizonColor = this.skyUniforms
+        ? this.skyUniforms.uHorizonColor
+        : SHARED_SHADER_UNIFORMS.uSkyHorizonColor;
       shader.uniforms.uDeepColor = this.waterMat ? { value: this.waterMat.color } : { value: new THREE.Color(0x06649B) };
 
       shader.vertexShader = shader.vertexShader
@@ -440,6 +495,9 @@ vShoreDist = ocSD;`
           `#include <common>
 uniform float uTime;
 uniform float uNightFactor;
+uniform float uSunsetFactor;
+uniform vec3 uSunDir;
+uniform vec3 uHorizonColor;
 uniform vec3 uDeepColor;
 varying vec3 vOcWorldPos;
 varying float vShoreDist;
@@ -491,7 +549,29 @@ ocFoam = clamp(ocCrest * 0.92 + ocBack * 0.45, 0.0, 1.0) * smoothstep(-0.32, 0.2
 vec3 ocFoamCol = mix(vec3(0.95, 0.98, 1.0), vec3(0.68, 0.78, 0.90), uNightFactor);
 diffuseColor.rgb = mix(diffuseColor.rgb, ocFoamCol, ocFoam * 0.86);
 diffuseColor.a = clamp(max(diffuseColor.a * ocShoreFade, ocFoam * 0.92), 0.0, 0.96);
+` : ''}
+// Reflexos de Fresnel dourado-violeta no pôr do sol & prata lunar à noite sobre o mar
+float ocSurfRip = ocNoise2(vOcWorldPos.xz * 0.75 + vec2(uTime * 0.45, -uTime * 0.32));
+vec3 ocViewDir = normalize(cameraPosition - vOcWorldPos);
+float ocFres = pow(1.0 - max(ocViewDir.y, 0.0), 3.0);
+vec2 ocSunXZ = normalize(vec2(uSunDir.x, uSunDir.z) + vec2(0.0001));
+vec2 ocRayXZ = normalize(vOcWorldPos.xz - cameraPosition.xz + vec2(0.0001));
+float ocSunAlign = max(dot(ocRayXZ, ocSunXZ), 0.0);
+diffuseColor.rgb += mix(vec3(0.55, 0.34, 0.56), vec3(1.0, 0.64, 0.30), ocSunAlign) * uSunsetFactor * ocFres * 0.55;
+diffuseColor.rgb += vec3(1.0, 0.80, 0.46) * pow(ocSunAlign, 10.0) * uSunsetFactor * 0.38;
+diffuseColor.rgb += vec3(1.0, 0.90, 0.64) * pow(ocSunAlign, 36.0) * smoothstep(0.38, 0.82, ocSurfRip) * uSunsetFactor * 0.95;
+diffuseColor.rgb += vec3(0.32, 0.48, 0.68) * uNightFactor * ocFres * 0.25;
+${!isBay ? `
+// Fusão atmosférica suave do mar distante no horizonte (zero corte duro com o céu)
+float ocHorizBlend = smoothstep(380.0, 1220.0, length(vOcWorldPos.xz));
+diffuseColor.rgb = mix(diffuseColor.rgb, uHorizonColor, ocHorizBlend * 0.85);
 ` : ''}`
+        )
+        .replace(
+          '#include <emissivemap_fragment>',
+          `#include <emissivemap_fragment>
+${!isBay ? `float ocHorizGlow = smoothstep(420.0, 1320.0, length(vOcWorldPos.xz));
+totalEmissiveRadiance += uHorizonColor * ocHorizGlow * mix(0.24, 0.42, max(uSunsetFactor, uNightFactor * 0.75));` : ''}`
         )
         .replace(
           '#include <roughnessmap_fragment>',
@@ -530,17 +610,15 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
     this.waterMesh.receiveShadow = true;
     this.group.add(this.waterMesh);
 
-    // 1B. Extensões oceânicas laterais contínuas além das pontas da enseada (|X| > 625) — elimina 100% a quina de 90° no horizonte!
-    const sideOceanGeo = new THREE.PlaneGeometry(2600, 620, 16, 8);
-    sideOceanGeo.rotateX(-Math.PI / 2);
-    [-1920, 1920].forEach((sx) => {
-      const sideWater = new THREE.Mesh(sideOceanGeo, this.waterMat);
-      sideWater.position.set(sx, 0.01, -184.0);
-      sideWater.receiveShadow = true;
-      sideWater.matrixAutoUpdate = false;
-      sideWater.updateMatrix();
-      this.group.add(sideWater);
-    });
+    // 1B. Saia Oceânica Circular 360° (r = 2100m em y = -0.18): veda 100% qualquer fresta lateral/noroeste contra o limbo!
+    const horizonSeaGeo = new THREE.CircleGeometry(2100, 64);
+    horizonSeaGeo.rotateX(-Math.PI / 2);
+    const horizonSeaMesh = new THREE.Mesh(horizonSeaGeo, this.waterMat);
+    horizonSeaMesh.position.set(0, -0.18, 0);
+    horizonSeaMesh.receiveShadow = true;
+    horizonSeaMesh.matrixAutoUpdate = false;
+    horizonSeaMesh.updateMatrix();
+    this.group.add(horizonSeaMesh);
 
     // 2. Águas Costeiras Calmas da Enseada Carioca (Bay Water Mesh estendida por toda a largura continental)
     this.createCoastalBayWater();
@@ -607,82 +685,208 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
     this.group.add(this.surfGroup);
   }
 
-  // Arquipélago Tropical Distante no Horizonte Sul (Atlântico Sul):
-  // Apenas ilhotas oceânicas suaves ao sul (mar aberto), sem blocos gigantes atrás da serra norte!
+  // Arquipélago Carioca + Anel Contínuo 360° da Serra do Mar + Luzes Distantes na Baía:
   createHorizonArchipelago() {
     const archGroup = new THREE.Group();
 
     const graniteMat = createStylizedMaterial({ color: 0x56616B }, 'stone');
     const lushIslandMat = createStylizedMaterial({ color: 0x2E6B4F }, 'foliage');
     const sandRimMat = createStylizedMaterial({ color: 0xDEC07C }, 'stone');
+    const distantRidgeMat = createStylizedMaterial({ color: 0x3A625B }, 'foliage');
+    const deepBackdropMat = new THREE.MeshLambertMaterial({ color: 0x456B7A, flatShading: true });
 
     const islands = [
-      // 1. Ilhotas Costeiras das Cagarras no Horizonte Sul (Mar Aberto, Z > 420)
-      { x: -290, z: 450, rx: 28, rz: 18, h: 16, hasPalmCap: true },
-      { x: -235, z: 485, rx: 16, rz: 12, h: 10, hasPalmCap: false },
-      { x: 260,  z: 465, rx: 32, rz: 20, h: 18, hasPalmCap: true },
-      { x: 320,  z: 495, rx: 18, rz: 14, h: 11, hasPalmCap: false },
+      // 1. Ilhotas Costeiras das Cagarras no Horizonte Sul (Mar Aberto, silhuetas multi-pico!)
+      { x: -290, z: 450, rx: 32, rz: 19, h: 17, hasPalmCap: true, hasTwinPeak: true },
+      { x: -235, z: 485, rx: 19, rz: 13, h: 10, hasPalmCap: false, hasTwinPeak: true },
+      { x: 260,  z: 465, rx: 34, rz: 20, h: 18, hasPalmCap: true, hasTwinPeak: true },
+      { x: 320,  z: 495, rx: 20, rz: 14, h: 11, hasPalmCap: false, hasTwinPeak: false },
       // 2. Ilha Rasa & Farol Oceânico ao Sul Profundo
-      { x: 18,   z: 540, rx: 26, rz: 16, h: 14, hasPalmCap: true, hasBeacon: true },
-      // 3. Cabos & Morros Distantes Emoldurando as Extremidades Oeste e Leste da Baía (fecham o horizonte sem cortes retos!)
-      { x: -580, z: 120, rx: 110, rz: 65, h: 42, hasPalmCap: true },
-      { x: -720, z: -20, rx: 145, rz: 95, h: 64, hasPalmCap: true },
-      { x: -840, z: -210, rx: 180, rz: 120, h: 82, hasPalmCap: true },
-      { x: 580,  z: 130, rx: 115, rz: 68, h: 45, hasPalmCap: true },
-      { x: 730,  z: -15, rx: 150, rz: 98, h: 68, hasPalmCap: true },
-      { x: 850,  z: -215, rx: 185, rz: 125, h: 86, hasPalmCap: true },
-      // 4. Segunda Camada Azul-Esverdeada da Serra do Mar ao Fundo Norte (perspectiva aérea infinita!)
-      { x: -540, z: -560, rx: 220, rz: 110, h: 98,  hasPalmCap: true },
-      { x: -220, z: -610, rx: 240, rz: 120, h: 112, hasPalmCap: true },
-      { x: 140,  z: -620, rx: 250, rz: 120, h: 118, hasPalmCap: true },
-      { x: 510,  z: -570, rx: 220, rz: 115, h: 102, hasPalmCap: true }
+      { x: 18,   z: 540, rx: 28, rz: 17, h: 15, hasPalmCap: true, hasBeacon: true, hasTwinPeak: true },
+      // 3. Cadeia Contínua de Cabos Oeste/Noroeste (fecha 100% o horizonte visto do Mirante Imperial!)
+      { x: -510, z: 120, rx: 120, rz: 72, h: 42, hasPalmCap: true, ridge: true },
+      { x: -640, z: -20, rx: 145, rz: 95, h: 58, hasPalmCap: true, ridge: true },
+      { x: -590, z: -180, rx: 160, rz: 115, h: 72, hasPalmCap: true, ridge: true },
+      { x: -720, z: -320, rx: 190, rz: 130, h: 88, hasPalmCap: true, ridge: true },
+      { x: -860, z: -470, rx: 220, rz: 145, h: 105, hasPalmCap: true, ridge: true },
+      { x: -890, z: 40,  rx: 170, rz: 125, h: 66, hasPalmCap: true, distant: true },
+      { x: -910, z: -195, rx: 200, rz: 140, h: 86, hasPalmCap: true, distant: true },
+      // 4. Cadeia Contínua de Cabos Leste/Nordeste (simetria panorâmica 360°)
+      { x: 520,  z: 125, rx: 120, rz: 72, h: 44, hasPalmCap: true, ridge: true },
+      { x: 645,  z: -15, rx: 145, rz: 95, h: 60, hasPalmCap: true, ridge: true },
+      { x: 595,  z: -175, rx: 160, rz: 115, h: 74, hasPalmCap: true, ridge: true },
+      { x: 725,  z: -315, rx: 190, rz: 130, h: 90, hasPalmCap: true, ridge: true },
+      { x: 865,  z: -465, rx: 220, rz: 145, h: 108, hasPalmCap: true, ridge: true },
+      { x: 895,  z: 45,  rx: 170, rz: 125, h: 68, hasPalmCap: true, distant: true },
+      { x: 915,  z: -190, rx: 200, rz: 140, h: 88, hasPalmCap: true, distant: true },
+      // 5. Segunda & Terceira Camadas da Serra do Mar ao Fundo Norte/Noroeste/Nordeste (horizonte contínuo!)
+      { x: -640, z: -560, rx: 240, rz: 120, h: 104, hasPalmCap: true, distant: true },
+      { x: -360, z: -600, rx: 250, rz: 125, h: 114, hasPalmCap: true, distant: true },
+      { x: -80,  z: -625, rx: 260, rz: 130, h: 122, hasPalmCap: true, distant: true },
+      { x: 210,  z: -620, rx: 255, rz: 125, h: 118, hasPalmCap: true, distant: true },
+      { x: 510,  z: -575, rx: 245, rz: 120, h: 106, hasPalmCap: true, distant: true }
     ];
 
+    const bodyGeo = new THREE.DodecahedronGeometry(1.0, 1);
+    const rimGeo = new THREE.CylinderGeometry(0.95, 1.12, 1.1, 10);
+    const capGeo = new THREE.DodecahedronGeometry(0.82, 1);
+
+    const rimMatrices = [];
+    const graniteMatrices = [];
+    const ridgeMatrices = [];
+    const backdropMatrices = [];
+    const lushCapMatrices = [];
+
+    const d = this._dummy;
+    const pushMatrix = (list, x, y, z, rx, ry, rz, rotY = 0) => {
+      d.position.set(x, y, z);
+      d.rotation.set(0, rotY, 0);
+      d.scale.set(rx, ry, rz);
+      d.updateMatrix();
+      list.push(d.matrix.clone());
+    };
+
     islands.forEach((isl, idx) => {
-      const g = new THREE.Group();
-      g.position.set(isl.x, -0.5, isl.z);
-
+      const baseY = -0.5;
       // Base suave de areia na linha d'água
-      const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.12, 1.1, 10), sandRimMat);
-      rim.scale.set(isl.rx * 1.02, 1.0, isl.rz * 1.02);
-      rim.position.y = 0.2;
-      g.add(rim);
+      pushMatrix(rimMatrices, isl.x, baseY + 0.2, isl.z, isl.rx * 1.02, 1.0, isl.rz * 1.02, 0);
 
-      // Silhueta baixa e alongada de ilhota granítica
-      const peak = new THREE.Mesh(new THREE.DodecahedronGeometry(1.0, 1), graniteMat);
-      peak.scale.set(isl.rx, isl.h, isl.rz);
-      peak.position.y = isl.h * 0.28;
-      peak.rotation.y = idx * 1.1;
-      g.add(peak);
+      const targetList = isl.distant
+        ? backdropMatrices
+        : (isl.ridge ? ridgeMatrices : graniteMatrices);
+      pushMatrix(targetList, isl.x, baseY + isl.h * 0.28, isl.z, isl.rx, isl.h, isl.rz, idx * 1.1);
 
-      // Vegetação integrada no topo da ilhota (sem saltar para fora da lateral)
-      if (isl.hasPalmCap) {
-        const cap = new THREE.Mesh(new THREE.DodecahedronGeometry(0.82, 1), lushIslandMat);
-        cap.scale.set(isl.rx * 0.76, isl.h * 0.42, isl.rz * 0.76);
-        cap.position.set(0, isl.h * 0.46, 0);
-        cap.rotation.y = idx * 1.1;
-        g.add(cap);
+      // Segundo pico / recife assimétrico nas ilhotas costeiras (acaba com a "meia-bola" simétrica!)
+      if (isl.hasTwinPeak) {
+        const sgn = idx % 2 === 0 ? 1 : -1;
+        pushMatrix(
+          targetList,
+          isl.x + isl.rx * 0.52 * sgn,
+          baseY + isl.h * 0.14,
+          isl.z + isl.rz * 0.18,
+          isl.rx * 0.56,
+          isl.h * 0.62,
+          isl.rz * 0.58,
+          idx * 1.7 + 0.6
+        );
+        pushMatrix(
+          graniteMatrices,
+          isl.x - isl.rx * 0.65 * sgn,
+          baseY + 0.7,
+          isl.z - isl.rz * 0.2,
+          isl.rx * 0.34,
+          Math.max(2.6, isl.h * 0.22),
+          isl.rz * 0.34,
+          0
+        );
+      }
+
+      if (isl.hasPalmCap && !isl.distant) {
+        pushMatrix(
+          lushCapMatrices,
+          isl.x,
+          baseY + isl.h * 0.46,
+          isl.z,
+          isl.rx * 0.76,
+          isl.h * 0.42,
+          isl.rz * 0.76,
+          idx * 1.1
+        );
       }
 
       // Farol oceânico na Ilha Rasa
       if (isl.hasBeacon) {
+        const beaconGroup = new THREE.Group();
+        beaconGroup.position.set(isl.x, baseY, isl.z);
+
         const tower = new THREE.Mesh(
           new THREE.CylinderGeometry(0.9, 1.3, 9.0, 8),
           new THREE.MeshLambertMaterial({ color: 0xF8FAFC })
         );
         tower.position.set(0, isl.h * 0.72 + 4.0, 0);
-        g.add(tower);
+        beaconGroup.add(tower);
 
         const lantern = new THREE.Mesh(
           new THREE.SphereGeometry(1.3, 8, 8),
           new THREE.MeshBasicMaterial({ color: 0xFDE047 })
         );
         lantern.position.set(0, isl.h * 0.72 + 9.0, 0);
-        g.add(lantern);
-      }
+        beaconGroup.add(lantern);
 
-      archGroup.add(g);
+        beaconGroup.traverse((o) => {
+          if (o.isMesh || o === beaconGroup) {
+            o.matrixAutoUpdate = false;
+            o.updateMatrix();
+          }
+        });
+        archGroup.add(beaconGroup);
+      }
     });
+
+    const makeInstanced = (geo, mat, matrices) => {
+      if (!matrices.length) return null;
+      const inst = new THREE.InstancedMesh(geo, mat, matrices.length);
+      for (let i = 0; i < matrices.length; i++) {
+        inst.setMatrixAt(i, matrices[i]);
+      }
+      inst.instanceMatrix.needsUpdate = true;
+      inst.frustumCulled = false;
+      inst.matrixAutoUpdate = false;
+      inst.updateMatrix();
+      archGroup.add(inst);
+      return inst;
+    };
+
+    makeInstanced(rimGeo, sandRimMat, rimMatrices);
+    makeInstanced(bodyGeo, graniteMat, graniteMatrices);
+    makeInstanced(bodyGeo, distantRidgeMat, ridgeMatrices);
+    makeInstanced(bodyGeo, deepBackdropMat, backdropMatrices);
+    makeInstanced(capGeo, lushIslandMat, lushCapMatrices);
+
+    // Luzes Distantes ancoradas nas encostas dos cabos voltadas para a baía (1 único Points draw call!)
+    const ridgeCapes = islands.filter((isl) => isl.ridge);
+    const bayLightCount = 132;
+    const bayLightPos = new Float32Array(bayLightCount * 3);
+    const bayLightCol = new Float32Array(bayLightCount * 3);
+    const lightTones = [
+      new THREE.Color(0xFFD580),
+      new THREE.Color(0xFFB347),
+      new THREE.Color(0xFFF1C9)
+    ];
+    for (let i = 0; i < bayLightCount; i++) {
+      const cape = ridgeCapes[i % ridgeCapes.length];
+      const inward = cape.x < 0 ? 1 : -1;
+      const s1 = Math.sin(i * 19.31 + 1.7) * 43758.5453;
+      const s2 = Math.sin(i * 47.17 + 3.9) * 43758.5453;
+      const r1 = s1 - Math.floor(s1);
+      const r2 = s2 - Math.floor(s2);
+
+      const ang = (r1 - 0.5) * 1.35;
+      bayLightPos[i * 3] = cape.x + inward * Math.cos(ang) * cape.rx * (0.46 + r2 * 0.24);
+      bayLightPos[i * 3 + 1] = 2.2 + (1.0 - r2) * Math.min(11.0, cape.h * 0.18);
+      bayLightPos[i * 3 + 2] = cape.z + Math.sin(ang) * cape.rz * 0.62;
+
+      const col = lightTones[i % lightTones.length];
+      bayLightCol[i * 3] = col.r;
+      bayLightCol[i * 3 + 1] = col.g;
+      bayLightCol[i * 3 + 2] = col.b;
+    }
+    const bayLightGeo = new THREE.BufferGeometry();
+    bayLightGeo.setAttribute('position', new THREE.BufferAttribute(bayLightPos, 3));
+    bayLightGeo.setAttribute('color', new THREE.BufferAttribute(bayLightCol, 3));
+    this.distantBayLightsMat = new THREE.PointsMaterial({
+      size: 2.5,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      fog: false
+    });
+    this.distantBayLights = new THREE.Points(bayLightGeo, this.distantBayLightsMat);
+    this.distantBayLights.matrixAutoUpdate = false;
+    this.distantBayLights.updateMatrix();
+    archGroup.add(this.distantBayLights);
 
     this.group.add(archGroup);
   }
@@ -741,8 +945,21 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
   createSeabirds() {
     // Gaivotas e aves costeiras sobrevoando a baía, a praia e o alto do Morro do Sol
     this.birds = [];
-    const wingMat = new THREE.MeshBasicMaterial({ color: 0xF8FAFC, side: THREE.DoubleSide });
-    const bodyMat = new THREE.MeshBasicMaterial({ color: 0xE2E8F0 });
+    this.birdWingMat = new THREE.MeshLambertMaterial({
+      color: 0xF8FAFC,
+      emissive: 0xCBD5E1,
+      emissiveIntensity: 0.12,
+      side: THREE.DoubleSide,
+      flatShading: true
+    });
+    this.birdBodyMat = new THREE.MeshLambertMaterial({
+      color: 0xE2E8F0,
+      emissive: 0x94A3B8,
+      emissiveIntensity: 0.08,
+      flatShading: true
+    });
+    const wingMat = this.birdWingMat;
+    const bodyMat = this.birdBodyMat;
 
     const leftWingGeo = new THREE.BufferGeometry();
     leftWingGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([
@@ -996,19 +1213,19 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
     const sunZ = Math.sin(sunAngle * 0.5) * 45 + 20;
 
     const isDaylight = (sunY > -10);
-    this.sunMesh.visible = isDaylight;
-    this.moonMesh.visible = !isDaylight || (progress > 0.45 && progress < 0.95);
+    // Sol & Lua HDR agora são renderizados no SkyDome; mantemos meshes ocultas por compatibilidade
+    if (this.sunMesh) this.sunMesh.visible = false;
+    if (this.moonMesh) this.moonMesh.visible = false;
 
     if (isDaylight) {
       this.dirLight.position.set(sunX, Math.max(12, sunY), sunZ);
-      this.sunMesh.position.copy(this.dirLight.position).multiplyScalar(4.8);
+      if (this.sunMesh) this.sunMesh.position.copy(this.dirLight.position).multiplyScalar(4.8);
     } else {
-      // Moon lighting position
       const moonX = -sunX;
       const moonY = Math.max(25, -sunY);
       const moonZ = -sunZ;
       this.dirLight.position.set(moonX, moonY, moonZ);
-      this.moonMesh.position.set(moonX * 4.5, moonY * 4.5, moonZ * 4.5);
+      if (this.moonMesh) this.moonMesh.position.set(moonX * 4.5, moonY * 4.5, moonZ * 4.5);
     }
 
     // Color Palettes & Atmosphere Blend:
@@ -1023,12 +1240,13 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
     const rate = instant ? 1.0 : 0.08;
 
     if (this.skyUniforms) {
-      this.skyUniforms.uSunDir.value.copy(this.dirLight.position).normalize();
+      this.skyUniforms.uSunDir.value.set(sunX, Math.max(isDaylight ? 5 : -8, sunY), sunZ).normalize();
+      this.skyUniforms.uMoonDir.value.set(-sunX, Math.max(22, -sunY), -sunZ).normalize();
     }
 
     if (targetPhase === 'day') {
       lerpTo(this.scene.background, '#58B4E3', rate);
-      lerpTo(this.scene.fog.color, '#A8DBF0', rate);
+      lerpTo(this.scene.fog.color, '#BCE6FA', rate);
       lerpTo(this.hemiLight.color, 0xE1F5FE, rate);
       lerpTo(this.hemiLight.groundColor, 0x367A45, rate);
       this.hemiLight.intensity = 0.85;
@@ -1036,14 +1254,19 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
       this.dirLight.intensity = 2.45;
       if (this.iblMaps) this.scene.environmentIntensity = 0.78;
       if (this.starMat) this.starMat.opacity = instant ? 0.0 : Math.max(0, this.starMat.opacity - 0.08);
+      if (this.distantBayLightsMat) this.distantBayLightsMat.opacity += (0.0 - this.distantBayLightsMat.opacity) * rate;
       if (this.waterMat) lerpTo(this.waterMat.color, 0x06649B, rate);
       if (this.bayWaterMat) lerpTo(this.bayWaterMat.color, 0x0B86C4, rate);
       if (this.skyUniforms) {
-        lerpTo(this.skyUniforms.uTopColor.value, '#3693D6', rate);
-        lerpTo(this.skyUniforms.uMidColor.value, '#68BEEB', rate);
-        lerpTo(this.skyUniforms.uHorizonColor.value, '#BCE5F6', rate);
+        lerpTo(this.skyUniforms.uTopColor.value, '#2B82D4', rate);
+        lerpTo(this.skyUniforms.uMidColor.value, '#66B9EC', rate);
+        lerpTo(this.skyUniforms.uLowColor.value, '#A6DEF5', rate);
+        lerpTo(this.skyUniforms.uHorizonColor.value, '#D4EFFA', rate);
+        lerpTo(this.skyUniforms.uSeaHorizonColor.value, '#4A9BC2', rate);
         lerpTo(this.skyUniforms.uSunGlowColor.value, '#FFF4C8', rate);
         this.skyUniforms.uSunGlowStrength.value += (0.42 - this.skyUniforms.uSunGlowStrength.value) * rate;
+        this.skyUniforms.uSunDiscStrength.value += (0.72 - this.skyUniforms.uSunDiscStrength.value) * rate;
+        this.skyUniforms.uMoonStrength.value += (0.0 - this.skyUniforms.uMoonStrength.value) * rate;
       }
       if (this.cloudMat) {
         lerpTo(this.cloudMat.color, 0xFAF8F3, rate);
@@ -1056,67 +1279,101 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
         this.atmoMat.opacity += (0.22 - this.atmoMat.opacity) * rate;
         this.atmoMat.size = 0.65;
       }
+      if (this.birdWingMat && this.birdBodyMat) {
+        lerpTo(this.birdWingMat.color, 0xF8FAFC, rate);
+        lerpTo(this.birdWingMat.emissive, 0xCBD5E1, rate);
+        this.birdWingMat.emissiveIntensity = 0.12;
+        lerpTo(this.birdBodyMat.color, 0xE2E8F0, rate);
+        lerpTo(this.birdBodyMat.emissive, 0x94A3B8, rate);
+        this.birdBodyMat.emissiveIntensity = 0.08;
+      }
     } else if (targetPhase === 'sunset') {
       const sunsetT = (progress - 0.42) / 0.16;
-      lerpBlend(this.scene.background, '#F57C36', '#6A3BB8', sunsetT, rate);
-      lerpBlend(this.scene.fog.color, '#F4A267', '#C87872', sunsetT, rate);
+      lerpBlend(this.scene.background, '#E87A48', '#52348F', sunsetT, rate);
+      lerpBlend(this.scene.fog.color, '#F4AA6E', '#D9816A', sunsetT, rate);
       lerpTo(this.hemiLight.color, 0xFED7AA, rate);
       lerpTo(this.hemiLight.groundColor, 0x6D3518, rate);
-      this.hemiLight.intensity = 0.82;
-      lerpTo(this.dirLight.color, 0xF5A336, rate);
-      this.dirLight.intensity = 2.15;
-      if (this.iblMaps) this.scene.environmentIntensity = 0.74;
-      if (this.starMat) this.starMat.opacity = instant ? (sunsetT * 0.4) : Math.min(0.4, sunsetT * 0.4);
-      if (this.waterMat) lerpTo(this.waterMat.color, 0x075985, rate);
-      if (this.bayWaterMat) lerpTo(this.bayWaterMat.color, 0x0284C7, rate);
+      this.hemiLight.intensity = 0.84;
+      lerpTo(this.dirLight.color, 0xF7A842, rate);
+      this.dirLight.intensity = 2.20;
+      if (this.iblMaps) this.scene.environmentIntensity = 0.76;
+      if (this.starMat) this.starMat.opacity = instant ? (sunsetT * 0.38) : Math.min(0.38, sunsetT * 0.38);
+      if (this.distantBayLightsMat) this.distantBayLightsMat.opacity += (0.30 - this.distantBayLightsMat.opacity) * rate;
+      if (this.waterMat) lerpTo(this.waterMat.color, 0x0A4B78, rate);
+      if (this.bayWaterMat) lerpTo(this.bayWaterMat.color, 0x0875A8, rate);
       if (this.skyUniforms) {
-        lerpBlend(this.skyUniforms.uTopColor.value, '#5056A8', '#28235C', sunsetT, rate);
-        lerpBlend(this.skyUniforms.uMidColor.value, '#E07A5F', '#8E4985', sunsetT, rate);
-        lerpBlend(this.skyUniforms.uHorizonColor.value, '#FBBF77', '#E88B68', sunsetT, rate);
-        lerpTo(this.skyUniforms.uSunGlowColor.value, '#FFB85C', rate);
-        this.skyUniforms.uSunGlowStrength.value += (0.72 - this.skyUniforms.uSunGlowStrength.value) * rate;
+        lerpBlend(this.skyUniforms.uTopColor.value, '#2B2F68', '#1D1A4C', sunsetT, rate);
+        lerpBlend(this.skyUniforms.uMidColor.value, '#C6596E', '#8E4378', sunsetT, rate);
+        lerpBlend(this.skyUniforms.uLowColor.value, '#F28A48', '#D8675A', sunsetT, rate);
+        lerpBlend(this.skyUniforms.uHorizonColor.value, '#F8B878', '#E0886B', sunsetT, rate);
+        lerpBlend(this.skyUniforms.uSeaHorizonColor.value, '#8B6572', '#52436A', sunsetT, rate);
+        lerpTo(this.skyUniforms.uSunGlowColor.value, '#FFCA6B', rate);
+        this.skyUniforms.uSunGlowStrength.value += (1.05 - this.skyUniforms.uSunGlowStrength.value) * rate;
+        this.skyUniforms.uSunDiscStrength.value += (1.15 - this.skyUniforms.uSunDiscStrength.value) * rate;
+        this.skyUniforms.uMoonStrength.value += (0.0 - this.skyUniforms.uMoonStrength.value) * rate;
       }
       if (this.cloudMat) {
-        lerpTo(this.cloudMat.color, 0xFBD2A8, rate);
-        lerpTo(this.cloudMat.emissive, 0xD96B43, rate);
-        this.cloudMat.emissiveIntensity = 0.24;
-        this.cloudMat.opacity = 0.90;
+        lerpTo(this.cloudMat.color, 0xFFF2D6, rate);
+        lerpTo(this.cloudMat.emissive, 0xFFA764, rate);
+        this.cloudMat.emissiveIntensity = 0.78;
+        this.cloudMat.opacity = 0.88;
       }
       if (this.atmoMat) {
         lerpTo(this.atmoMat.color, 0xFFD080, rate);
-        this.atmoMat.opacity += (0.34 - this.atmoMat.opacity) * rate;
+        this.atmoMat.opacity += (0.36 - this.atmoMat.opacity) * rate;
         this.atmoMat.size = 0.80;
+      }
+      if (this.birdWingMat && this.birdBodyMat) {
+        lerpTo(this.birdWingMat.color, 0xFFE6C2, rate);
+        lerpTo(this.birdWingMat.emissive, 0xD98A54, rate);
+        this.birdWingMat.emissiveIntensity = 0.18;
+        lerpTo(this.birdBodyMat.color, 0xF5D0A9, rate);
+        lerpTo(this.birdBodyMat.emissive, 0xC47644, rate);
+        this.birdBodyMat.emissiveIntensity = 0.14;
       }
     } else if (targetPhase === 'night') {
       // LUMINOUS NIGHT: Deep cobalt blue sky, sparkling stars, bright moon bounce, zero murky darkness!
-      lerpTo(this.scene.background, '#111D33', rate);
-      lerpTo(this.scene.fog.color, '#1D3254', rate);
-      lerpTo(this.hemiLight.color, 0x6080A8, rate);
-      lerpTo(this.hemiLight.groundColor, 0x1F3A2E, rate);
-      this.hemiLight.intensity = 0.65; // Balanced with PMREM night IBL
+      lerpTo(this.scene.background, '#0E1C36', rate);
+      lerpTo(this.scene.fog.color, '#1D375E', rate);
+      lerpTo(this.hemiLight.color, 0x6788B2, rate);
+      lerpTo(this.hemiLight.groundColor, 0x223E32, rate);
+      this.hemiLight.intensity = 0.68; // Balanced with PMREM night IBL
       lerpTo(this.dirLight.color, 0xD4E6F8, rate);
-      this.dirLight.intensity = 0.72; // Soft directional moon rim, prevents specular blowout on water
-      if (this.iblMaps) this.scene.environmentIntensity = 0.50;
+      this.dirLight.intensity = 0.74; // Soft directional moon rim, prevents specular blowout on water
+      if (this.iblMaps) this.scene.environmentIntensity = 0.52;
       if (this.starMat) this.starMat.opacity = instant ? 0.85 : Math.min(0.85, this.starMat.opacity + 0.08);
+      if (this.distantBayLightsMat) this.distantBayLightsMat.opacity += (0.74 - this.distantBayLightsMat.opacity) * rate;
       if (this.waterMat) lerpTo(this.waterMat.color, 0x0A3654, rate);
       if (this.bayWaterMat) lerpTo(this.bayWaterMat.color, 0x0369A1, rate);
       if (this.skyUniforms) {
-        lerpTo(this.skyUniforms.uTopColor.value, '#0B162B', rate);
-        lerpTo(this.skyUniforms.uMidColor.value, '#142646', rate);
-        lerpTo(this.skyUniforms.uHorizonColor.value, '#223B63', rate);
+        lerpTo(this.skyUniforms.uTopColor.value, '#081226', rate);
+        lerpTo(this.skyUniforms.uMidColor.value, '#122446', rate);
+        lerpTo(this.skyUniforms.uLowColor.value, '#1A345C', rate);
+        lerpTo(this.skyUniforms.uHorizonColor.value, '#213E69', rate);
+        lerpTo(this.skyUniforms.uSeaHorizonColor.value, '#132948', rate);
         lerpTo(this.skyUniforms.uSunGlowColor.value, '#7CA6D8', rate);
         this.skyUniforms.uSunGlowStrength.value += (0.28 - this.skyUniforms.uSunGlowStrength.value) * rate;
+        this.skyUniforms.uSunDiscStrength.value += (0.0 - this.skyUniforms.uSunDiscStrength.value) * rate;
+        this.skyUniforms.uMoonStrength.value += (1.0 - this.skyUniforms.uMoonStrength.value) * rate;
       }
       if (this.cloudMat) {
-        lerpTo(this.cloudMat.color, 0x3D5578, rate);
-        lerpTo(this.cloudMat.emissive, 0x1D2E49, rate);
-        this.cloudMat.emissiveIntensity = 0.16;
-        this.cloudMat.opacity = 0.52;
+        lerpTo(this.cloudMat.color, 0x5B7DA6, rate);
+        lerpTo(this.cloudMat.emissive, 0x2F4E78, rate);
+        this.cloudMat.emissiveIntensity = 0.44;
+        this.cloudMat.opacity = 0.32;
       }
       if (this.atmoMat) {
         lerpTo(this.atmoMat.color, 0xFFE882, rate);
         this.atmoMat.opacity += (0.76 - this.atmoMat.opacity) * rate;
         this.atmoMat.size = 1.05;
+      }
+      if (this.birdWingMat && this.birdBodyMat) {
+        lerpTo(this.birdWingMat.color, 0x3C5475, rate);
+        lerpTo(this.birdWingMat.emissive, 0x16243B, rate);
+        this.birdWingMat.emissiveIntensity = 0.04;
+        lerpTo(this.birdBodyMat.color, 0x334A68, rate);
+        lerpTo(this.birdBodyMat.emissive, 0x111E33, rate);
+        this.birdBodyMat.emissiveIntensity = 0.02;
       }
     } else if (targetPhase === 'dawn') {
       const dawnT = (progress - 0.88) / 0.12;
@@ -1129,14 +1386,19 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
       this.dirLight.intensity = 1.95;
       if (this.iblMaps) this.scene.environmentIntensity = 0.72;
       if (this.starMat) this.starMat.opacity = instant ? 0.0 : Math.max(0, this.starMat.opacity - 0.06);
+      if (this.distantBayLightsMat) this.distantBayLightsMat.opacity += (0.18 - this.distantBayLightsMat.opacity) * rate;
       if (this.waterMat) lerpTo(this.waterMat.color, 0x0284C7, rate);
       if (this.bayWaterMat) lerpTo(this.bayWaterMat.color, 0x0EA5E9, rate);
       if (this.skyUniforms) {
-        lerpBlend(this.skyUniforms.uTopColor.value, '#4C5DA6', '#3B97D8', dawnT, rate);
-        lerpBlend(this.skyUniforms.uMidColor.value, '#E07C95', '#76C4EB', dawnT, rate);
-        lerpBlend(this.skyUniforms.uHorizonColor.value, '#FCD2B5', '#C2E8F8', dawnT, rate);
+        lerpBlend(this.skyUniforms.uTopColor.value, '#3E5294', '#2B82D4', dawnT, rate);
+        lerpBlend(this.skyUniforms.uMidColor.value, '#DF7E96', '#66B9EC', dawnT, rate);
+        lerpBlend(this.skyUniforms.uLowColor.value, '#F8B994', '#A6DEF5', dawnT, rate);
+        lerpBlend(this.skyUniforms.uHorizonColor.value, '#FFE2B3', '#D4EFFA', dawnT, rate);
+        lerpBlend(this.skyUniforms.uSeaHorizonColor.value, '#5A6E94', '#4A9BC2', dawnT, rate);
         lerpTo(this.skyUniforms.uSunGlowColor.value, '#FDE68A', rate);
         this.skyUniforms.uSunGlowStrength.value += (0.60 - this.skyUniforms.uSunGlowStrength.value) * rate;
+        this.skyUniforms.uSunDiscStrength.value += (0.85 - this.skyUniforms.uSunDiscStrength.value) * rate;
+        this.skyUniforms.uMoonStrength.value += (0.0 - this.skyUniforms.uMoonStrength.value) * rate;
       }
       if (this.cloudMat) {
         lerpTo(this.cloudMat.color, 0xFDE0D4, rate);
@@ -1148,6 +1410,14 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
         lerpTo(this.atmoMat.color, 0xFDE68A, rate);
         this.atmoMat.opacity += (0.28 - this.atmoMat.opacity) * rate;
         this.atmoMat.size = 0.72;
+      }
+      if (this.birdWingMat && this.birdBodyMat) {
+        lerpTo(this.birdWingMat.color, 0xFCE7F3, rate);
+        lerpTo(this.birdWingMat.emissive, 0xD8A3B8, rate);
+        this.birdWingMat.emissiveIntensity = 0.14;
+        lerpTo(this.birdBodyMat.color, 0xF5D0E0, rate);
+        lerpTo(this.birdBodyMat.emissive, 0xC48AA3, rate);
+        this.birdBodyMat.emissiveIntensity = 0.10;
       }
     }
   }

@@ -589,9 +589,9 @@ export const UpdatesMixin = {
     const isLit = nightFactor > 0.08;
     if (this.sharedWindowMats && this.sharedWindowMats.length >= 3) {
       const presets = [
-        { day: 0x3D5570, col: 0xFCD34D, em: 0xF59E0B, ei: 1.15 },
-        { day: 0x45607D, col: 0xFDE68A, em: 0xD97706, ei: 0.72 },
-        { day: 0x31455A, col: 0x263547, em: 0x334155, ei: 0.14 }
+        { day: 0x3D5570, col: 0xFFE082, em: 0xFF9F1C, ei: 1.42 },
+        { day: 0x45607D, col: 0xFFD08A, em: 0xE67E22, ei: 0.92 },
+        { day: 0x31455A, col: 0x2E435A, em: 0x3B5570, ei: 0.22 }
       ];
       for (let i = 0; i < this.sharedWindowMats.length; i++) {
         const m = this.sharedWindowMats[i];
@@ -623,7 +623,13 @@ export const UpdatesMixin = {
       }
     }
 
-    // 2. Solar Streetlamps along highways, plazas and promenades
+    // 2. Solar Streetlamps along highways, plazas and promenades (+ lanternas do Mirante Imperial)
+    if (this.miranteLanternMat) {
+      this.miranteLanternMat.emissiveIntensity = 0.25 + 1.85 * nightFactor;
+    }
+    if (this.miranteGlowMat) {
+      this.miranteGlowMat.opacity = 0.04 + 0.24 * nightFactor;
+    }
     if (this.solarLamps && this.solarLamps.length > 0) {
       for (let i = 0; i < this.solarLamps.length; i++) {
         const lamp = this.solarLamps[i];

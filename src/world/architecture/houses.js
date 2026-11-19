@@ -918,11 +918,11 @@ export const HousesMixin = {
       base.receiveShadow = true;
       houseGroup.add(base);
     } else {
-      // Embasamento sólido em alvenaria estrutural
+      // Embasamento sólido em alvenaria estrutural (pedra arenito quente)
       const w = 3.95;
       const d = 3.65;
       const foundationGeo = new THREE.BoxGeometry(w, fDepth * 0.65, d);
-      const foundationMat = getSharedStylizedMaterial(0x5D5852, 'stone', { flatShading: true });
+      const foundationMat = getSharedStylizedMaterial(0x756C62, 'stone', { flatShading: true });
       const foundation = new THREE.Mesh(foundationGeo, foundationMat);
       foundation.position.set(0, -(fDepth * 0.65) / 2, 0);
       foundation.receiveShadow = true;
@@ -940,8 +940,8 @@ export const HousesMixin = {
       this.buildLaje(houseData, 1);
     }
 
-    // Solid stone entrance steps (escadaria de acesso) leading out from the doorway
-    const stepMat = getSharedStylizedMaterial(0x746D64, 'stone', { flatShading: true });
+    // Solid stone entrance steps (escadaria de acesso em tom quente) leading out from the doorway
+    const stepMat = getSharedStylizedMaterial(0x9A8D7D, 'stone', { flatShading: true });
     for (let s = 1; s <= 3; s++) {
       const sz = 1.95 + s * 0.55;
       const gx = plat.x + Math.sin(naturalAngle) * sz;

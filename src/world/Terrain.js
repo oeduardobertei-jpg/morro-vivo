@@ -627,9 +627,10 @@ export class Terrain {
       metalness: 0.0,
       flatShading: false
     });
-    material.customProgramCacheKey = () => 'morro_terrain_splat_v1';
+    material.customProgramCacheKey = () => 'morro_terrain_splat_v2';
     material.onBeforeCompile = (shader) => {
       shader.uniforms.uNightFactor = SHARED_SHADER_UNIFORMS.uNightFactor;
+      shader.uniforms.uSunsetFactor = SHARED_SHADER_UNIFORMS.uSunsetFactor;
       shader.vertexShader = shader.vertexShader
         .replace(
           '#include <common>',
@@ -648,6 +649,7 @@ vTerrWorldNorm = normalize( mat3( modelMatrix ) * objectNormal );`
         .replace(
           '#include <common>',
           `#include <common>
+uniform float uSunsetFactor;
 varying vec3 vTerrWorldPos;
 varying vec3 vTerrWorldNorm;
 
@@ -676,9 +678,18 @@ float trFine = trNoise2(vTerrWorldPos.xz * 1.85);
 float trSlope = 1.0 - clamp(vTerrWorldNorm.y, 0.0, 1.0);
 float trSandZone = (1.0 - smoothstep(1.2, 2.8, vTerrWorldPos.y)) * smoothstep(12.0, 22.0, vTerrWorldPos.z);
 
-// Micro-detalhe de grama tropical / terra batida na encosta
+// Micro-detalhe + variação orgânica pictórica entre grama quente e esmeralda nas encostas
 float trDetail = (trMacro * 0.45 + trMid * 0.35 + trFine * 0.20) - 0.5;
-diffuseColor.rgb *= (1.0 + trDetail * 0.14);
+diffuseColor.rgb *= (1.0 + trDetail * 0.16);
+float trMeadowShift = clamp(trMacro * 0.65 + trMid * 0.35, 0.0, 1.0);
+float trGrassMask = (1.0 - trSandZone) * smoothstep(0.6, 2.5, vTerrWorldPos.y);
+vec3 trSunlitGrass = diffuseColor.rgb * vec3(1.10, 1.06, 0.88);
+vec3 trEmeraldGrass = diffuseColor.rgb * vec3(0.88, 1.02, 0.96);
+diffuseColor.rgb = mix(diffuseColor.rgb, mix(trEmeraldGrass, trSunlitGrass, trMeadowShift), trGrassMask * 0.55);
+
+// Banho suave de luz dourada nas encostas inclinadas ao entardecer
+float trGoldenRim = smoothstep(0.06, 0.36, trSlope) * smoothstep(2.0, 18.0, vTerrWorldPos.y);
+diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * vec3(1.16, 0.98, 0.80), trGoldenRim * uSunsetFactor * 0.45);
 
 // Estrias minerais de granito em escarpas íngremes (independente da resolução da malha)
 float trCliff = smoothstep(0.18, 0.42, trSlope) * smoothstep(2.5, 6.0, vTerrWorldPos.y);

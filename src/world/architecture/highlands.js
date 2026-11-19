@@ -59,18 +59,44 @@ export const HighlandsMixin = {
       miranteGroup.add(tip);
     }
 
-    // 3. Guarda-corpo Rústico e Nobre (Balaústres em madeira maciça com corrimão contínuo)
+    // 3. Guarda-corpo Rústico e Nobre (Balaústres em madeira maciça com corrimão contínuo + 4 arandelas quentes)
     const railMat = new THREE.MeshLambertMaterial({ color: 0x3E2718 });
+    this.miranteLanternMat = new THREE.MeshLambertMaterial({
+      color: 0xFEF3C7,
+      emissive: 0xFF9F1C,
+      emissiveIntensity: 0.25,
+      flatShading: true
+    });
+    this.miranteLanternMat.userData = { dynamicEmissive: true };
+    const miranteHaloMat = new THREE.MeshBasicMaterial({
+      color: 0xFFB84D,
+      transparent: true,
+      opacity: 0.24,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    this.miranteGlowMat = miranteHaloMat;
+
     const numPosts = 16;
+    let arandelaCount = 0;
     for (let r = 0; r < numPosts; r++) {
       const angle = (r / numPosts) * Math.PI * 2;
       // Deixar abertura de entrada ao sul (onde a passarela conecta: ângulo em torno de Math.PI/2)
       if (Math.abs(angle - Math.PI / 2) < 0.38) continue;
 
+      const px = Math.cos(angle) * 7.7;
+      const pz = Math.sin(angle) * 7.7;
       const post = new THREE.Mesh(new THREE.BoxGeometry(0.18, 1.2, 0.18), railMat);
-      post.position.set(Math.cos(angle) * 7.7, 0.75, Math.sin(angle) * 7.7);
+      post.position.set(px, 0.75, pz);
       post.castShadow = true;
       miranteGroup.add(post);
+
+      if (r % 4 === 1 && arandelaCount < 4) {
+        arandelaCount++;
+        const postSconce = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.28, 0.24), this.miranteLanternMat);
+        postSconce.position.set(px, 1.48, pz);
+        miranteGroup.add(postSconce);
+      }
     }
 
     // Corrimão curvado superior de segurança
@@ -201,20 +227,30 @@ export const HighlandsMixin = {
     signBoard.castShadow = true;
     portalGroup.add(signBoard);
 
-    // Lanternas de Boas-Vindas com iluminação noturna aconchegante
-    const lanternMat = new THREE.MeshLambertMaterial({
-      color: 0xFEF3C7,
-      emissive: 0xF59E0B,
-      emissiveIntensity: 1.5,
-      flatShading: true
-    });
-    const lanternL = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.48, 0.35), lanternMat);
+    // Lanternas de Boas-Vindas com halo suave + varal de lâmpadas quentes (sem PointLight extra)
+    const lanternL = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.48, 0.35), this.miranteLanternMat);
     lanternL.position.set(-2.8, 3.8, 0.4);
     portalGroup.add(lanternL);
 
-    const lanternR = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.48, 0.35), lanternMat);
+    const lanternR = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.48, 0.35), this.miranteLanternMat);
     lanternR.position.set(2.8, 3.8, 0.4);
     portalGroup.add(lanternR);
+
+    [-2.8, 2.8].forEach((hx) => {
+      const halo = new THREE.Mesh(new THREE.SphereGeometry(0.45, 8, 6), miranteHaloMat);
+      halo.position.set(hx, 3.8, 0.4);
+      halo.userData.dynamic = true;
+      portalGroup.add(halo);
+    });
+
+    // Varal de 5 lâmpadas douradas sob a viga superior do pórtico
+    const festoonGeo = new THREE.SphereGeometry(0.11, 6, 5);
+    for (let b = 0; b < 5; b++) {
+      const u = (b / 4) * 2 - 1;
+      const bulb = new THREE.Mesh(festoonGeo, this.miranteLanternMat);
+      bulb.position.set(u * 2.0, 4.12 - (1.0 - u * u) * 0.18, 0.15);
+      portalGroup.add(bulb);
+    }
 
     miranteGroup.add(portalGroup);
 
@@ -226,6 +262,36 @@ export const HighlandsMixin = {
       step.receiveShadow = true;
       miranteGroup.add(step);
     }
+
+    // 8. Paisagismo Orgânico na base circular: 5 pedras de granito musgoso + 5 moitas floridas de buganvília
+    const mossStoneMat = new THREE.MeshLambertMaterial({ color: 0x67727E, flatShading: true });
+    const shrubLeafMat = new THREE.MeshLambertMaterial({ color: 0x357A4B, flatShading: true });
+    const bougColors = [0xDF4F7A, 0xE6A13C, 0x9B5DE5];
+    const baseAngles = [-2.55, -1.85, -0.95, 0.05, 0.85];
+    baseAngles.forEach((ang, idx) => {
+      const rRock = 8.75 + (idx % 2) * 0.45;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.75, 0), mossStoneMat);
+      rock.scale.set(1.25, 0.72, 1.05);
+      rock.rotation.set(idx * 0.4, ang, 0.15);
+      rock.position.set(Math.cos(ang) * rRock, -0.25, Math.sin(ang) * rRock);
+      rock.castShadow = true;
+      rock.receiveShadow = true;
+      miranteGroup.add(rock);
+
+      const bushAng = ang + 0.34;
+      const rBush = 8.95;
+      const bx = Math.cos(bushAng) * rBush;
+      const bz = Math.sin(bushAng) * rBush;
+      const foliage = new THREE.Mesh(new THREE.DodecahedronGeometry(0.62, 0), shrubLeafMat);
+      foliage.scale.set(1.15, 0.85, 1.1);
+      foliage.position.set(bx, 0.08, bz);
+      miranteGroup.add(foliage);
+
+      const bloomMat = new THREE.MeshLambertMaterial({ color: bougColors[idx % bougColors.length], flatShading: true });
+      const bloom = new THREE.Mesh(new THREE.DodecahedronGeometry(0.28, 0), bloomMat);
+      bloom.position.set(bx + 0.15, 0.42, bz - 0.12);
+      miranteGroup.add(bloom);
+    });
 
     this.group.add(miranteGroup);
     this.miranteImperial = miranteGroup;

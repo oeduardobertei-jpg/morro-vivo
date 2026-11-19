@@ -12,7 +12,8 @@ import * as THREE from 'three';
 export const SHARED_SHADER_UNIFORMS = {
   uTime: { value: 0 },
   uNightFactor: { value: 0 },
-  uSunDir: { value: new THREE.Vector3(-0.4, 0.8, 0.4).normalize() },
+  uSunsetFactor: { value: 0 },
+  uSunDir: { value: new THREE.Vector3(-0.5, 0.78, 0.36).normalize() },
   uSkyHorizonColor: { value: new THREE.Color('#7EC8E8') }
 };
 
@@ -158,11 +159,21 @@ export function updateSharedShaderUniforms(delta, env) {
     const phase = typeof info === 'string' ? info : (info.phase || 'day');
     const progress = typeof info === 'object' && info.progress !== undefined ? info.progress : 0;
     let targetNight = 0.0;
-    if (phase === 'night') targetNight = 1.0;
-    else if (phase === 'sunset') targetNight = 0.45 * Math.min(1, Math.max(0, (progress - 0.42) / 0.16));
-    else if (phase === 'dawn') targetNight = 0.45 * Math.max(0, 1.0 - (progress - 0.88) / 0.12);
+    let targetSunset = 0.0;
+    if (phase === 'night') {
+      targetNight = 1.0;
+    } else if (phase === 'sunset') {
+      const sunsetT = Math.min(1, Math.max(0, (progress - 0.42) / 0.16));
+      targetNight = 0.45 * sunsetT;
+      targetSunset = 1.0;
+    } else if (phase === 'dawn') {
+      const dawnT = Math.min(1, Math.max(0, (progress - 0.88) / 0.12));
+      targetNight = 0.45 * (1.0 - dawnT);
+      targetSunset = 0.55;
+    }
     const rate = Math.min(1.0, Math.max(0.05, delta * 3.0));
     SHARED_SHADER_UNIFORMS.uNightFactor.value += (targetNight - SHARED_SHADER_UNIFORMS.uNightFactor.value) * rate;
+    SHARED_SHADER_UNIFORMS.uSunsetFactor.value += (targetSunset - SHARED_SHADER_UNIFORMS.uSunsetFactor.value) * rate;
   }
 }
 

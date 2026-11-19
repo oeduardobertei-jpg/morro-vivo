@@ -153,6 +153,20 @@ try {
   await setCam(42, 20, 12, 24, 8, -14);
   await snap('06_night_village_studiofx.png');
 
+  // 6B. Vista exata do Mirante Imperial -> Sol HDR no Pôr do Sol + Flanco Oeste/NO (replica screenshot #8)
+  await setModeAndPhase('bloom', 'sunset');
+  await setCam(84, 44, -124, -28, 18, -38);
+  await snap('09_mirante_sunset_horizon.png');
+
+  // 6C. Vista exata do Mirante Imperial -> Noite (farol volumétrico, Mirante quente, luzes nos cabos e 0 limbo; replica screenshot #9)
+  await setModeAndPhase('bloom', 'night');
+  await setCam(84, 44, -124, -28, 18, -38);
+  await snap('10_mirante_night_horizon.png');
+
+  // 6D. Flanco Noroeste Extremo à Noite (garante 100% vedação atrás das colinas e turbinas)
+  await setCam(45, 58, -88, -140, 8, -175);
+  await snap('11_northwest_ridge_night.png');
+
   // 7. Teste funcional rápido: WASD move câmera + FastPicker clica casa agrupada
   await setCam(-45, 42, 108, 0, 8, -10);
   const beforePos = await page.evaluate(() => window.__morro.controls.target.toArray());

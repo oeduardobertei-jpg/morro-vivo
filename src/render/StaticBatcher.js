@@ -227,7 +227,8 @@ export class StaticBatcher {
           : { flatShading: false };
         applyStylizedShader(mat, preset, opts);
       } else {
-        const params = { vertexColors: true, side: src.side, flatShading: !!src.flatShading };
+        const params = { vertexColors: true, side: src.side };
+        if (src.type !== 'MeshBasicMaterial') params.flatShading = !!src.flatShading;
         if (src.type === 'MeshStandardMaterial') { params.roughness = src.roughness; params.metalness = src.metalness; }
         mat = new src.constructor(params);
       }

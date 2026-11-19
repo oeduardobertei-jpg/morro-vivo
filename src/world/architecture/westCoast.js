@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { createStylizedFigure } from '../npcs/population.js';
+import { SHARED_SHADER_UNIFORMS } from '../../render/StylizedMaterials.js';
 
 /** Costa oeste: farol, píer, enseada dos pescadores, palmeiras e barcos. */
 export const WestCoastMixin = {
@@ -36,6 +37,21 @@ export const WestCoastMixin = {
     lantern.position.y = 11.8;
     lhGroup.add(lantern);
 
+    // Aura aditiva quente envolvendo a lanterna do farol
+    const lanternHalo = new THREE.Mesh(
+      new THREE.SphereGeometry(2.1, 12, 10),
+      new THREE.MeshBasicMaterial({
+        color: 0xFFD97D,
+        transparent: true,
+        opacity: 0.24,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        fog: false
+      })
+    );
+    lanternHalo.position.y = 11.8;
+    lhGroup.add(lanternHalo);
+
     const roofGeo = new THREE.ConeGeometry(1.3, 1.2, 8);
     const roof = new THREE.Mesh(roofGeo, redMat);
     roof.position.y = 13.1;
@@ -45,21 +61,55 @@ export const WestCoastMixin = {
     beaconLight.position.y = 12.0;
     lhGroup.add(beaconLight);
 
-    // 360-degree rotating lighthouse beam (active at sunset & night)
+    // 360-degree rotating volumetric lighthouse beam (active at sunset & night)
     const beamGroup = new THREE.Group();
     beamGroup.position.set(0, 12.0, 0);
 
-    const beamGeo = new THREE.ConeGeometry(5.2, 54.0, 12, 1, true);
-    // FIXED: Negative rotation so the tip is at the origin and the wide base extends outwards
+    const beamGeo = new THREE.ConeGeometry(5.6, 62.0, 20, 1, true);
+    // Ponta estreita em z = 0 (lanterna) e boca aberta estendendo-se até z = +62m
     beamGeo.rotateX(-Math.PI / 2);
-    beamGeo.translate(0, 0, 27.0);
+    beamGeo.translate(0, 0, 31.0);
 
-    const beamMat = new THREE.MeshBasicMaterial({
-      color: 0xFFFBEB,
+    const beamMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uNightFactor: SHARED_SHADER_UNIFORMS.uNightFactor,
+        uSunsetFactor: SHARED_SHADER_UNIFORMS.uSunsetFactor
+      },
       transparent: true,
-      opacity: 0.22,
-      side: THREE.DoubleSide,
-      depthWrite: false
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.FrontSide,
+      fog: false,
+      vertexShader: `
+        varying vec2 vUv;
+        varying float vAxialT;
+        varying vec3 vViewNormal;
+        varying vec3 vViewDir;
+        void main() {
+          vUv = uv;
+          vAxialT = clamp(position.z / 62.0, 0.0, 1.0);
+          vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+          vViewNormal = normalize(normalMatrix * normal);
+          vViewDir = normalize(-mvPos.xyz);
+          gl_Position = projectionMatrix * mvPos;
+        }
+      `,
+      fragmentShader: `
+        uniform float uNightFactor;
+        uniform float uSunsetFactor;
+        varying vec2 vUv;
+        varying float vAxialT;
+        varying vec3 vViewNormal;
+        varying vec3 vViewDir;
+        void main() {
+          // Dissolve suavemente ao longo dos 62m e nas bordas laterais via Fresnel (zero corte reto!)
+          float lenFade = pow(1.0 - vAxialT, 1.25) * smoothstep(1.0, 0.60, vAxialT) * smoothstep(0.0, 0.03, vAxialT);
+          float rimFade = pow(abs(dot(normalize(vViewNormal), normalize(vViewDir))), 1.35);
+          float phaseOpacity = clamp(uNightFactor + uSunsetFactor * 0.50, 0.0, 1.0);
+          float alpha = lenFade * rimFade * 0.58 * phaseOpacity;
+          gl_FragColor = vec4(vec3(1.0, 0.92, 0.66), alpha);
+        }
+      `
     });
     const beamMesh = new THREE.Mesh(beamGeo, beamMat);
     beamGroup.add(beamMesh);

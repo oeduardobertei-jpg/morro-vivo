@@ -4,7 +4,7 @@ import * as THREE from 'three';
 export const WorkersMixin = {
   // DISPATCH WHEELBARROW COURIER FROM OLARIA WITH BRICK SUPPLIES
   dispatchCourierWithSupplies(siteData, onDelivered) {
-    const candidates = this.npcs.filter(npc => !npc.isBuilder && !npc.isCourier && !npc.isScenicMirante && !npc.isBarraqueiro && !npc.isFisherman && !npc.isAthlete && !npc.isMateiro && !npc.isCapoeira && !npc.isHorta && !npc.isMototaxi && !npc.isSurfer && !npc.isCalistenia && npc.role !== 'Jogador da Pelada');
+    const candidates = this.npcs.filter(npc => !npc.isDedicatedBeachgoer && !npc.isBuilder && !npc.isCourier && !npc.isScenicMirante && !npc.isBarraqueiro && !npc.isFisherman && !npc.isAthlete && !npc.isMateiro && !npc.isCapoeira && !npc.isHorta && !npc.isMototaxi && !npc.isSurfer && !npc.isCalistenia && npc.role !== 'Jogador da Pelada');
     if (candidates.length === 0) {
       if (onDelivered) onDelivered();
       return null;
@@ -91,7 +91,7 @@ export const WorkersMixin = {
 
   // RECRUIT REAL CITIZENS FROM THE WORKING POPULATION AS BUILDERS
   recruitWorkersForSite(siteData, count = 2) {
-    const candidates = this.npcs.filter(npc => !npc.isBuilder && !npc.isCourier && !npc.isScenicMirante && !npc.isBarraqueiro && !npc.isFisherman && !npc.isAthlete && !npc.isMateiro && !npc.isCapoeira && !npc.isHorta && !npc.isMototaxi && !npc.isSurfer && !npc.isCalistenia && npc.role !== 'Jogador da Pelada');
+    const candidates = this.npcs.filter(npc => !npc.isDedicatedBeachgoer && !npc.isBuilder && !npc.isCourier && !npc.isScenicMirante && !npc.isBarraqueiro && !npc.isFisherman && !npc.isAthlete && !npc.isMateiro && !npc.isCapoeira && !npc.isHorta && !npc.isMototaxi && !npc.isSurfer && !npc.isCalistenia && npc.role !== 'Jogador da Pelada');
     if (candidates.length === 0) return [];
 
     // Sort by proximity to site to choose nearby citizens
@@ -118,11 +118,17 @@ export const WorkersMixin = {
       npc.assignedSite = siteData;
       npc.waitTimer = 0; // Cancela qualquer pausa imediatamente
 
+      // Garante traje urbano antes de equipar uniforme de obra (nunca muta materiais compartilhados de pele!)
+      if (this.setNPCBeachOutfit) {
+        this.setNPCBeachOutfit(npc, false);
+      }
+
       // Equipamento do operário
       npc.builderHelmet.visible = true;
-      npc.hat.visible = false;
+      if (npc.hat) npc.hat.visible = false;
       npc.toolArm.visible = true;
-      npc.torso.material.color.setHex(0xF97316); // Colete refletivo de alta visibilidade!
+      const vestMat = this._getSharedLambertMat ? this._getSharedLambertMat(0xF97316, true) : npc.cityTorsoMat;
+      npc.torso.material = vestMat; // Colete refletivo de alta visibilidade sem mutar material compartilhado!
 
       // Ponto de trabalho perimetral externo (raio 3.4m voltado para a rua de acesso - NUNCA dentro da casa ou sobre o pad de terraplanagem!)
       const angleOffset = (idx === 0 ? -0.42 : 0.42);
@@ -176,8 +182,8 @@ export const WorkersMixin = {
     }
     if (npc.torso) {
       npc.torso.rotation.set(0, 0, 0);
-      if (npc.originalColor !== undefined) {
-        npc.torso.material.color.setHex(npc.originalColor);
+      if (npc.cityTorsoMat) {
+        npc.torso.material = npc.cityTorsoMat;
       }
     }
 

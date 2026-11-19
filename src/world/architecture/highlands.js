@@ -312,12 +312,19 @@ export const HighlandsMixin = {
   createMiranteDasPipas() {
     const miranteGroup = new THREE.Group();
     const my = this.terrain ? this.terrain.getElevation(-78, -50) : 10.4;
-    miranteGroup.position.set(-78, my, -50);
+    miranteGroup.position.set(-78, my + 0.35, -50);
+
+    // Fundação de pedra de mão argamassada ancorada na encosta
+    const stoneBaseMat = new THREE.MeshLambertMaterial({ color: 0x64748B, flatShading: true });
+    const stonePlinth = new THREE.Mesh(new THREE.CylinderGeometry(7.2, 7.8, 3.2, 14), stoneBaseMat);
+    stonePlinth.position.y = -1.75;
+    stonePlinth.receiveShadow = true;
+    miranteGroup.add(stonePlinth);
 
     // Solid wooden cliff-mounted deck (14m diameter)
     const deckMat = new THREE.MeshLambertMaterial({ color: 0x5C4636, flatShading: true });
-    const deckMesh = new THREE.Mesh(new THREE.CylinderGeometry(7.0, 7.5, 2.8, 14), deckMat);
-    deckMesh.position.y = -1.2;
+    const deckMesh = new THREE.Mesh(new THREE.CylinderGeometry(7.0, 7.3, 1.4, 14), deckMat);
+    deckMesh.position.y = -0.65;
     deckMesh.receiveShadow = true;
     miranteGroup.add(deckMesh);
 
@@ -328,18 +335,27 @@ export const HighlandsMixin = {
     surface.receiveShadow = true;
     miranteGroup.add(surface);
 
-    // Wooden safety rail (guarda-corpo)
+    // Wooden safety rail (guarda-corpo com abertura de entrada ao sul em direção à trilha)
     const railMat = new THREE.MeshLambertMaterial({ color: 0x3E2D22 });
     for (let r = 0; r < 14; r++) {
+      if (r === 3 || r === 4) continue; // Abertura de acesso sul (+Z)
       const angle = (r / 14) * Math.PI * 2;
-      const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 0.12), railMat);
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.1, 0.14), railMat);
       post.position.set(Math.cos(angle) * 6.6, 0.65, Math.sin(angle) * 6.6);
       miranteGroup.add(post);
     }
-    const topRail = new THREE.Mesh(new THREE.RingGeometry(6.4, 6.8, 16), railMat);
+    const topRail = new THREE.Mesh(new THREE.RingGeometry(6.4, 6.8, 18, 1, Math.PI * 0.68, Math.PI * 1.72), railMat);
     topRail.rotation.x = -Math.PI / 2;
     topRail.position.y = 1.15;
     miranteGroup.add(topRail);
+
+    // Escadaria de madeira de acesso ao sul (+Z) conectando o deck ao patamar da viela
+    for (let s = 1; s <= 3; s++) {
+      const step = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.22, 0.55), deckMat);
+      step.position.set(0, 0.1 - s * 0.18, 6.7 + s * 0.50);
+      step.receiveShadow = true;
+      miranteGroup.add(step);
+    }
 
     // Viewing Telescope (Luneta de Observação)
     const brassMat = new THREE.MeshLambertMaterial({ color: 0xD4AF37 });
@@ -622,5 +638,231 @@ export const HighlandsMixin = {
     radioGroup.add(panel);
 
     this.group.add(radioGroup);
+  },
+
+  // =========================================================================
+  // REVITALIZAÇÃO DO FLANCO LESTE (PIPODROMO DO LEVANTE, POMAR & TRILHA DA CRISTA)
+  // =========================================================================
+  createEastHighlandLife() {
+    const lifeGroup = new THREE.Group();
+
+    // 1. PIPÓDROMO DO ALTO DO LEVANTE (x: 88, z: -48)
+    const pipX = 88.0, pipZ = -48.0;
+    const pipY = this.terrain ? this.terrain.getElevation(pipX, pipZ) : 10.2;
+    const pipGroup = new THREE.Group();
+    pipGroup.position.set(pipX, pipY + 0.35, pipZ);
+
+    const stonePlinthMat = new THREE.MeshLambertMaterial({ color: 0x64748B, flatShading: true });
+    const deckMat = new THREE.MeshLambertMaterial({ color: 0x5C4636, flatShading: true });
+    const plankMat = new THREE.MeshLambertMaterial({ color: 0x8C6B4E, flatShading: true });
+    const railMat = new THREE.MeshLambertMaterial({ color: 0x3E2D22 });
+
+    // Fundação de pedra argamassada nivelando o Pipódromo na encosta leste
+    const stonePlinth = new THREE.Mesh(new THREE.CylinderGeometry(5.4, 6.0, 2.8, 12), stonePlinthMat);
+    stonePlinth.position.y = -1.5;
+    stonePlinth.receiveShadow = true;
+    pipGroup.add(stonePlinth);
+
+    // Deck panorâmico elevado em madeira
+    const deckBase = new THREE.Mesh(new THREE.CylinderGeometry(5.2, 5.4, 1.2, 12), deckMat);
+    deckBase.position.y = -0.55;
+    deckBase.receiveShadow = true;
+    pipGroup.add(deckBase);
+
+    const deckFloor = new THREE.Mesh(new THREE.CylinderGeometry(5.1, 5.1, 0.18, 12), plankMat);
+    deckFloor.position.y = 0.1;
+    deckFloor.receiveShadow = true;
+    pipGroup.add(deckFloor);
+
+    // Guarda-corpo perimetral com abertura de entrada ao sul (+Z)
+    for (let r = 0; r < 12; r++) {
+      if (r === 3) continue; // Abertura de acesso sul (+Z)
+      const angle = (r / 12) * Math.PI * 2;
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.1, 0.12), railMat);
+      post.position.set(Math.cos(angle) * 4.8, 0.65, Math.sin(angle) * 4.8);
+      pipGroup.add(post);
+    }
+    const topRail = new THREE.Mesh(new THREE.RingGeometry(4.6, 5.0, 16, 1, Math.PI * 0.66, Math.PI * 1.74), railMat);
+    topRail.rotation.x = -Math.PI / 2;
+    topRail.position.y = 1.15;
+    pipGroup.add(topRail);
+
+    // Escadinha de madeira na entrada sul (+Z)
+    for (let s = 1; s <= 3; s++) {
+      const step = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.22, 0.5), deckMat);
+      step.position.set(0, 0.1 - s * 0.18, 4.9 + s * 0.45);
+      step.receiveShadow = true;
+      pipGroup.add(step);
+    }
+
+    // Carretilhas de pipa profissionais coloridas sobre uma bancada
+    const bench = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.55, 0.7), plankMat);
+    bench.position.set(0, 0.35, -2.8);
+    pipGroup.add(bench);
+
+    const reelColors = [0xEF4444, 0x10B981, 0xF59E0B, 0x3B82F6];
+    reelColors.forEach((col, idx) => {
+      const reel = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.18, 0.18, 0.25, 8),
+        new THREE.MeshLambertMaterial({ color: col, flatShading: true })
+      );
+      reel.position.set(-0.8 + idx * 0.55, 0.75, -2.8);
+      reel.rotation.x = Math.PI / 2;
+      pipGroup.add(reel);
+    });
+
+    // Bandeirinhas triangulares festivas nos mastros
+    const pennantColors = [0xEF4444, 0xFACC15, 0x3B82F6, 0x10B981];
+    for (let p = 0; p < 6; p++) {
+      const pAngle = (p / 6) * Math.PI - Math.PI / 2;
+      const flag = new THREE.Mesh(
+        new THREE.ConeGeometry(0.18, 0.45, 3),
+        new THREE.MeshLambertMaterial({ color: pennantColors[p % pennantColors.length], side: THREE.DoubleSide })
+      );
+      flag.position.set(Math.cos(pAngle) * 4.6, 1.25, Math.sin(pAngle) * 4.6);
+      flag.rotation.z = Math.PI / 2;
+      pipGroup.add(flag);
+    }
+
+    // 4 Pipas no céu no alto desta crista
+    if (this.kites) {
+      const extraKiteColors = [0xF43F5E, 0x06B6D4, 0xF59E0B, 0x10B981];
+      for (let ek = 0; ek < 4; ek++) {
+        const kGroup = new THREE.Group();
+        const kx = pipX + (Math.random() - 0.5) * 16;
+        const kz = pipZ + (Math.random() - 0.5) * 16;
+        const ky = pipY + 16.0 + Math.random() * 8;
+        kGroup.position.set(kx, ky, kz);
+
+        const kiteGeo = new THREE.BufferGeometry();
+        const vertices = new Float32Array([
+          0, 1.1, 0,
+          -0.75, 0.2, 0,
+          0, -0.9, 0,
+          0, 1.1, 0,
+          0, -0.9, 0,
+          0.75, 0.2, 0
+        ]);
+        kiteGeo.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
+        kiteGeo.computeVertexNormals();
+
+        const kMat = new THREE.MeshBasicMaterial({ color: extraKiteColors[ek], side: THREE.DoubleSide });
+        const sail = new THREE.Mesh(kiteGeo, kMat);
+        kGroup.add(sail);
+
+        const tail = new THREE.Mesh(new THREE.BoxGeometry(0.08, 1.6, 0.02), new THREE.MeshBasicMaterial({ color: 0xFDFDFD }));
+        tail.position.y = -1.6;
+        kGroup.add(tail);
+
+        this.group.add(kGroup);
+
+        this.kites.push({
+          mesh: kGroup,
+          tail: tail,
+          baseY: ky,
+          baseRotY: Math.random() * Math.PI,
+          phase: Math.random() * 10
+        });
+      }
+    }
+
+    lifeGroup.add(pipGroup);
+
+    // 2. POMAR AGROFLORESTAL DA COLINA (x: 96, z: -28)
+    const agroX = 96.0, agroZ = -28.0;
+    const agroY = this.terrain ? this.terrain.getElevation(agroX, agroZ) : 6.8;
+    const agroGroup = new THREE.Group();
+    agroGroup.position.set(agroX, agroY, agroZ);
+
+    // Muretas curvas de contenção em pedra seca
+    const stoneMat = new THREE.MeshLambertMaterial({ color: 0x64748B, flatShading: true });
+    [-3.0, 0, 3.0].forEach(offsetZ => {
+      const wall = new THREE.Mesh(new THREE.BoxGeometry(12.0, 0.8, 0.45), stoneMat);
+      wall.position.set(0, (offsetZ + 3.0) * 0.25, offsetZ);
+      wall.receiveShadow = true;
+      agroGroup.add(wall);
+    });
+
+    // Canteiros e arbustos frutíferos (mamoeiros e bananeiras)
+    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4E342E });
+    const leafMat = new THREE.MeshLambertMaterial({ color: 0x16A34A, flatShading: true });
+    const fruitMat = new THREE.MeshLambertMaterial({ color: 0xF59E0B });
+
+    const fruitSpots = [
+      { x: -4.0, z: -1.8 }, { x: -1.5, z: -2.0 }, { x: 2.0, z: -1.6 },
+      { x: -3.0, z: 1.5 },  { x: 1.0, z: 1.8 },   { x: 4.5, z: 1.2 }
+    ];
+    fruitSpots.forEach(pt => {
+      const tree = new THREE.Group();
+      tree.position.set(pt.x, 0.4, pt.z);
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.14, 2.2, 5), trunkMat);
+      trunk.position.y = 1.1;
+      tree.add(trunk);
+
+      for (let l = 0; l < 5; l++) {
+        const lAngle = (l / 5) * Math.PI * 2;
+        const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.4, 4), leafMat);
+        leaf.position.set(Math.cos(lAngle) * 0.4, 2.0, Math.sin(lAngle) * 0.4);
+        leaf.rotation.x = Math.cos(lAngle) * 0.55;
+        leaf.rotation.z = Math.sin(lAngle) * 0.55;
+        tree.add(leaf);
+      }
+
+      // Frutos pendurados
+      const fruit = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 6), fruitMat);
+      fruit.position.set(0, 1.8, 0.15);
+      tree.add(fruit);
+
+      agroGroup.add(tree);
+    });
+
+    // Bica d'água da serra com cocho de pedra
+    const troughMat = new THREE.MeshLambertMaterial({ color: 0x475569 });
+    const waterMat = new THREE.MeshBasicMaterial({ color: 0x38BDF8, transparent: true, opacity: 0.75 });
+    const trough = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 0.8), troughMat);
+    trough.position.set(-4.5, 0.25, 3.2);
+    agroGroup.add(trough);
+
+    const waterSurface = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.05, 0.65), waterMat);
+    waterSurface.position.set(-4.5, 0.45, 3.2);
+    agroGroup.add(waterSurface);
+
+    // Cano de bambu vertendo água
+    const bamboo = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.1, 5), new THREE.MeshLambertMaterial({ color: 0xD4B886 }));
+    bamboo.rotation.x = Math.PI / 3;
+    bamboo.position.set(-4.5, 0.7, 2.8);
+    agroGroup.add(bamboo);
+
+    // Paiol de ferramentas rústico
+    const shedMat = new THREE.MeshLambertMaterial({ color: 0x5C4033, flatShading: true });
+    const shed = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.1, 2.0), shedMat);
+    shed.position.set(4.2, 1.05, -3.2);
+    shed.castShadow = true;
+    agroGroup.add(shed);
+
+    const shedRoof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 0.8, 4), new THREE.MeshLambertMaterial({ color: 0xB45309 }));
+    shedRoof.rotation.y = Math.PI / 4;
+    shedRoof.position.set(4.2, 2.45, -3.2);
+    agroGroup.add(shedRoof);
+
+    lifeGroup.add(agroGroup);
+
+    // 3. TRILHA DA CRISTA ORIENTAL (x: 70, z: -72)
+    const cristaX = 70.0, cristaZ = -72.0;
+    const cristaY = this.terrain ? this.terrain.getElevation(cristaX, cristaZ) : 12.5;
+    const cristaGroup = new THREE.Group();
+    cristaGroup.position.set(cristaX, cristaY, cristaZ);
+
+    const cristaDeck = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.8, 1.2, 8), deckMat);
+    cristaDeck.position.y = -0.5;
+    cristaGroup.add(cristaDeck);
+
+    const cristaBench = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.45, 0.6), plankMat);
+    cristaBench.position.set(0, 0.35, 0.8);
+    cristaGroup.add(cristaBench);
+
+    lifeGroup.add(cristaGroup);
+
+    this.group.add(lifeGroup);
   }
 };

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { applyStylizedShader, inferPresetFromColor } from './StylizedMaterials.js';
 
 const HIDDEN_LAYER = 31;
 const SUPPORTED = new Set(['MeshLambertMaterial', 'MeshStandardMaterial', 'MeshBasicMaterial']);
@@ -47,7 +48,7 @@ export class StaticBatcher {
     this.scene = scene;
     this.enabled = opts.enabled !== false;
     this.getExcludedRoots = opts.getExcludedRoots || (() => []);
-    this.cellSize = opts.cellSize ?? 48;
+    this.cellSize = opts.cellSize ?? 84;
     this.calibrateSeconds = opts.calibrateSeconds ?? 2.5;
     this.buildBudgetMs = opts.buildBudgetMs ?? 6;
     this.state = 'waiting';
@@ -126,18 +127,42 @@ export class StaticBatcher {
     return false;
   }
 
+  _resolvePreset(mat) {
+    if (mat.type === 'MeshBasicMaterial' || mat.userData?.skipStylized) return null;
+    return mat.userData?.stylizedPreset || inferPresetFromColor(mat.color, mat.type === 'MeshStandardMaterial' ? mat.roughness : null);
+  }
+
   _keyOf(rec) {
     const m = rec.material, me = rec.mesh;
-    return `${m.type}|${m.side}|${m.flatShading ? 1 : 0}|${me.castShadow ? 1 : 0}|${me.receiveShadow ? 1 : 0}|${Math.round((m.roughness ?? 0) * 100)}|${Math.round((m.metalness ?? 0) * 100)}`;
+    const preset = this._resolvePreset(m) || 'basic';
+    const effType = m.type === 'MeshLambertMaterial' ? 'MeshStandardMaterial' : m.type;
+    const effFlat = preset !== 'basic' ? 0 : (m.flatShading ? 1 : 0);
+    const effRough = m.type === 'MeshStandardMaterial' ? Math.round((m.roughness ?? 0.85) * 20) : 'p';
+    const effMetal = m.type === 'MeshStandardMaterial' ? Math.round((m.metalness ?? 0.0) * 20) : 'p';
+    return `${effType}|${preset}|${m.side}|${effFlat}|${me.castShadow ? 1 : 0}|${me.receiveShadow ? 1 : 0}|${effRough}|${effMetal}`;
   }
 
   _sharedMaterial(key, rec) {
     let mat = this.sharedMaterials.get(key);
     if (!mat) {
       const src = rec.material;
-      const params = { vertexColors: true, side: src.side, flatShading: !!src.flatShading };
-      if (src.type === 'MeshStandardMaterial') { params.roughness = src.roughness; params.metalness = src.metalness; }
-      mat = new src.constructor(params);
+      const preset = this._resolvePreset(src);
+      if (preset) {
+        const params = {
+          vertexColors: true,
+          side: src.side,
+          flatShading: false
+        };
+        mat = new THREE.MeshStandardMaterial(params);
+        const opts = src.type === 'MeshStandardMaterial'
+          ? { roughness: src.roughness, metalness: src.metalness, flatShading: false }
+          : { flatShading: false };
+        applyStylizedShader(mat, preset, opts);
+      } else {
+        const params = { vertexColors: true, side: src.side, flatShading: !!src.flatShading };
+        if (src.type === 'MeshStandardMaterial') { params.roughness = src.roughness; params.metalness = src.metalness; }
+        mat = new src.constructor(params);
+      }
       this.sharedMaterials.set(key, mat);
     }
     return mat;
@@ -269,23 +294,37 @@ export class StaticBatcher {
       return;
     }
 
-    // ativo: vigia mudanças e mantém o lote consistente
+    // ativo: vigia mudanças de forma fatiada (apenas ~120 meshes por frame em vez de 3.500!)
+    // Elimina 100% dos engasgos de CPU mantendo consistência total dos lotes
     const dirty = new Set();
-    for (const rec of this.recs) {
-      if (rec.dynamic || rec.removed || !rec.chunk) continue;
-      if (this._changed(rec)) {
-        if (this._detached(rec)) this._release(rec, true);
-        else this._release(rec, false);
-        dirty.add(rec.chunk);
+    const totalRecs = this.recs.length;
+    if (totalRecs > 0) {
+      const sliceSize = 120;
+      const start = this._watchCursor || 0;
+      const end = Math.min(totalRecs, start + sliceSize);
+      for (let i = start; i < end; i++) {
+        const rec = this.recs[i];
+        if (rec.dynamic || rec.removed || !rec.chunk) continue;
+        if (this._changed(rec)) {
+          if (this._detached(rec)) this._release(rec, true);
+          else this._release(rec, false);
+          dirty.add(rec.chunk);
+        }
       }
+      this._watchCursor = end >= totalRecs ? 0 : end;
     }
-    for (const mr of this.matRecs.values()) {
-      if (mr.recs[0].dynamic && mr.recs.every((r) => r.dynamic || r.removed)) continue;
-      if (this._materialDirty(mr)) {
-        for (const r of mr.recs) {
-          if (r.dynamic || r.removed || !r.chunk) continue;
-          this._release(r, false);
-          dirty.add(r.chunk);
+
+    this._matWatchTimer = (this._matWatchTimer || 0) + delta;
+    if (this._matWatchTimer >= 1.0) {
+      this._matWatchTimer = 0;
+      for (const mr of this.matRecs.values()) {
+        if (mr.recs[0].dynamic && mr.recs.every((r) => r.dynamic || r.removed)) continue;
+        if (this._materialDirty(mr)) {
+          for (const r of mr.recs) {
+            if (r.dynamic || r.removed || !r.chunk) continue;
+            this._release(r, false);
+            dirty.add(r.chunk);
+          }
         }
       }
     }

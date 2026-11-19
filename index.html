@@ -39,61 +39,60 @@
 
   <!-- UI Overlay Layer -->
   <div id="ui-overlay">
-    <!-- Top Bar: Brand, Metrics, Controls -->
+    <!-- Top Unified Dock: Brand, Integrated Metrics Capsule, Quick Controls -->
     <header class="top-bar interactive">
       <div class="brand">
         <span class="brand-icon">🌄</span>
-        <div>
-          <h1 class="brand-title">MORRO VIVO</h1>
-          <p class="brand-subtitle">Simulação Orgânica da Colina Carioca</p>
+        <div class="brand-text-col">
+          <div class="brand-title-row">
+            <h1 class="brand-title">MORRO VIVO</h1>
+            <span id="day-counter" class="day-pill">DIA 1</span>
+          </div>
+          <p class="brand-subtitle">Colina Carioca Viva</p>
         </div>
       </div>
 
-      <!-- Live Simulation Metrics -->
-      <div class="metrics-group">
-        <div class="metric-pill" title="População Total no Morro">
-          <span class="icon">👥</span>
-          <span>Moradores: <strong id="val-pop" class="metric-value">46</strong></span>
+      <!-- Unified Metrics Capsule -->
+      <div class="metrics-capsule">
+        <div class="metric-chip" title="População Total no Morro">
+          <span class="chip-icon">👥</span>
+          <strong id="val-pop" class="metric-value">320</strong>
         </div>
-        <div class="metric-pill" title="Crédito e Circulação Econômica Comunitária">
-          <span class="icon">🪙</span>
-          <span>Economia: <strong id="val-wealth" class="metric-value">R$ 380</strong></span>
+        <div class="chip-divider"></div>
+        <div class="metric-chip" title="Caixa Comunitário Disponível">
+          <span class="chip-icon">🪙</span>
+          <strong id="val-wealth" class="metric-value" style="color: #4ADE80;">R$ 480</strong>
         </div>
-        <div class="metric-pill" title="Abastecimento de Água das Lajes">
-          <span class="icon">💧</span>
-          <span>Água: <strong id="val-water" class="metric-value">92%</strong></span>
+        <div class="chip-divider"></div>
+        <div class="metric-chip" title="Abastecimento de Água nas Caixas">
+          <span class="chip-icon">💧</span>
+          <strong id="val-water" class="metric-value">95%</strong>
         </div>
-        <div class="metric-pill" title="Energia Solar Limpa">
-          <span class="icon">☀️</span>
-          <span>Energia: <strong id="val-energy" class="metric-value">88%</strong></span>
+        <div class="chip-divider"></div>
+        <div class="metric-chip" title="Energia Solar Limpa">
+          <span class="chip-icon">☀️</span>
+          <strong id="val-energy" class="metric-value">92%</strong>
         </div>
-        <div class="metric-pill" title="Harmonia Social & Cultura">
-          <span class="icon">🥁</span>
-          <span>Harmonia: <strong id="val-culture" class="metric-value">94%</strong></span>
+        <div class="chip-divider"></div>
+        <div class="metric-chip" title="Harmonia Social & Cultura">
+          <span class="chip-icon">🥁</span>
+          <strong id="val-culture" class="metric-value">94%</strong>
         </div>
       </div>
 
-      <!-- Controls: Presets, Audio, Time, Save, New World -->
+      <!-- Compact Integrated Controls -->
       <div class="controls-group">
-        <button id="btn-save" class="btn-icon" title="Salvar Progresso Imediatamente">
-          <span id="save-status">💾 Salvo</span>
+        <button id="btn-politics" class="btn-icon btn-gold-accent"
+          title="Abrir Conselho Comunitário, Gestores Eleitos e Massa de Votos (Atalho: Tecla P)">
+          <span>🗳️</span> <span>Conselho & Votos</span>
         </button>
 
-        <button id="btn-new-world" class="btn-icon" style="border-color: rgba(231, 111, 81, 0.45);"
-          title="Reiniciar para as 4 vilas pioneiras originais">
-          <span>🔄</span> <span>Novo Mundo</span>
+        <button id="btn-fx-toggle" class="btn-icon active"
+          title="Alternar Efeito Tilt-Shift (Miniatura) & Bloom Noturno (Atalho: Tecla B)">
+          <span>✨</span> <span id="fx-label">Maquete (Leve)</span>
         </button>
 
-        <button id="btn-audio" class="btn-icon" title="Ativar/Desativar Trilha Sonora Procedural (Bossa & Mar)">
-          <span>🎵</span> <span id="audio-label">Música</span>
-        </button>
-
-        <button id="btn-audio-mixer" class="btn-icon"
-          title="Abrir Mixer de Volumes (Música, Obras, Campinho, Mar, SFX)">
-          <span>🎚️</span> <span>Volumes</span>
-        </button>
-
-        <button id="btn-time-cycle" class="btn-icon active"
+        <button id="btn-time-cycle" class="btn-icon"
           title="Alternar Horário (Dia, Pôr do Sol, Noite, Alvorecer)">
           <span id="time-icon">☀️</span> <span id="time-label">Dia Tropical</span>
         </button>
@@ -101,113 +100,138 @@
         <button id="btn-speed" class="btn-icon" title="Velocidade da Simulação">
           <span>⏩</span> <span id="speed-label">1x</span>
         </button>
+
+        <button id="btn-audio" class="btn-icon btn-compact" title="Ativar/Desativar Trilha Sonora (Bossa & Mar)">
+          <span>🎵</span> <span id="audio-label" class="sr-label">Música</span>
+        </button>
+
+        <button id="btn-audio-mixer" class="btn-icon btn-compact"
+          title="Abrir Mixer de Volumes (Música, Obras, Campinho, Mar, SFX)">
+          <span>🎚️</span> <span class="sr-label">Volumes</span>
+        </button>
+
+        <button id="btn-save" class="btn-icon btn-compact" title="Salvar Progresso Imediatamente">
+          <span id="save-status">💾</span>
+        </button>
+
+        <button id="btn-new-world" class="btn-icon btn-compact" style="border-color: rgba(231, 111, 81, 0.45);"
+          title="Reiniciar para um Novo Mundo">
+          <span>🔄</span> <span class="sr-label">Novo Mundo</span>
+        </button>
       </div>
     </header>
 
-    <!-- Center Container: Diplomacy Card (Left) and Action Deck (Right) -->
+    <!-- Collapsible Side Menus Container (Leaves 90%+ of the 3D World Unobstructed!) -->
     <div class="center-container">
-      <!-- Left: Autonomous Diplomacy & Communities -->
-      <div class="glass-panel interactive">
-        <div class="panel-header">
-          <div class="panel-title">
-            <span>🤝</span> Diplomacia & Bairros
-          </div>
-          <span id="day-counter" style="font-size: 0.75rem; color: var(--color-gold); font-weight: 700;">DIA 1</span>
-        </div>
+      <!-- Left Collapsible Menu: Bairros, Gestores & Diplomacia -->
+      <div id="drawer-left" class="side-drawer left-drawer collapsed interactive">
+        <button id="toggle-drawer-left" class="drawer-tab-btn" title="Abrir/Recolher Menu de Bairros e Gestores (Atalho: Tecla D)">
+          <span class="tab-icon">🤝</span>
+          <span class="tab-label">Bairros & Gestores</span>
+          <span id="chevron-left" class="tab-chevron">▾</span>
+        </button>
 
-        <div class="faction-item prainha" style="border-left-color: #0077B6;">
-          <div class="faction-name">
-            <span style="color: #0077B6;">Porto & Prainha (Oeste)</span>
-            <span id="prainha-harmony">90%</span>
+        <div class="drawer-body">
+          <div class="faction-item prainha" style="border-left-color: #0077B6;">
+            <div class="faction-name">
+              <span style="color: #38BDF8;">Porto & Prainha (Oeste)</span>
+              <span id="prainha-harmony" class="harmony-pill">90%</span>
+            </div>
+            <div class="faction-desc">Farol, cais de pesca, praia e quiosques.</div>
+            <div class="leader-badge"><span>👑 Gestor(a):</span> <strong id="prainha-leader">Seu Zeca do Farol</strong></div>
+            <div class="diplomacy-badge">Pacto: Rotas Navais e Pescado Fresco</div>
           </div>
-          <div class="faction-desc">Farol, cais de pesca, praia e quiosques.</div>
-          <div class="diplomacy-badge">Pacto: Rotas Navais e Pescado Fresco</div>
-        </div>
 
-        <div class="faction-item sol">
-          <div class="faction-name">
-            <span style="color: #E76F51;">Morro do Sol (Centro)</span>
-            <span id="sol-harmony">94%</span>
+          <div class="faction-item sol">
+            <div class="faction-name">
+              <span style="color: #FB923C;">Morro do Sol (Centro)</span>
+              <span id="sol-harmony" class="harmony-pill">94%</span>
+            </div>
+            <div class="faction-desc">Encosta central suave, lajes e rodas de samba.</div>
+            <div class="leader-badge"><span>👑 Gestor(a):</span> <strong id="sol-leader">Dona Valéria</strong></div>
+            <div class="diplomacy-badge">Pacto: Aliança Cultural e Alvenaria</div>
           </div>
-          <div class="faction-desc">Encosta central suave, lajes e rodas de samba.</div>
-          <div class="diplomacy-badge">Pacto: Aliança Cultural e Alvenaria</div>
-        </div>
 
-        <div class="faction-item serra" style="border-left-color: #38BDF8;">
-          <div class="faction-name">
-            <span style="color: #38BDF8;">Alto da Serra (Norte)</span>
-            <span id="serra-harmony">92%</span>
+          <div class="faction-item serra" style="border-left-color: #38BDF8;">
+            <div class="faction-name">
+              <span style="color: #38BDF8;">Alto da Serra (Norte)</span>
+              <span id="serra-harmony" class="harmony-pill">92%</span>
+            </div>
+            <div class="faction-desc">Usina solar, bondinho e nascentes puras.</div>
+            <div class="leader-badge"><span>👑 Gestor(a):</span> <strong id="serra-leader">Iara da Chapada</strong></div>
+            <div class="diplomacy-badge">Pacto: Energia Limpa & Aqueduto</div>
           </div>
-          <div class="faction-desc">Usina solar, chapada alta e nascentes puras.</div>
-          <div class="diplomacy-badge">Pacto: Energia Limpa & Aqueduto</div>
-        </div>
 
-        <div class="faction-item varzea" style="border-left-color: #2A9D8F;">
-          <div class="faction-name">
-            <span style="color: #2A9D8F;">Polo da Várzea (Leste)</span>
-            <span id="varzea-harmony">96%</span>
+          <div class="faction-item varzea" style="border-left-color: #2A9D8F;">
+            <div class="faction-name">
+              <span style="color: #2DD4BF;">Polo da Várzea (Leste)</span>
+              <span id="varzea-harmony" class="harmony-pill">96%</span>
+            </div>
+            <div class="faction-desc">Feira cultural, mototáxi e futebol de várzea.</div>
+            <div class="leader-badge"><span>👑 Gestor(a):</span> <strong id="varzea-leader">Profª Cláudia</strong></div>
+            <div class="diplomacy-badge">Pacto: Grande Feira Livre Continental</div>
           </div>
-          <div class="faction-desc">Feira cultural, futevôlei e futebol de várzea.</div>
-          <div class="diplomacy-badge">Pacto: Grande Feira Livre Continental</div>
+
+          <button id="btn-open-politics-panel" class="drawer-footer-btn">
+            <span>🗳️</span> <span>Abrir Painel Político Completo</span>
+          </button>
         </div>
       </div>
 
-      <!-- Right: Player Interventions & Cameras -->
-      <div class="action-deck interactive">
-        <button id="act-puxadinho" class="action-btn">
-          <span class="btn-icon-lg">🏗️</span>
-          <div class="btn-text-block">
-            <div>Estimular Puxadinho</div>
-            <div class="btn-sub">Subsidia ampliação orgânica de laje</div>
-          </div>
+      <!-- Right Collapsible Unified Menu: Intervenções & Obras -->
+      <div id="drawer-right" class="side-drawer right-drawer collapsed interactive">
+        <button id="toggle-drawer-right" class="drawer-tab-btn" title="Abrir/Recolher Menu de Obras e Ações Comunitárias (Atalho: Tecla I)">
+          <span class="tab-icon">🛠️</span>
+          <span class="tab-label">Obras & Intervenções</span>
+          <span id="chevron-right" class="tab-chevron">▾</span>
         </button>
 
-        <button id="act-samba" class="action-btn">
-          <span class="btn-icon-lg">🥁</span>
-          <div class="btn-text-block">
-            <div>Festa da Roda de Samba</div>
-            <div class="btn-sub">Eleva harmonia social e diplomacia</div>
-          </div>
-        </button>
+        <div class="drawer-body unified-actions-menu">
+          <div class="menu-section-hint">Invista o caixa comunitário para expandir e guiar a política do morro:</div>
 
-        <button id="act-water" class="action-btn">
-          <span class="btn-icon-lg">💧</span>
-          <div class="btn-text-block">
-            <div>Rede de Caixas d'Água</div>
-            <div class="btn-sub">Abastece todas as vilas do continente</div>
-          </div>
-        </button>
+          <button id="act-puxadinho" class="action-btn unified-action-item">
+            <span class="action-item-icon">🏗️</span>
+            <div class="action-item-info">
+              <div class="action-item-title">Estimular Puxadinho</div>
+              <div class="action-item-sub">Amplia laje de moradia (+Obras)</div>
+            </div>
+            <span class="cost-badge">R$ 60</span>
+          </button>
 
-        <button id="act-solar" class="action-btn">
-          <span class="btn-icon-lg">☀️</span>
-          <div class="btn-text-block">
-            <div>Postes com Painéis Solares</div>
-            <div class="btn-sub">Ilumina as praças e avenidas</div>
-          </div>
-        </button>
+          <button id="act-samba" class="action-btn unified-action-item">
+            <span class="action-item-icon">🥁</span>
+            <div class="action-item-info">
+              <div class="action-item-title">Festa da Roda de Samba</div>
+              <div class="action-item-sub">+15% Harmonia (+Cultura)</div>
+            </div>
+            <span class="cost-badge">R$ 45</span>
+          </button>
 
-        <button id="act-frontier" class="action-btn">
-          <span class="btn-icon-lg">⛰️</span>
-          <div class="btn-text-block">
-            <div>Desbravar Cinturão & Cume</div>
-            <div class="btn-sub">Abre socalcos e atrai vida ao alto</div>
-          </div>
-        </button>
+          <button id="act-water" class="action-btn unified-action-item">
+            <span class="action-item-icon">💧</span>
+            <div class="action-item-info">
+              <div class="action-item-title">Rede de Caixas d'Água</div>
+              <div class="action-item-sub">+20% Água nas vilas (+Infra)</div>
+            </div>
+            <span class="cost-badge">R$ 55</span>
+          </button>
 
-        <!-- Cinematic Cameras & Drone Mode -->
-        <div class="camera-bar-wrapper">
-          <div class="camera-bar">
-            <button id="cam-pan" class="cam-btn active" title="Grande Panorâmica do Continente">Panorâmica</button>
-            <button id="cam-prainha" class="cam-btn" title="Porto & Prainha (Oeste)">Porto</button>
-            <button id="cam-morro" class="cam-btn" title="Morro do Sol (Centro)">Morro</button>
-            <button id="cam-serra" class="cam-btn" title="Alto da Serra (Norte)">Serra</button>
-            <button id="cam-cume" class="cam-btn" title="Fenda do Cume & Encostas Vivas">Cume</button>
-            <button id="cam-varzea" class="cam-btn" title="Polo da Várzea (Leste)">Várzea</button>
-          </div>
-          <button id="cam-cinema-toggle" class="cinema-toggle-btn"
-            title="Ativar/Desativar Câmera Cinematográfica Contemplativa (Atalho: Tecla C)">
-            <span class="cinema-icon">🎬</span>
-            <span class="cinema-label">Câmera Cinema: <strong id="cinema-status">Desligada</strong></span>
+          <button id="act-solar" class="action-btn unified-action-item">
+            <span class="action-item-icon">☀️</span>
+            <div class="action-item-info">
+              <div class="action-item-title">Painéis Solares nas Ruas</div>
+              <div class="action-item-sub">+16% Energia limpa (+Ecologia)</div>
+            </div>
+            <span class="cost-badge">R$ 50</span>
+          </button>
+
+          <button id="act-frontier" class="action-btn unified-action-item">
+            <span class="action-item-icon">⛰️</span>
+            <div class="action-item-info">
+              <div class="action-item-title">Desbravar Cinturão & Cume</div>
+              <div class="action-item-sub">Funda nova moradia na fronteira</div>
+            </div>
+            <span class="cost-badge">R$ 80</span>
           </button>
         </div>
       </div>
@@ -221,13 +245,30 @@
       </div>
     </div>
 
-    <!-- Bottom Bar: Live Autonomous Event News Ticker -->
+    <!-- Bottom Unified Bar: Live Radio Ticker (Left) + Integrated Camera Dock (Right) -->
     <footer class="bottom-bar interactive">
       <div class="news-ticker">
-        <span class="ticker-label">📻 Rádio Comunitária</span>
+        <span class="ticker-label">📻 Rádio</span>
         <span id="ticker-text" class="ticker-text">
           O morro acorda em harmonia. Vento favorável para as pipas na colina.
         </span>
+      </div>
+
+      <div class="bottom-camera-dock">
+        <div class="camera-bar">
+          <button id="cam-pan" class="cam-btn active" title="Grande Panorâmica do Continente">Panorâmica</button>
+          <button id="cam-prainha" class="cam-btn" title="Porto & Prainha (Oeste)">Porto</button>
+          <button id="cam-morro" class="cam-btn" title="Morro do Sol (Centro)">Morro</button>
+          <button id="cam-bonde" class="cam-btn" title="Bondinho da Serra & Mobilidade">Bondinho</button>
+          <button id="cam-serra" class="cam-btn" title="Alto da Serra (Norte)">Serra</button>
+          <button id="cam-cume" class="cam-btn" title="Fenda do Cume & Encostas Vivas">Cume</button>
+          <button id="cam-varzea" class="cam-btn" title="Polo da Várzea & Mototáxis (Leste)">Várzea</button>
+        </div>
+        <button id="cam-cinema-toggle" class="cinema-toggle-btn"
+          title="Ativar/Desativar Câmera Cinematográfica Contemplativa (Atalho: Tecla C)">
+          <span class="cinema-icon">🎬</span>
+          <span class="cinema-label">Cinema: <strong id="cinema-status">Off</strong></span>
+        </button>
       </div>
     </footer>
 
@@ -280,18 +321,33 @@
             </div>
           </div>
 
-          <!-- Channel: Music -->
+          <!-- Channel: Music (Boom-Bap & Funk Brasileiro) -->
           <div class="mixer-channel-row">
             <div class="channel-info">
-              <span class="channel-icon">🎸</span>
+              <span class="channel-icon">🎧</span>
               <div class="channel-labels">
-                <span class="channel-name">Música (Bossa Nova)</span>
-                <span class="channel-desc">Acordes acústicos relaxantes de violão</span>
+                <span class="channel-name">Trilha Sonora (Boom-Bap & Funk BR)</span>
+                <span class="channel-desc">Batida animada de Boom-Bap, Samba-Rock e Funk Brasileiro</span>
               </div>
             </div>
             <div class="channel-controls">
               <input type="range" id="vol-music" min="0" max="100" value="65" class="mixer-slider" />
               <span id="label-vol-music" class="channel-percent">65%</span>
+            </div>
+          </div>
+
+          <!-- Channel: Roda de Samba (Terreiro) -->
+          <div class="mixer-channel-row">
+            <div class="channel-info">
+              <span class="channel-icon">🥁</span>
+              <div class="channel-labels">
+                <span class="channel-name">Roda de Samba (Terreiro)</span>
+                <span class="channel-desc">Samba de raiz espacial (aumenta ao chegar bem pertinho)</span>
+              </div>
+            </div>
+            <div class="channel-controls">
+              <input type="range" id="vol-samba" min="0" max="100" value="75" class="mixer-slider" />
+              <span id="label-vol-samba" class="channel-percent">75%</span>
             </div>
           </div>
 
@@ -364,6 +420,81 @@
             style="width: auto; padding: 0.55rem 1.4rem; justify-content: center; background: var(--color-primary);">
             <span style="color: #FFFFFF; font-weight: 700;">Concluído</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Political & Social Intelligence Modal (🗳️ Conselho, Gestores & Massa de Votos) -->
+    <div id="modal-politics" class="modal-backdrop interactive" style="display: none;">
+      <div class="modal-box politics-modal-box">
+        <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+          <div class="mixer-title-block">
+            <span class="mixer-icon">🗳️</span>
+            <div>
+              <h3 style="margin: 0; font-size: 1.2rem; color: #FFFFFF;">Conselho Comunitário, Eleições & Inteligência Social</h3>
+              <p style="margin: 0.15rem 0 0; font-size: 0.76rem; color: var(--color-text-dim);">
+                Acompanhe a massa de votos por ideologia, as alianças políticas e a IA dos candidatos a gestores
+              </p>
+            </div>
+          </div>
+          <button id="politics-modal-close" class="inspector-close" title="Fechar">&times;</button>
+        </div>
+
+        <div class="politics-scroll-area">
+          <!-- Macro Grid: Mass Electorate Ideologies & Treasury/Election Controls -->
+          <div class="politics-top-grid">
+            <div class="pol-card">
+              <div class="pol-card-title">
+                <span>📊 Massa de Votos por Ideologia</span>
+                <span id="pol-total-voters" style="font-size: 0.75rem; color: var(--color-gold);">250 eleitores ativos</span>
+              </div>
+              <div id="pol-mass-bars">
+                <!-- Populated via JS -->
+              </div>
+            </div>
+
+            <div class="pol-card" style="display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div class="pol-card-title">
+                  <span>🏛️ Urnas & Caixa Comunitário</span>
+                  <span id="pol-election-countdown" style="font-size: 0.75rem; color: #4ADE80;">Eleição em 14 dias</span>
+                </div>
+                <div id="pol-economy-summary" style="font-size: 0.78rem; color: var(--color-text-dim); line-height: 1.55; margin-bottom: 0.75rem;">
+                  <!-- Populated via JS -->
+                </div>
+              </div>
+              <button id="btn-run-election-now" class="action-btn" style="width: 100%; justify-content: center; background: linear-gradient(135deg, #F59E0B, #E76F51); padding: 0.6rem;">
+                <span style="font-weight: 800; color: #FFF;">🗳️ Convocar Eleições Gerais Agora</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- District Filter Tabs & Candidates Detail Grid -->
+          <div class="pol-card">
+            <div class="pol-card-title" style="flex-wrap: wrap; gap: 0.5rem;">
+              <span>👥 Candidatos a Gestores & Relações Políticas</span>
+              <div class="pol-filter-tabs">
+                <button class="pol-tab-btn active" data-dist="all">Todos (12)</button>
+                <button class="pol-tab-btn" data-dist="prainha">Porto & Prainha</button>
+                <button class="pol-tab-btn" data-dist="sol">Morro do Sol</button>
+                <button class="pol-tab-btn" data-dist="serra">Alto da Serra</button>
+                <button class="pol-tab-btn" data-dist="varzea">Polo da Várzea</button>
+              </div>
+            </div>
+            <div id="pol-candidates-grid" class="candidates-grid">
+              <!-- Populated via JS -->
+            </div>
+          </div>
+
+          <!-- Autonomous AI Political Feed -->
+          <div class="pol-card">
+            <div class="pol-card-title">
+              <span>📜 Diário do Conselho & Decisões da IA dos Gestores</span>
+            </div>
+            <div id="pol-log-list" class="pol-log-list">
+              <!-- Populated via JS -->
+            </div>
+          </div>
         </div>
       </div>
     </div>

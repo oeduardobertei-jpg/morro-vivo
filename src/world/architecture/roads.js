@@ -1,138 +1,222 @@
 import * as THREE from 'three';
+import { getSharedStylizedMaterial } from '../../render/StylizedMaterials.js';
 
 /** Vias, alameda do samba, bocas de boteco, estradas de laje e postes. */
 export const RoadsMixin = {
+  // Verifica se um bloco de estrada/escadaria está invadindo o interior de qualquer deck, parque, estação ou monumento
+  isInsideLandmarkFootprint(sx, sz) {
+    if (Math.abs(sx - 55.0) < 18.0 && Math.abs(sz - 4.0) < 13.0) return true; // Campinho de Futebol
+    if (Math.abs(sx - 75.0) < 9.5 && Math.abs(sz - 4.0) < 7.5) return true;   // Mercado Cultural
+    if (Math.abs(sx - (-22.0)) < 8.5 && Math.abs(sz - (-14.0)) < 6.5) return true; // Olaria Central
+    if (Math.hypot(sx - 95.0, sz - (-18.0)) < 8.2) return true;               // Grande Olaria Leste
+    if (Math.abs(sx - 82.0) < 9.5 && Math.abs(sz - (-8.0)) < 6.5) return true; // Agrofloresta
+    if (Math.abs(sx - 75.0) < 8.2 && Math.abs(sz - (-45.0)) < 5.8) return true; // Socalcos Leste
+    if (Math.abs(sx - 96.0) < 6.5 && Math.abs(sz - (-28.0)) < 5.0) return true; // Pomar Agroflorestal
+    if (Math.hypot(sx - (-2.0), sz - (-4.0)) < 9.2) return true;              // Praça do Samba
+    if (Math.abs(sx - (-2.0)) < 3.4 && sz > -19.0 && sz < -12.2) return true; // Escadaria da Alameda do Samba
+    if (Math.abs(sx - (-18.0)) < 11.2 && Math.abs(sz - (-72.0)) < 8.6) return true; // Parque Solar da Serra
+    if (Math.hypot(sx - (-8.0), sz - (-65.0)) < 4.5) return true;             // Nascente da Serra
+    if (Math.hypot(sx - 0.0, sz - (-104.0)) < 4.8) return true;               // Torre de Rádio
+    if (Math.hypot(sx - 50.0, sz - (-110.0)) < 8.8) return true;              // Deck do Mirante Imperial
+    if (Math.hypot(sx - (-78.0), sz - (-50.0)) < 8.6) return true;            // Deck do Mirante das Pipas
+    if (Math.hypot(sx - 88.0, sz - (-48.0)) < 6.8) return true;               // Deck do Pipódromo do Levante
+    if (Math.hypot(sx - 70.0, sz - (-72.0)) < 4.4) return true;               // Deck da Trilha da Crista
+    if (Math.hypot(sx - (-95.0), sz - (-68.0)) < 4.6) return true;            // Deck das Falésias do Poente
+    if (Math.hypot(sx - (-98.0), sz - (-55.0)) < 5.2) return true;            // Mirante do Poente
+    if (Math.hypot(sx - 98.0, sz - (-55.0)) < 5.2) return true;               // Mirante do Levante
+    if (Math.hypot(sx - (-64.0), sz - (-44.0)) < 3.8) return true;            // Mesa de Dominó do Poente
+    if (Math.hypot(sx - (-100.0), sz - (-38.0)) < 4.8) return true;           // Rancho das Canoas
+    if (Math.hypot(sx - (-95.0), sz - 0.0) < 7.0) return true;                // Vila dos Pescadores do Poente
+    if (Math.hypot(sx - (-110.0), sz - (-15.0)) < 6.8) return true;           // Terreiro de Capoeira
+    if (Math.abs(sx - (-92.0)) < 5.2 && Math.abs(sz - (-25.0)) < 4.2) return true; // Horta em Socalcos
+    if (Math.abs(sx - 112.0) < 6.0 && Math.abs(sz - (-12.0)) < 4.5) return true;   // Academia ao Ar Livre
+    if (Math.abs(sx - 13.5) < 4.5 && (Math.abs(sz - 14.0) < 4.5 || Math.abs(sz - (-16.0)) < 4.0 || Math.abs(sz - (-60.0)) < 4.5)) return true; // Estações do Bondinho
+    return false;
+  },
+
   createContinentalRoadNetwork() {
-    const roadMat = new THREE.MeshLambertMaterial({ color: 0xFFFFFF, flatShading: true });
-    const stoneGeo = new THREE.BoxGeometry(2.8, 1.4, 2.2);
+    // Pavimentação Urbana Carioca: Asfalto contínuo de ladeira e meio-fio de granito
+    const roadMat = getSharedStylizedMaterial(0x3E3B38, 'asphalt', {
+      flatShading: true,
+      side: THREE.DoubleSide
+    });
+    const curbMat = getSharedStylizedMaterial(0x8A837A, 'stone', {
+      flatShading: true,
+      side: THREE.DoubleSide
+    });
 
     const routes = [
-      // 1. Grand Coastal Highway (East to West along the beach promenade: z = 18.0)
+      // 1. Avenida Beira-Mar (Grande Calçadão Litorâneo: Z = 18.0, X de -285 a +285)
       [
-        { x: -135, z: 18.0 }, { x: -115, z: 18.0 }, { x: -102, z: 18.0 }, { x: -80, z: 18.0 }, { x: -58, z: 18.0 },
-        { x: -35, z: 18.0 },  { x: -12, z: 18.0 },  { x: 12, z: 18.0 },
-        { x: 35, z: 18.0 },   { x: 58, z: 18.0 },   { x: 80, z: 18.0 }, { x: 102, z: 18.0 }, { x: 115, z: 18.0 }, { x: 135, z: 18.0 }
+        { x: -285, z: 18.0 }, { x: -245, z: 18.0 }, { x: -205, z: 18.0 }, { x: -165, z: 18.0 },
+        { x: -125, z: 18.0 }, { x: -102, z: 18.0 }, { x: -78, z: 18.0 },  { x: -50, z: 18.0 },
+        { x: -20, z: 18.0 },  { x: 0, z: 18.0 },    { x: 15, z: 18.0 },   { x: 45, z: 18.0 },
+        { x: 75, z: 18.0 },   { x: 102, z: 18.0 },  { x: 125, z: 18.0 },  { x: 165, z: 18.0 },
+        { x: 205, z: 18.0 },  { x: 245, z: 18.0 },  { x: 285, z: 18.0 }
       ],
-      // 2. North-South Central Spine (upper portion from Alameda do Samba crossroads to Mirante da Vista Imperial)
+      // 2. Ladeira do Morro do Sol (Subida Central do Morro: Orla -> Colina Sul -> Alameda -> Olaria -> Serra)
       [
-        { x: -2, z: -19.5 },
-        { x: -18, z: -18 }, { x: 5, z: -32 },   { x: -12, z: -50 }, { x: 0, z: -66 }, { x: 0, z: -76 }
+        { x: 15, z: 18.0 },   { x: 22, z: 10.0 },   { x: 24, z: 0.0 },    { x: 20, z: -10.0 },
+        { x: 14, z: -18.0 },  { x: -2, z: -19.5 },  { x: -15, z: -18.0 }, { x: -22, z: -14.0 }
       ],
-      // 3. West Mid-hill Arterial (Prainha to central junction)
+      // 3. Eixo Central da Serra (Continuação suave subindo a encosta oeste até o Platô do Alto da Serra)
       [
-        { x: -75, z: 16 },  { x: -70, z: 4 },  { x: -65, z: -8 },
-        { x: -50, z: -20 }, { x: -30, z: -32 }, { x: -3, z: -32 }
+        { x: -15, z: -18.0 }, { x: -18, z: -28.0 }, { x: -16, z: -40.0 }, { x: -10, z: -52.0 }, { x: 0, z: -66.0 }
       ],
-      // 4. East Mid-hill Arterial (Várzea to central junction)
+      // 4. Ladeira da Várzea (Subida Oriental: Polo da Várzea contornando suavemente a encosta leste)
       [
-        { x: 75, z: 16 },   { x: 70, z: 4 },   { x: 65, z: -8 },
-        { x: 50, z: -20 },  { x: 30, z: -32 },  { x: -3, z: -32 }
+        { x: 75, z: 18.0 },   { x: 85, z: 10.0 },   { x: 82, z: -2.0 },   { x: 78, z: -14.0 },
+        { x: 62, z: -22.0 },  { x: 46, z: -26.0 },  { x: 28, z: -32.0 },  { x: 14, z: -46.0 }, { x: 0, z: -66.0 }
       ],
-      // 5. ROUTE 5: WESTERN HIGHLAND HIGHWAY (Colina do Poente ao Mirante Imperial)
+      // 5. Ladeira da Prainha (Subida Ocidental: Porto da Prainha contornando suavemente a encosta oeste)
       [
-        { x: -95, z: 18 },  { x: -95, z: 0 },  { x: -90, z: -25 },
-        { x: -98, z: -55 }, { x: -78, z: -50 }, { x: -55, z: -70 }, { x: -28, z: -74 }, { x: 0, z: -72 }
+        { x: -78, z: 18.0 },  { x: -75, z: 14.0 },  { x: -70, z: 2.0 },   { x: -65, z: -10.0 },
+        { x: -52, z: -20.0 }, { x: -35, z: -30.0 }, { x: -20, z: -42.0 }, { x: 0, z: -66.0 }
       ],
-      // 6. ROUTE 6: EASTERN HIGHLAND HIGHWAY (Encosta do Levante ao Mirante Imperial)
+      // 6. Estrada da Crista & Mirante Imperial (Platô da Serra -> Mirante Imperial)
       [
-        { x: 95, z: 18 },   { x: 95, z: -18 }, { x: 90, z: -25 },
-        { x: 98, z: -55 },  { x: 75, z: -45 },  { x: 55, z: -70 }, { x: 28, z: -74 },  { x: 0, z: -72 }
+        { x: 0, z: -66.0 },   { x: 16, z: -74.0 },  { x: 32, z: -86.0 },  { x: 46, z: -96.0 }, { x: 50, z: -102.0 }
       ],
-      // 7. ROUTE 7: TRILHA PANORÂMICA DA COROA DAS ALTURAS (Contorno cênico da crista por trás do mirante)
+      // 7. Estrada da Torre de Rádio (Platô da Serra -> Cume Norte)
       [
-        { x: -78, z: -50 }, { x: -50, z: -75 }, { x: -24, z: -88 },
-        { x: -14, z: -94 }, { x: 0, z: -98 },   { x: 14, z: -94 },
-        { x: 24, z: -88 },  { x: 50, z: -75 },  { x: 75, z: -45 }
+        { x: 0, z: -66.0 },   { x: 0, z: -82.0 },   { x: 0, z: -100.0 },  { x: 0, z: -104.0 }
       ],
-      // 8. ROUTE 8: AVENIDA DAS FALÉSIAS DO POENTE (Fronteira Extremo Oeste: X até -135)
+      // 8. Trilha Panorâmica da Coroa das Alturas
       [
-        { x: -95, z: 18 },  { x: -115, z: 8 },  { x: -125, z: -20 }, { x: -135, z: -25 },
-        { x: -130, z: -45 }, { x: -135, z: -75 }, { x: -120, z: -85 }, { x: -98, z: -55 }
+        { x: -45, z: -85.0 }, { x: -24, z: -92.0 }, { x: 0, z: -96.0 },   { x: 24, z: -92.0 }, { x: 45, z: -85.0 }
       ],
-      // 9. ROUTE 9: AVENIDA DO VALE DO LEVANTE (Fronteira Extremo Leste: X até +135)
+      // 9. Estrada das Falésias do Poente (Vale Ocidental)
       [
-        { x: 95, z: 18 },   { x: 115, z: 8 },   { x: 125, z: -20 }, { x: 135, z: -25 },
-        { x: 130, z: -45 }, { x: 135, z: -75 }, { x: 120, z: -85 }, { x: 98, z: -55 }
+        { x: -78, z: 18.0 },  { x: -115, z: 12.0 }, { x: -135, z: -20.0 }, { x: -154, z: -16.0 },
+        { x: -186, z: -22.0 }, { x: -216, z: -34.0 }, { x: -244, z: -22.0 }, { x: -266, z: 6.0 }, { x: -278, z: 18.0 }
       ],
-      // 10. ROUTE 10: ESTRADA DAS ALTURAS DA CRISTA PROFUNDA (Cume Norte Extremo: Z até -132)
+      // 10. Estrada do Vale do Levante (Vale Oriental)
       [
-        { x: -55, z: -120 }, { x: -45, z: -125 }, { x: -28, z: -115 }, { x: 0, z: -118 },
-        { x: 0, z: -130 },   { x: 28, z: -115 },  { x: 45, z: -125 }, { x: 55, z: -120 }
+        { x: 78, z: 18.0 },   { x: 115, z: 12.0 },  { x: 135, z: -20.0 }, { x: 154, z: -16.0 },
+        { x: 186, z: -22.0 }, { x: 216, z: -34.0 }, { x: 244, z: -22.0 }, { x: 266, z: 6.0 },  { x: 278, z: 18.0 }
+      ],
+      // 11. Estrada da Sela da Serra Norte (Contorno norte profundo)
+      [
+        { x: -116, z: -132.0 }, { x: -62, z: -152.0 }, { x: 0, z: -156.0 }, { x: 62, z: -152.0 }, { x: 116, z: -132.0 }
       ]
     ];
 
-    // Precalculate all block transformation matrices
-    const blockMatrices = [];
-    const dummy = new THREE.Object3D();
+    const roadPositions = [];
+    const curbPositions = [];
 
-    routes.forEach((route, rIdx) => {
+    const halfW = 1.7; // Largura da pista asfáltica (3.4m)
+    const curbW = 0.22; // Largura do meio-fio de cantaria (0.22m)
+
+    routes.forEach(route => {
+      // 1. Gera pontos de amostragem refinados (~1.2m)
+      const points = [];
       for (let i = 0; i < route.length - 1; i++) {
         const p1 = route[i];
         const p2 = route[i + 1];
-        const dist = Math.hypot(p2.x - p1.x, p2.z - p1.z);
-        const heightDiff = Math.abs((this.terrain ? this.terrain.getElevation(p2.x, p2.z) : 0) - (this.terrain ? this.terrain.getElevation(p1.x, p1.z) : 0));
-        
-        // Se a montanha for um paredão, força a criação de MÚLTIPLOS blocos para não gerar escadas voadoras
-        const steps = Math.max(9, Math.ceil(dist / 1.5), Math.ceil(heightDiff / 0.35));
-        
-        const dx = (p2.x - p1.x) / steps;
-        const dz = (p2.z - p1.z) / steps;
-        const roadHeading = Math.atan2(dx, dz);
-
-        for (let s = 0; s < steps; s++) {
-          const sx = p1.x + dx * s;
-          const sz = p1.z + dz * s;
-
-          // EVITAR SOBREPOSIÇÃO EM MONUMENTOS E CASAS
-          const inSoccer = (Math.abs(sx - 55) < 13 && Math.abs(sz - 4) < 9);
-          const inMarket = (Math.abs(sx - 75) < 10 && Math.abs(sz - 4) < 8);
-          const inOlaria = (Math.abs(sx - (-22)) < 8 && Math.abs(sz - (-14)) < 6);
-          const inAgro = (Math.abs(sx - 82) < 9 && Math.abs(sz - (-8)) < 6);
-          const inSamba = (Math.hypot(sx - (-2), sz - (-4)) < 6);
-          
-          // Se a estrada passar por cima de uma casa, ela é cortada (virando um beco sem saída na porta da casa!)
-          const inHouse = this.houses.some(h => Math.hypot(h.position.x - sx, h.position.z - sz) < 3.2);
-          
-          if (inSoccer || inMarket || inOlaria || inAgro || inSamba || inHouse) continue;
-
-          const sy = this.terrain ? this.terrain.getElevation(sx, sz) : 2.5;
-
-          const nY = this.terrain ? this.terrain.getElevation(sx + dx * 0.5, sz + dz * 0.5) : sy;
-          const distStep = Math.hypot(dx, dz);
-          const slopeAngle = -Math.atan2(nY - sy, distStep * 0.5);
-
-          dummy.position.set(sx, sy - 0.65, sz);
-          dummy.rotation.set(Math.max(-0.35, Math.min(0.35, slopeAngle)), roadHeading, 0);
-          dummy.updateMatrix();
-
-          blockMatrices.push({ matrix: dummy.matrix.clone(), routeIdx: rIdx, x: sx, y: sy, z: sz });
-
-          // Register node to prevent houses from spawning here
-          this.infrastructureNodes.push({ x: sx, z: sz });
+        const segDist = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+        const steps = Math.max(2, Math.ceil(segDist / 1.2));
+        for (let s = (i === 0 ? 0 : 1); s <= steps; s++) {
+          const t = s / steps;
+          const x = p1.x + (p2.x - p1.x) * t;
+          const z = p1.z + (p2.z - p1.z) * t;
+          points.push({ x, z });
+          // Registra nó de infraestrutura para evitar casas sobre as pistas
+          this.infrastructureNodes.push({ x, z });
         }
+      }
+
+      if (points.length < 2) return;
+
+      // 2. Para cada ponto da rota, calcula fatias com elevações reais do relevo
+      const slices = [];
+      for (let i = 0; i < points.length; i++) {
+        const p = points[i];
+        let tx = 0, tz = 0;
+        if (i === 0) {
+          tx = points[1].x - p.x;
+          tz = points[1].z - p.z;
+        } else if (i === points.length - 1) {
+          tx = p.x - points[i - 1].x;
+          tz = p.z - points[i - 1].z;
+        } else {
+          tx = points[i + 1].x - points[i - 1].x;
+          tz = points[i + 1].z - points[i - 1].z;
+        }
+        const len = Math.hypot(tx, tz) || 1;
+        const nx = -tz / len;
+        const nz = tx / len;
+
+        // Pista Asfáltica (Esquerda e Direita)
+        const lx = p.x + nx * halfW;
+        const lz = p.z + nz * halfW;
+        const ly = (this.terrain ? this.terrain.getElevation(lx, lz) : 2.5) + 0.08;
+
+        const rx = p.x - nx * halfW;
+        const rz = p.z - nz * halfW;
+        const ry = (this.terrain ? this.terrain.getElevation(rx, rz) : 2.5) + 0.08;
+
+        // Meio-fio Esquerdo (topo ligeiramente elevado +0.16m para relevo)
+        const clx = p.x + nx * (halfW + curbW);
+        const clz = p.z + nz * (halfW + curbW);
+        const cly = (this.terrain ? this.terrain.getElevation(clx, clz) : 2.5) + 0.16;
+
+        // Meio-fio Direito
+        const crx = p.x - nx * (halfW + curbW);
+        const crz = p.z - nz * (halfW + curbW);
+        const cry = (this.terrain ? this.terrain.getElevation(crx, crz) : 2.5) + 0.16;
+
+        slices.push({
+          l: [lx, ly, lz],
+          r: [rx, ry, rz],
+          cl: [clx, cly, clz],
+          cr: [crx, cry, crz]
+        });
+      }
+
+      // 3. Monta malha contínua (triângulos perfeitos sem dentes ou fendas)
+      for (let i = 0; i < slices.length - 1; i++) {
+        const s0 = slices[i];
+        const s1 = slices[i + 1];
+
+        // Superfície da Pista de Asfalto (2 triângulos por segmento)
+        roadPositions.push(
+          ...s0.l, ...s0.r, ...s1.l,
+          ...s1.l, ...s0.r, ...s1.r
+        );
+
+        // Meio-fio Esquerdo (2 triângulos formando o topo da guia)
+        curbPositions.push(
+          ...s0.cl, ...s0.l, ...s1.cl,
+          ...s1.cl, ...s0.l, ...s1.l
+        );
+
+        // Meio-fio Direito (2 triângulos formando o topo da guia)
+        curbPositions.push(
+          ...s0.r, ...s0.cr, ...s1.r,
+          ...s1.r, ...s0.cr, ...s1.cr
+        );
       }
     });
 
-    // Single InstancedMesh rendering all road blocks in 1 draw call!
-    const instancedRoad = new THREE.InstancedMesh(stoneGeo, roadMat, blockMatrices.length);
-    instancedRoad.receiveShadow = true;
-
-    const baseShade = new THREE.Color(0x9E978E);
-    const colorVar = new THREE.Color();
-
-    for (let i = 0; i < blockMatrices.length; i++) {
-      const bm = blockMatrices[i];
-      instancedRoad.setMatrixAt(i, bm.matrix);
-      const tint = (Math.sin(i * 1.6) * 0.06);
-      colorVar.copy(baseShade).addScalar(tint);
-      instancedRoad.setColorAt(i, colorVar);
+    // Gera a malha única e contínua do asfalto
+    if (roadPositions.length > 0) {
+      const roadGeo = new THREE.BufferGeometry();
+      roadGeo.setAttribute('position', new THREE.Float32BufferAttribute(roadPositions, 3));
+      roadGeo.computeVertexNormals();
+      const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+      roadMesh.receiveShadow = true;
+      this.group.add(roadMesh);
     }
 
-    instancedRoad.instanceMatrix.needsUpdate = true;
-    if (instancedRoad.instanceColor) instancedRoad.instanceColor.needsUpdate = true;
-
-    this.group.add(instancedRoad);
-    this.instancedRoad = instancedRoad;
+    // Gera a malha única e contínua do meio-fio de granito
+    if (curbPositions.length > 0) {
+      const curbGeo = new THREE.BufferGeometry();
+      curbGeo.setAttribute('position', new THREE.Float32BufferAttribute(curbPositions, 3));
+      curbGeo.computeVertexNormals();
+      const curbMesh = new THREE.Mesh(curbGeo, curbMat);
+      curbMesh.receiveShadow = true;
+      this.group.add(curbMesh);
+    }
   },
 
   // =========================================================================
@@ -143,16 +227,16 @@ export const RoadsMixin = {
   createAlamedaDoSamba() {
     const alamedaGroup = new THREE.Group();
 
-    const terracotaMat = new THREE.MeshLambertMaterial({ color: 0xB85D3F, flatShading: true });
-    const stoneTrimMat = new THREE.MeshLambertMaterial({ color: 0x334155, flatShading: true });
-    const stoneBaseMat = new THREE.MeshLambertMaterial({ color: 0x475569, flatShading: true });
-    const woodMat = new THREE.MeshLambertMaterial({ color: 0x3E2723, flatShading: true });
-    const leafMat = new THREE.MeshLambertMaterial({ color: 0x2D6A4F });
-    const bougPinkMat = new THREE.MeshLambertMaterial({ color: 0xEC4899 });
-    const bougPurpleMat = new THREE.MeshLambertMaterial({ color: 0x8B5CF6 });
-    const potMat = new THREE.MeshLambertMaterial({ color: 0x8D6E63 });
-    const flowerMatRed = new THREE.MeshLambertMaterial({ color: 0xEF4444 });
-    const flowerMatYellow = new THREE.MeshLambertMaterial({ color: 0xF59E0B });
+    const terracotaMat = getSharedStylizedMaterial(0xB85D3F, 'brick', { flatShading: true });
+    const stoneTrimMat = getSharedStylizedMaterial(0x475569, 'stone', { flatShading: true });
+    const stoneBaseMat = getSharedStylizedMaterial(0x576374, 'stone', { flatShading: true });
+    const woodMat = getSharedStylizedMaterial(0x4A3128, 'wood', { flatShading: true });
+    const leafMat = getSharedStylizedMaterial(0x36754E, 'foliage', { wind: 'crown' });
+    const bougPinkMat = getSharedStylizedMaterial(0xD64D7E, 'foliage', { wind: 'crown' });
+    const bougPurpleMat = getSharedStylizedMaterial(0x8858C8, 'foliage', { wind: 'crown' });
+    const potMat = getSharedStylizedMaterial(0x966B56, 'brick');
+    const flowerMatRed = getSharedStylizedMaterial(0xDA4F49, 'plaster');
+    const flowerMatYellow = getSharedStylizedMaterial(0xE0A443, 'plaster');
 
     // 1. Pavimentação Escalonada em Patamares Suaves de Jardim (Z = -19.5 até Z = -13.0)
     const numSlabs = 14;
@@ -276,8 +360,7 @@ export const RoadsMixin = {
       { x: 0.8,  z: -14.2, rot: -1.57, yOffset: 0.2 }
     ];
     benchConfigs.forEach((bCfg, bIdx) => {
-      const bT = (bCfg.z - (-19.5)) / 6.5;
-      const bY = 11.6 + bT * 2.5;
+      const bY = this.terrain ? this.terrain.getElevation(bCfg.x, bCfg.z) : 12.5;
 
       const benchGroup = new THREE.Group();
       benchGroup.position.set(bCfg.x, bY + bCfg.yOffset, bCfg.z);
@@ -313,8 +396,7 @@ export const RoadsMixin = {
     const wireMat = new THREE.MeshBasicMaterial({ color: 0x333333 });
     const colors = [0xFF0000, 0x00FF00, 0xFFFF00, 0x00FFFF, 0xFF00FF, 0xF97316];
     pergolaZs.forEach((pZ, pIdx) => {
-      const pT = (pZ - (-19.5)) / 6.5;
-      const pY = 11.6 + pT * 2.5;
+      const pY = this.terrain ? this.terrain.getElevation(-2.0, pZ) : 12.5;
 
       const wire = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 5.2, 3), wireMat);
       wire.position.set(-2.0, pY + 3.4, pZ);
@@ -357,13 +439,13 @@ export const RoadsMixin = {
       {
         id: 'boteco_varzea',
         name: 'Boteco da Várzea',
-        tableX: 37.2,
-        tableZ: -4.8,
+        tableX: 38.0,
+        tableZ: 14.0,
         chairColor: chairMatAmbev,
         hasUmbrella: true,
         chairs: [
-          { x: 36.5, z: -4.8, rotY: Math.PI / 2 },
-          { x: 37.9, z: -4.8, rotY: -Math.PI / 2 }
+          { x: 37.3, z: 14.0, rotY: Math.PI / 2 },
+          { x: 38.7, z: 14.0, rotY: -Math.PI / 2 }
         ]
       },
       {
@@ -376,6 +458,42 @@ export const RoadsMixin = {
         chairs: [
           { x: -66.0, z: 1.5, rotY: 0 },
           { x: -66.0, z: 2.9, rotY: Math.PI }
+        ]
+      },
+      {
+        id: 'boteco_vale_poente',
+        name: 'Boteco do Vale do Poente',
+        tableX: -186.0,
+        tableZ: -19.5,
+        chairColor: chairMatAmbev,
+        hasUmbrella: true,
+        chairs: [
+          { x: -186.7, z: -19.5, rotY: Math.PI / 2 },
+          { x: -185.3, z: -19.5, rotY: -Math.PI / 2 }
+        ]
+      },
+      {
+        id: 'boteco_vale_levante',
+        name: 'Boteco do Vale do Levante',
+        tableX: 186.0,
+        tableZ: -19.5,
+        chairColor: chairMatBrahma,
+        hasUmbrella: true,
+        chairs: [
+          { x: 185.3, z: -19.5, rotY: Math.PI / 2 },
+          { x: 186.7, z: -19.5, rotY: -Math.PI / 2 }
+        ]
+      },
+      {
+        id: 'boteco_sela_serra',
+        name: 'Venda da Sela da Serra',
+        tableX: -6.0,
+        tableZ: -155.5,
+        chairColor: chairMatAmbev,
+        hasUmbrella: false,
+        chairs: [
+          { x: -6.7, z: -155.5, rotY: Math.PI / 2 },
+          { x: -5.3, z: -155.5, rotY: -Math.PI / 2 }
         ]
       }
     ];
@@ -459,205 +577,172 @@ export const RoadsMixin = {
     this.group.add(botecoGroup);
   },
 
-  // REDE DE ESTRADAS DE LAJES, ESCADARIAS & VIELAS DO MORRO
-  // Conecta organicamente 100% dos novos lotes residenciais aos eixos principais
-  // Renderizado com InstancedMesh para altíssima performance (60 FPS fluidos em 1x a 5x)
+  // REDE DE ESCADARIAS URBANAS PEDONAIS & VIELAS ARTICULADAS (Arquitetura Orgânica Carioca)
+  // Conecta organicamente os diferentes platôs residenciais às ruas pavimentadas e monumentos.
+  // Modelado com degraus contínuos de pedra/cimento, patamares e muretas de proteção.
   createEstradasDeLajes() {
-    const slabGeo = new THREE.BoxGeometry(2.4, 0.28, 1.8);
-    const slabMat = new THREE.MeshLambertMaterial({ color: 0xF7F2EB, flatShading: true });
+    const stepGeo = new THREE.BoxGeometry(2.4, 0.22, 1.05);
+    const stepMat = getSharedStylizedMaterial(0x948D82, 'stone', { flatShading: true });
 
-    const stepGeo = new THREE.BoxGeometry(2.4, 0.38, 1.1);
-    const stepMat = new THREE.MeshLambertMaterial({ color: 0xE8E0D5, flatShading: true });
+    const parapetGeo = new THREE.BoxGeometry(0.24, 0.38, 1.05);
+    const parapetMat = getSharedStylizedMaterial(0x767068, 'stone', { flatShading: true });
 
-    const postGeo = new THREE.CylinderGeometry(0.06, 0.08, 2.4, 5);
-    const postMat = new THREE.MeshLambertMaterial({ color: 0x3E3832, flatShading: true });
+    const postGeo = new THREE.CylinderGeometry(0.06, 0.08, 2.2, 5);
+    const postMat = getSharedStylizedMaterial(0x433D36, 'metal', { flatShading: true });
 
-    const lanternGeo = new THREE.BoxGeometry(0.38, 0.38, 0.38);
+    const lanternGeo = new THREE.BoxGeometry(0.28, 0.28, 0.28);
     const lanternMat = new THREE.MeshLambertMaterial({
       color: 0xFEF3C7,
       emissive: 0xF59E0B,
-      emissiveIntensity: 1.25,
+      emissiveIntensity: 0.9,
       flatShading: true
     });
 
-    const slabRoutes = [
-      // 1. Viela do Poente & Encostas Ocidentais (Conecta todos os lotes oeste ao mar e à colina)
+    // 7 Escadarias Principais Dedicadas (Conectam cotas de altitude onde não passam veículos)
+    const stairRoutes = [
+      // 1. Escadaria Monumental do Mirante Sul (Praia -> Mirante Sul -> Terreiro de Samba)
       [
-        { x: -75, z: 16 }, { x: -84, z: 8 }, { x: -88, z: -2 }, { x: -76, z: -12 },
-        { x: -75, z: -25 }, { x: -84, z: -32 }, { x: -94, z: -32 }, { x: -96, z: -48 },
-        { x: -84, z: -56 }, { x: -72, z: -62 }, { x: -60, z: -68 }, { x: -50, z: -70 }
+        { x: 0.0, z: 18.0 },
+        { x: -0.4, z: 14.0 },
+        { x: -0.8, z: 10.0 },
+        { x: -1.0, z: 5.6 }
       ],
-      // 2. Escadaria Central da Colina Poente (Subida íngreme em degraus de concreto)
+      // 2. Escadaria da Vila da Prainha (Píer -> Socalcos Baixos e Hortas Oeste)
       [
-        { x: -55, z: 4 }, { x: -58, z: -6 }, { x: -52, z: -16 }, { x: -44, z: -28 },
-        { x: -54, z: -36 }, { x: -66, z: -60 }, { x: -70, z: -72 }, { x: -60, z: -85 }
+        { x: -78.0, z: 18.0 },
+        { x: -84.0, z: 8.0 },
+        { x: -88.0, z: -2.0 },
+        { x: -88.0, z: -14.0 },
+        { x: -92.0, z: -25.0 }
       ],
-      // 3. Viela da Prainha Extrema (Borda oeste do relevo - Alcança X = -135)
+      // 3. Escadaria da Capoeira do Poente (Socalcos Poente -> Roda de Capoeira)
       [
-        { x: -95, z: 12 },  { x: -105, z: 8 },  { x: -115, z: 8 },  { x: -125, z: -20 },
-        { x: -135, z: -25 }, { x: -135, z: -75 }, { x: -125, z: -60 }, { x: -120, z: -85 },
-        { x: -92, z: -72 }, { x: -80, z: -88 }
+        { x: -95.0, z: 12.0 },
+        { x: -102.0, z: 2.0 },
+        { x: -110.0, z: -15.0 }
       ],
-      // 4. Viela do Levante & Encostas Orientais (Conecta todos os lotes leste à várzea e à colina)
+      // 4. Escadaria do Campinho da Várzea (Calçadão da Praia -> Campinho)
       [
-        { x: 75, z: 16 }, { x: 84, z: 8 }, { x: 88, z: -2 }, { x: 76, z: -12 },
-        { x: 75, z: -25 }, { x: 84, z: -32 }, { x: 94, z: -32 }, { x: 96, z: -48 },
-        { x: 84, z: -56 }, { x: 72, z: -62 }, { x: 60, z: -68 }, { x: 50, z: -70 }
+        { x: 55.0, z: 18.0 },
+        { x: 55.0, z: 13.0 },
+        { x: 55.0, z: 8.0 },
+        { x: 55.0, z: 4.0 }
       ],
-      // 5. Escadaria Central da Colina Levante (Subida íngreme em degraus de concreto)
+      // 5. Escadaria do Pipódromo do Levante (Ladeira do Levante -> Alto do Pipódromo)
       [
-        { x: 55, z: 4 }, { x: 58, z: -6 }, { x: 52, z: -16 }, { x: 44, z: -28 },
-        { x: 54, z: -36 }, { x: 66, z: -60 }, { x: 70, z: -72 }, { x: 60, z: -85 }
+        { x: 78.0, z: -14.0 },
+        { x: 82.0, z: -26.0 },
+        { x: 86.0, z: -38.0 },
+        { x: 88.0, z: -48.0 }
       ],
-      // 6. Viela da Várzea Extrema (Borda leste do relevo - Alcança X = +135)
+      // 6. Escadaria de Acesso à Estação Alta do Bondinho
       [
-        { x: 95, z: 12 },  { x: 105, z: 8 },  { x: 115, z: 8 },  { x: 125, z: -20 },
-        { x: 135, z: -25 }, { x: 135, z: -75 }, { x: 125, z: -60 }, { x: 120, z: -85 },
-        { x: 92, z: -72 }, { x: 80, z: -88 }
+        { x: 0.0, z: -60.0 },
+        { x: 6.5, z: -60.0 },
+        { x: 13.5, z: -60.0 }
       ],
-      // 7. Transversal Central-Oeste (conecta Morro do Sol ao Poente)
+      // 7. Escadaria da Usina Solar e Nascente da Serra
       [
-        { x: -15, z: -18 }, { x: -28, z: -18 }, { x: -38, z: -15 }, { x: -48, z: -28 }, { x: -65, z: -38 }
-      ],
-      // 8. Transversal Central-Leste (conecta Morro do Sol ao Levante)
-      [
-        { x: 15, z: -18 }, { x: 28, z: -18 }, { x: 38, z: -15 }, { x: 48, z: -28 }, { x: 65, z: -38 }
-      ],
-      // 9. Transversal Alta da Serra (conecta a Serra aos flancos laterais)
-      [
-        { x: -18, z: -48 }, { x: -30, z: -52 }, { x: -45, z: -50 }, { x: -60, z: -55 }
-      ],
-      [
-        { x: 18, z: -48 }, { x: 30, z: -52 }, { x: 45, z: -50 }, { x: 60, z: -55 }
-      ],
-      // 10. Estrada Panorâmica do Cume & Crista das Alturas
-      [
-        { x: -42, z: -82 }, { x: -32, z: -92 }, { x: -20, z: -94 }, { x: -10, z: -102 },
-        { x: 0, z: -104 },
-        { x: 10, z: -102 }, { x: 20, z: -94 }, { x: 32, z: -92 }, { x: 42, z: -82 }
-      ],
-      // 11. Escadaria da Crista Profunda & Cume Norte Extremo (Z até -132)
-      [
-        { x: -55, z: -120 }, { x: -45, z: -125 }, { x: -35, z: -132 }, { x: -20, z: -130 },
-        { x: 0, z: -130 },   { x: 20, z: -130 },  { x: 35, z: -132 }, { x: 45, z: -125 }, { x: 55, z: -120 }
+        { x: 0.0, z: -66.0 },
+        { x: -8.0, z: -68.0 },
+        { x: -18.0, z: -72.0 }
       ]
     ];
 
-    const slabMatrices = [];
     const stepMatrices = [];
+    const parapetMatrices = [];
     const postMatrices = [];
     const lanternMatrices = [];
     const dummy = new THREE.Object3D();
+    const dummyParapet = new THREE.Object3D();
 
-    let globalStepCount = 0;
+    stairRoutes.forEach(route => {
+      // Lanterna discreta no patamar inferior de entrada
+      if (route.length > 0) {
+        const start = route[0];
+        const startY = this.terrain ? this.terrain.getElevation(start.x, start.z) : 2.5;
+        dummy.position.set(start.x + 1.4, startY + 1.1, start.z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        postMatrices.push(dummy.matrix.clone());
 
-    slabRoutes.forEach(route => {
+        dummy.position.set(start.x + 1.4, startY + 2.25, start.z);
+        dummy.updateMatrix();
+        lanternMatrices.push(dummy.matrix.clone());
+      }
+
       for (let i = 0; i < route.length - 1; i++) {
         const p1 = route[i];
         const p2 = route[i + 1];
         const dist = Math.hypot(p2.x - p1.x, p2.z - p1.z);
-        const heightDiff = Math.abs((this.terrain ? this.terrain.getElevation(p2.x, p2.z) : 0) - (this.terrain ? this.terrain.getElevation(p1.x, p1.z) : 0));
-        // O segredo para não ter escada voadora: forçar muitos degraus se o tombo (heightDiff) for grande!
-        const steps = Math.max(2, Math.ceil(heightDiff / 0.25), Math.ceil(dist / 1.0));
+        // Passo confortável de ~0.95m para proporção real de degrau urbano
+        const steps = Math.max(2, Math.ceil(dist / 0.95));
         const dx = (p2.x - p1.x) / steps;
         const dz = (p2.z - p1.z) / steps;
         const heading = Math.atan2(dx, dz);
 
         for (let s = 0; s < steps; s++) {
-          globalStepCount++;
           const sx = p1.x + dx * s;
           const sz = p1.z + dz * s;
-          
-          // EVITAR SOBREPOSIÇÃO EM MONUMENTOS (Market, Olaria, Agroforest, Soccer, Samba) E CASAS
-          const inSoccer = (Math.abs(sx - 55) < 13 && Math.abs(sz - 4) < 9);
-          const inMarket = (Math.abs(sx - 75) < 10 && Math.abs(sz - 4) < 8);
-          const inOlaria = (Math.abs(sx - (-22)) < 8 && Math.abs(sz - (-14)) < 6);
-          const inAgro = (Math.abs(sx - 82) < 9 && Math.abs(sz - (-8)) < 6);
-          const inSamba = (Math.hypot(sx - (-2), sz - (-4)) < 6);
-          
-          const inHouse = this.houses.some(h => Math.hypot(h.position.x - sx, h.position.z - sz) < 3.2);
-          
-          if (inSoccer || inMarket || inOlaria || inAgro || inSamba || inHouse) continue;
+
+          this.infrastructureNodes.push({ x: sx, z: sz });
+
+          if (this.isInsideLandmarkFootprint(sx, sz)) continue;
 
           const sy = this.terrain ? this.terrain.getElevation(sx, sz) : 2.5;
-
           const nextX = sx + dx * 0.5;
           const nextZ = sz + dz * 0.5;
           const nextY = this.terrain ? this.terrain.getElevation(nextX, nextZ) : sy;
-          const deltaY = nextY - sy;
-          const stepDist = Math.hypot(dx * 0.5, dz * 0.5);
-          const slopeAngle = -Math.atan2(deltaY, stepDist);
+          const slopeAngle = -Math.atan2(nextY - sy, 0.5 * Math.hypot(dx, dz));
 
-          // If slope is steep, place a staircase step, otherwise a smooth slab paver
-          if (Math.abs(deltaY) > 0.22) {
-            dummy.position.set(sx, sy + 0.28, sz);
-            dummy.rotation.set(Math.max(-0.4, Math.min(0.4, slopeAngle)), heading, 0);
-            dummy.scale.set(1.0, 1.0, 1.0);
-            dummy.updateMatrix();
-            stepMatrices.push(dummy.matrix.clone());
-          } else {
-            dummy.position.set(sx, sy + 0.15, sz); // Laje mais rente ao chão
-            dummy.rotation.set(Math.max(-0.35, Math.min(0.35, slopeAngle * 0.85)), heading, 0); // Rotaciona fielmente
-            dummy.scale.set(1.0, 1.0, 1.0);
-            dummy.updateMatrix();
-            slabMatrices.push(dummy.matrix.clone());
-          }
+          // Degrau de pedra
+          dummy.position.set(sx, sy + 0.08, sz);
+          dummy.rotation.set(Math.max(-0.45, Math.min(0.45, slopeAngle)), heading, 0);
+          dummy.scale.set(1.0, 1.0, 1.0);
+          dummy.updateMatrix();
+          stepMatrices.push(dummy.matrix.clone());
 
-          // Place a solar lamppost every 7 steps along the viela
-          if (globalStepCount % 7 === 0) {
-            const sideOffset = 1.35;
-            const px = sx + sideOffset * Math.cos(heading + Math.PI / 2);
-            const pz = sz + sideOffset * Math.sin(heading + Math.PI / 2);
-            const py = this.terrain ? this.terrain.getElevation(px, pz) : sy;
+          // Mureta de contenção lateral esquerda e direita
+          const perpX = Math.cos(heading) * 1.25;
+          const perpZ = -Math.sin(heading) * 1.25;
+          dummyParapet.position.set(sx + perpX, sy + 0.18, sz + perpZ);
+          dummyParapet.rotation.set(Math.max(-0.45, Math.min(0.45, slopeAngle)), heading, 0);
+          dummyParapet.scale.set(1.0, 1.0, 1.0);
+          dummyParapet.updateMatrix();
+          parapetMatrices.push(dummyParapet.matrix.clone());
 
-            // Post
-            dummy.position.set(px, py + 1.2, pz);
-            dummy.rotation.set(0, heading, 0);
-            dummy.scale.set(1.0, 1.0, 1.0);
-            dummy.updateMatrix();
-            postMatrices.push(dummy.matrix.clone());
-
-            // Lantern
-            dummy.position.set(px, py + 2.45, pz);
-            dummy.rotation.set(0, 0, 0);
-            dummy.scale.set(1.0, 1.0, 1.0);
-            dummy.updateMatrix();
-            lanternMatrices.push(dummy.matrix.clone());
-          }
-
-          // Register node to prevent houses from spawning here
-          this.infrastructureNodes.push({ x: sx, z: sz });
+          dummyParapet.position.set(sx - perpX, sy + 0.18, sz - perpZ);
+          dummyParapet.updateMatrix();
+          parapetMatrices.push(dummyParapet.matrix.clone());
         }
+      }
+
+      // Lanterna discreta no patamar superior de chegada
+      if (route.length > 1) {
+        const end = route[route.length - 1];
+        const endY = this.terrain ? this.terrain.getElevation(end.x, end.z) : 2.5;
+        dummy.position.set(end.x - 1.4, endY + 1.1, end.z);
+        dummy.rotation.set(0, 0, 0);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        postMatrices.push(dummy.matrix.clone());
+
+        dummy.position.set(end.x - 1.4, endY + 2.25, end.z);
+        dummy.updateMatrix();
+        lanternMatrices.push(dummy.matrix.clone());
       }
     });
 
-    // 1. Instanced Slabs
-    if (slabMatrices.length > 0) {
-      const instancedSlabs = new THREE.InstancedMesh(slabGeo, slabMat, slabMatrices.length);
-      instancedSlabs.receiveShadow = true;
-      const baseColor = new THREE.Color(0xF5EFEB);
-      const varColor = new THREE.Color();
-      for (let i = 0; i < slabMatrices.length; i++) {
-        instancedSlabs.setMatrixAt(i, slabMatrices[i]);
-        const tint = (Math.sin(i * 1.9) * 0.04);
-        varColor.copy(baseColor).addScalar(tint);
-        instancedSlabs.setColorAt(i, varColor);
-      }
-      instancedSlabs.instanceMatrix.needsUpdate = true;
-      if (instancedSlabs.instanceColor) instancedSlabs.instanceColor.needsUpdate = true;
-      this.group.add(instancedSlabs);
-      this.instancedSlabs = instancedSlabs;
-    }
-
-    // 2. Instanced Steps
+    // 1. Instanced Steps (Degraus de Pedra com variação sutil de tom)
     if (stepMatrices.length > 0) {
       const instancedSteps = new THREE.InstancedMesh(stepGeo, stepMat, stepMatrices.length);
       instancedSteps.receiveShadow = true;
-      const baseStepColor = new THREE.Color(0xEAE3D8);
+      const baseStepColor = new THREE.Color(0x8C857B);
       const varStepColor = new THREE.Color();
       for (let i = 0; i < stepMatrices.length; i++) {
         instancedSteps.setMatrixAt(i, stepMatrices[i]);
-        const tint = (Math.sin(i * 2.3) * 0.04);
+        const tint = (Math.sin(i * 1.7) * 0.03);
         varStepColor.copy(baseStepColor).addScalar(tint);
         instancedSteps.setColorAt(i, varStepColor);
       }
@@ -667,7 +752,19 @@ export const RoadsMixin = {
       this.instancedSteps = instancedSteps;
     }
 
-    // 3. Instanced Solar Lampposts
+    // 2. Instanced Parapets (Muretas de Cantaria)
+    if (parapetMatrices.length > 0) {
+      const instancedParapets = new THREE.InstancedMesh(parapetGeo, parapetMat, parapetMatrices.length);
+      instancedParapets.receiveShadow = true;
+      for (let i = 0; i < parapetMatrices.length; i++) {
+        instancedParapets.setMatrixAt(i, parapetMatrices[i]);
+      }
+      instancedParapets.instanceMatrix.needsUpdate = true;
+      this.group.add(instancedParapets);
+      this.instancedParapets = instancedParapets;
+    }
+
+    // 3. Instanced Solar Lampposts (Postes nos patamares)
     if (postMatrices.length > 0) {
       const instancedPosts = new THREE.InstancedMesh(postGeo, postMat, postMatrices.length);
       instancedPosts.castShadow = true;
@@ -679,7 +776,7 @@ export const RoadsMixin = {
       this.instancedPosts = instancedPosts;
     }
 
-    // 4. Instanced Glowing Lanterns
+    // 4. Instanced Glowing Lanterns (Luz quente nos patamares)
     if (lanternMatrices.length > 0) {
       const instancedLanterns = new THREE.InstancedMesh(lanternGeo, lanternMat, lanternMatrices.length);
       for (let i = 0; i < lanternMatrices.length; i++) {
@@ -706,7 +803,16 @@ export const RoadsMixin = {
       { x: -98, z: -55 }, // Mirante do Poente
       { x: 95, z: -18 },  // Grande Olaria
       { x: 98, z: -55 },  // Mirante do Levante
-      { x: 0, z: -104 }   // Torre de Rádio
+      { x: 0, z: -104 },  // Torre de Rádio
+      { x: -168, z: 12 }, // Vale do Poente Baixo
+      { x: -225, z: 12 }, // Orla do Poente Expandida
+      { x: -195, z: -55 },// Encosta do Poente Expandida
+      { x: 168, z: 12 },  // Vale do Levante Baixo
+      { x: 225, z: 12 },  // Orla do Levante Expandida
+      { x: 195, z: -55 }, // Encosta do Levante Expandida
+      { x: -65, z: -155 },// Sela da Serra Oeste
+      { x: 65, z: -155 }, // Sela da Serra Leste
+      { x: 0, z: -165 }   // Mirante da Sela Norte
     ];
 
     lampCoords.forEach(pos => {

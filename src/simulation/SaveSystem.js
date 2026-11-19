@@ -9,7 +9,7 @@ export class SaveSystem {
       const payload = {
         timestamp: Date.now(),
         day: data.day,
-        speed: data.speed,
+        speed: 1, // Sane default: sempre persiste 1x para que reaberturas e novos mundos nunca iniciem travados em 5x
         metrics: data.metrics,
         factions: data.factions,
         diplomacy: data.diplomacy,

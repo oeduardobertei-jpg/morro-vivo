@@ -8,15 +8,22 @@ import * as THREE from 'three';
 
 // Pontos de comércio e convívio econômico permanente no mapa
 const COMMERCE_SPOTS = [
-  // 1. Barracas Tradicionais da Praia
+  // 1. Barracas Tradicionais da Praia (Toda a Orla de -215 a +225)
+  { id: 'caldo', name: 'Barraca do Caldo de Cana & Pastel', x: -215.0, z: 42.8, type: 'stall', district: 'prainha', itemName: 'Caldo de Cana' },
+  { id: 'caipirinha', name: 'Quiosque Brisa do Poente', x: -155.0, z: 42.8, type: 'stall', district: 'prainha', itemName: 'Água de Coco' },
   { id: 'coco', name: 'Barraca do Coco Verde', x: -40.0, z: 42.8, type: 'stall', district: 'prainha', itemName: 'Coco Gelado' },
   { id: 'mate', name: 'Barraca do Mate & Biscoito Globo', x: -10.0, z: 42.8, type: 'stall', district: 'prainha', itemName: 'Mate Gelado' },
   { id: 'acai', name: 'Barraca do Açaí da Colina', x: 20.0, z: 42.8, type: 'stall', district: 'varzea', itemName: 'Tigela de Açaí' },
   { id: 'petiscos', name: 'Barraca de Frutos do Mar & Petiscos', x: 50.0, z: 42.8, type: 'stall', district: 'varzea', itemName: 'Pastel de Camarão' },
+  { id: 'milho', name: 'Barraca do Milho Verde & Coco', x: 160.0, z: 42.8, type: 'stall', district: 'varzea', itemName: 'Milho Cozido' },
+  { id: 'sorvete', name: 'Quiosque Picolé & Sorvete do Levante', x: 225.0, z: 42.8, type: 'stall', district: 'varzea', itemName: 'Picolé de Fruta' },
 
-  // 2. Extremos Costeiros & Cais
+  // 2. Extremos Costeiros, Cais & Vendas dos Vales Expandidos
   { id: 'pier_fish', name: 'Píer dos Pescadores', x: -78.0, z: 74.0, type: 'fishery', district: 'prainha', itemName: 'Pescado Fresco' },
   { id: 'cove_fish', name: 'Rancho Caiçara da Enseada', x: -95.0, z: 0.0, type: 'fishery', district: 'prainha', itemName: 'Peixe Salgado' },
+  { id: 'boteco_poente', name: 'Boteco do Vale do Poente', x: -186.0, z: -19.5, type: 'market', district: 'prainha', itemName: 'Refresco & Empada' },
+  { id: 'boteco_levante', name: 'Boteco do Vale do Levante', x: 186.0, z: -19.5, type: 'market', district: 'varzea', itemName: 'Suco & Salgado' },
+  { id: 'venda_sela', name: 'Venda da Sela da Serra', x: -6.0, z: -155.5, type: 'market', district: 'serra', itemName: 'Café & Pão de Queijo' },
 
   // 3. Agrofloresta & Horta Comunitária
   { id: 'horta_dona_nair', name: 'Horta Comunitária em Socalcos', x: 82.0, z: -8.0, type: 'farm', district: 'varzea', itemName: 'Cesto de Verduras' },

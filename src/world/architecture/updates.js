@@ -3,6 +3,7 @@ import * as THREE from 'three';
 /** Laço de atualização por frame: iluminação noturna, fumaça e animações. */
 export const UpdatesMixin = {
   update(delta) {
+    if (this.updateMobilitySystems) this.updateMobilitySystems(delta);
     const time = performance.now() * 0.003;
     const timeInfo = this.env ? this.env.getTimeOfDay() : 'day';
     const phase = (typeof timeInfo === 'string') ? timeInfo : (timeInfo.phase || 'day');
@@ -15,7 +16,7 @@ export const UpdatesMixin = {
       // Phase 0: Waiting for materials to be delivered by pushcart courier from Olaria
       if (c.state === 'WAITING_SUPPLIES') {
         c.supplyWaitTimer = (c.supplyWaitTimer || 0) + delta;
-        if (c.supplyWaitTimer > 8.0) {
+        if (c.supplyWaitTimer > 3.5) {
           // Automatic timeout fallback: supplies arrive safely, recruit workers ONLY if not already recruited!
           c.state = 'WAITING_WORKERS';
           if ((!c.workers || c.workers.length === 0) && this.npcManager) {
@@ -32,7 +33,7 @@ export const UpdatesMixin = {
           c.workers = this.npcManager.recruitWorkersForSite(c, 2);
         }
         const anyArrived = c.workers && c.workers.length > 0 && c.workers.some(w => w.builderState === 'working');
-        if (anyArrived) {
+        if (anyArrived || c.workerWaitTimer > 3.5) {
           c.state = 'ACTIVE_WORK';
           this.spawnConstructionPuff({
             x: c.plateau.x,
@@ -40,7 +41,7 @@ export const UpdatesMixin = {
             z: c.plateau.z
           });
         }
-        continue; // NUNCA avança a obra sem operário fisicamente presente e trabalhando!
+        continue;
       }
 
       // Regra estrita de Horário de Obras: à noite e alvorecer, expediente é encerrado e operários são liberados!
@@ -60,13 +61,11 @@ export const UpdatesMixin = {
       }
 
       // Phase 2: Active Construction & Real-Time Terraforming
-      // A obra só progride fisicamente e emite sons/partículas se houver operário trabalhando no local
+      // Se houver operários no local, obra opera a 100% de velocidade; se operários estão a caminho, o canteiro avança a ritmo de preparo (65%)
       const hasActiveWorker = c.workers && c.workers.some(w => w.builderState === 'working');
-      if (!hasActiveWorker) {
-        continue;
-      }
+      const progressMult = hasActiveWorker ? 1.0 : 0.65;
 
-      c.progress += delta / c.duration;
+      c.progress += (delta / c.duration) * progressMult;
 
       // Sub-phase A: Terraforming / Excavating (0.0 to 0.28) ~ 4.5 seconds
       if (c.progress <= 0.28) {
@@ -363,21 +362,14 @@ export const UpdatesMixin = {
       b.group.rotation.z = Math.sin(time * 1.5 + b.phase) * 0.05;
     });
 
-    // Dynamic Beach Umbrellas: Presence scales smoothly with number of people on the beach
-    if (this.beachUmbrellas && this.beachUmbrellas.length > 0) {
-      let beachCrowd = 4;
-      if (this.npcManager && this.npcManager.npcs) {
-        beachCrowd = this.npcManager.npcs.filter(n => n.group.position.z >= 22.0 && Math.abs(n.group.position.x) <= 105).length;
+    // Guarda-sóis da praia permanecem todos ativos e estáveis (evita realocação e permite uso contínuo das cadeiras)
+    if (this.beachUmbrellas && this.beachUmbrellas.length > 0 && !this._beachUmbrellasInitialized) {
+      this._beachUmbrellasInitialized = true;
+      for (let i = 0; i < this.beachUmbrellas.length; i++) {
+        const u = this.beachUmbrellas[i];
+        u.group.scale.set(1, 1, 1);
+        u.group.visible = true;
       }
-      // Target active umbrellas scales from 3 up to all 12
-      const targetActive = Math.min(this.beachUmbrellas.length, Math.max(3, Math.floor(beachCrowd / 1.5)));
-
-      this.beachUmbrellas.forEach(u => {
-        u.targetScale = (u.order < targetActive) ? 1.0 : 0.001;
-        u.currentScale += (u.targetScale - u.currentScale) * Math.min(1.0, delta * 3.2);
-        u.group.scale.set(u.currentScale, u.currentScale, u.currentScale);
-        u.group.visible = u.currentScale > 0.05;
-      });
     }
 
     // Altinha Duo Match on the East Shore (Organic, Athletic & Rhythmic Beach Soccer)
@@ -483,6 +475,25 @@ export const UpdatesMixin = {
       }
     }
 
+    // Frescobol Rally in Southeast Dunes Court
+    if (this.frescobolMatch) {
+      const f = this.frescobolMatch;
+      f.progress += delta * 1.8;
+      const p1Z = -3.5, p2Z = 3.5;
+      const startZ = f.direction === 1 ? p1Z : p2Z;
+      const endZ = f.direction === 1 ? p2Z : p1Z;
+      if (f.progress < 1.0) {
+        const t = f.progress;
+        f.ball.position.z = startZ + (endZ - startZ) * t;
+        f.ball.position.x = Math.sin(t * Math.PI) * 0.4;
+        f.ball.position.y = 1.0 + Math.sin(t * Math.PI) * 1.1;
+        f.ball.rotation.x += delta * 15 * f.direction;
+      } else {
+        f.progress = 0.0;
+        f.direction = -f.direction;
+      }
+    }
+
     // Leaning Coconut Palms Wind Sway & Maresia Audio
     if (this.beachPalms) {
       this.beachPalms.forEach(p => {
@@ -574,18 +585,37 @@ export const UpdatesMixin = {
       nightFactor = 0.0;
     }
 
-    // 1. House Windows: Slate blue reflection by day -> Radiant glowing golden homes at dusk & night
-    if (this.windowMeshes && this.windowMeshes.length > 0) {
-      const isLit = nightFactor > 0.08;
+    // 1. House Windows: Slate blue glass by day -> Warm varied amber glow across homes at dusk & night (O(1) via sharedWindowMats)
+    const isLit = nightFactor > 0.08;
+    if (this.sharedWindowMats && this.sharedWindowMats.length >= 3) {
+      const presets = [
+        { day: 0x3D5570, col: 0xFCD34D, em: 0xF59E0B, ei: 1.15 },
+        { day: 0x45607D, col: 0xFDE68A, em: 0xD97706, ei: 0.72 },
+        { day: 0x31455A, col: 0x263547, em: 0x334155, ei: 0.14 }
+      ];
+      for (let i = 0; i < this.sharedWindowMats.length; i++) {
+        const m = this.sharedWindowMats[i];
+        const p = presets[i % presets.length];
+        if (isLit) {
+          m.color.setHex(p.col);
+          m.emissive.setHex(p.em);
+          m.emissiveIntensity = p.ei * nightFactor;
+        } else {
+          m.color.setHex(p.day);
+          m.emissive.setHex(0x000000);
+          m.emissiveIntensity = 0.0;
+        }
+      }
+    } else if (this.windowMeshes && this.windowMeshes.length > 0) {
       for (let i = 0; i < this.windowMeshes.length; i++) {
         const win = this.windowMeshes[i];
         if (win.material) {
           if (isLit) {
-            win.material.color.setHex(0xFDE047);
+            win.material.color.setHex(0xFCD34D);
             win.material.emissive.setHex(0xF59E0B);
-            win.material.emissiveIntensity = 1.35 * nightFactor;
+            win.material.emissiveIntensity = 1.15 * nightFactor;
           } else {
-            win.material.color.setHex(0x415A77);
+            win.material.color.setHex(0x3D5570);
             win.material.emissive.setHex(0x000000);
             win.material.emissiveIntensity = 0.0;
           }
@@ -633,6 +663,29 @@ export const UpdatesMixin = {
         const fireScaleY = isSambaActive ? flicker * 1.35 : flicker * 0.6;
         this.sambaFire.scale.set(flicker, fireScaleY, flicker);
         this.sambaFireInner.scale.set(flicker * 0.9, fireScaleY * 0.9, flicker * 0.9);
+      }
+    }
+
+    // 4b. Rodinhas de Luau & Fogueiras na Praia (Acendem no Pôr do Sol e à Noite!)
+    if (this.beachBonfires && this.beachBonfires.length > 0) {
+      const isLuauActive = (phase === 'night' || phase === 'sunset');
+      for (let b = 0; b < this.beachBonfires.length; b++) {
+        const bf = this.beachBonfires[b];
+        if (bf.fireGroup) {
+          bf.fireGroup.visible = isLuauActive;
+        }
+        if (isLuauActive) {
+          const phaseShift = b * 2.1;
+          const flicker = 0.95 + Math.sin(time * 11.5 + phaseShift) * 0.16 + Math.cos(time * 17.0 + phaseShift) * 0.10;
+          const scaleY = flicker * (phase === 'night' ? 1.25 : 0.92);
+          if (bf.fireOuter) bf.fireOuter.scale.set(flicker, scaleY, flicker);
+          if (bf.fireInner) bf.fireInner.scale.set(flicker * 0.88, scaleY * 0.90, flicker * 0.88);
+          if (bf.fireLight) {
+            bf.fireLight.intensity = (phase === 'night' ? 2.6 : 1.6) + Math.sin(time * 13.0 + phaseShift) * 0.55;
+          }
+        } else if (bf.fireLight) {
+          bf.fireLight.intensity = 0.0;
+        }
       }
     }
 

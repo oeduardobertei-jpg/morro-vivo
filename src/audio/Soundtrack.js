@@ -7,22 +7,34 @@ export class AmbientSoundtrack {
   constructor() {
     this.ctx = null;
     this.isPlaying = false;
+    this.userPausedMusic = false;
     this.chordInterval = null;
+    this.beatStep = 0;
+    this.barCount = 0;
     this.windNode = null;
+    // Progressão Boom-Bap Funk Brasileiro & Samba-Rock (Am9 -> Dm9 -> G13 -> Cmaj9/E7#9)
     this.bossaProgression = [
-      [261.63, 329.63, 392.00, 493.88], // Cmaj7
-      [220.00, 261.63, 329.63, 392.00], // Am7
-      [293.66, 349.23, 440.00, 523.25], // Dm7
-      [196.00, 246.94, 293.66, 349.23, 440.00] // G7(9)
+      [220.00, 261.63, 329.63, 392.00, 493.88], // Am9 (Swing Carioca / Jorge Ben & D2 vibe)
+      [146.83, 220.00, 261.63, 329.63, 349.23], // Dm9 (Groove de Baile Charme)
+      [196.00, 246.94, 293.66, 349.23, 440.00], // G13 (Balanço Funk-Soul Brasileiro)
+      [164.81, 207.65, 246.94, 293.66, 392.00]  // E7(#9) (Acorde Hendrix/Tim Maia de virada)
+    ];
+    this.bassProgression = [
+      [55.00, 110.00, 82.41, 98.00],  // A1 -> A2 (Octave slap) -> E2 -> G2
+      [73.42, 146.83, 110.00, 65.41], // D2 -> D3 (Octave slap) -> A2 -> C2
+      [49.00, 98.00,  73.42, 87.31],  // G1 -> G2 (Octave slap) -> D2 -> F2
+      [65.41, 82.41,  98.00, 103.83]  // C2 -> E2 -> G2 -> G#2 (Chromatic walk-up)
     ];
     this.chordIndex = 0;
     this.camera = null;
     this.controls = null;
+    this.sambaProximityDuck = 1.0;
 
     // Per-channel mixer volumes (percentages 0 to 100)
     this.volumes = {
       master: 80,
       music: 65,
+      samba: 75,
       construction: 45,
       soccer: 18, // Baixado completamente para nunca incomodar ou irritar
       sea: 65,    // Volume encorpado e refrescante da maresia
@@ -33,6 +45,7 @@ export class AmbientSoundtrack {
     // Web Audio Gain Nodes for multi-channel mixing
     this.masterGainNode = null;
     this.musicGainNode = null;
+    this.sambaGainNode = null;
     this.seaGainNode = null;
     this.sfxMasterNode = null;
     this.constructionGainNode = null;
@@ -62,10 +75,14 @@ export class AmbientSoundtrack {
     this.masterGainNode = this.ctx.createGain();
     this.masterGainNode.connect(this.ctx.destination);
 
-    // 2. Music Channel (Bossa Nova chords)
+    // 2. Music Channel (Trilha Sonora Geral: Chill Lo-Fi Boom-Bap Rap)
     this.musicGainNode = this.ctx.createGain();
     this.musicGainNode.connect(this.masterGainNode);
     this.masterGain = this.musicGainNode; // Alias
+
+    // 2b. Dedicated Roda de Samba Channel (Terreiro de Samba do Morro)
+    this.sambaGainNode = this.ctx.createGain();
+    this.sambaGainNode.connect(this.masterGainNode);
 
     // 3. Sea Breeze & Wave Swells Channel
     this.seaGainNode = this.ctx.createGain();
@@ -102,6 +119,11 @@ export class AmbientSoundtrack {
     if (!this.oceanBreezeActive && this.ctx && this.ctx.state === 'running') {
       this.startOceanBreeze();
     }
+    // Inicia automaticamente a trilha sonora Boom-Bap tranquila na primeira interação, a menos que o jogador tenha pausado
+    if (!this.isPlaying && !this.userPausedMusic && this.ctx) {
+      this.play();
+      if (this.onPlayStateChange) this.onPlayStateChange(true);
+    }
   }
 
   // VOLUME MIXING CONTROLS
@@ -129,7 +151,13 @@ export class AmbientSoundtrack {
         break;
       case 'music':
         if (this.musicGainNode) {
-          this.musicGainNode.gain.setValueAtTime(fraction * 0.22, t);
+          const duck = this.sambaProximityDuck !== undefined ? this.sambaProximityDuck : 1.0;
+          this.musicGainNode.gain.setTargetAtTime(fraction * 0.42 * duck, t, 0.15);
+        }
+        break;
+      case 'samba':
+        if (this.sambaGainNode) {
+          this.sambaGainNode.gain.setTargetAtTime(fraction * 0.85, t, 0.1);
         }
         break;
       case 'sea':
@@ -161,7 +189,7 @@ export class AmbientSoundtrack {
   }
 
   applyAllVolumes() {
-    ['master', 'music', 'sea', 'sfx', 'construction', 'soccer', 'generalSfx'].forEach(ch => this.applyVolume(ch));
+    ['master', 'music', 'samba', 'sea', 'sfx', 'construction', 'soccer', 'generalSfx'].forEach(ch => this.applyVolume(ch));
   }
 
   saveVolumes() {
@@ -187,22 +215,31 @@ export class AmbientSoundtrack {
     }
 
     if (this.isPlaying) {
+      this.userPausedMusic = true;
       this.stop();
+      if (this.onPlayStateChange) this.onPlayStateChange(false);
       return false;
     } else {
+      this.userPausedMusic = false;
       this.play();
+      if (this.onPlayStateChange) this.onPlayStateChange(true);
       return true;
     }
   }
 
   play() {
     if (!this.ctx) this.init();
+    if (this.isPlaying) return;
     this.isPlaying = true;
     this.startOceanBreeze();
-    this.playNextChord();
+    this.beatStep = 0;
+    this.barCount = 0;
+    if (this.chordInterval) clearInterval(this.chordInterval);
+    // Sequenciador Boom-Bap Funk Brasileiro a ~98 BPM (16 semicolcheias animadas: 153ms por step)
+    this.playBoomBapStep();
     this.chordInterval = setInterval(() => {
-      if (this.isPlaying) this.playNextChord();
-    }, 4200);
+      if (this.isPlaying) this.playBoomBapStep();
+    }, 153);
   }
 
   stop() {
@@ -266,37 +303,399 @@ export class AmbientSoundtrack {
     this.oceanBreezeActive = true;
   }
 
-  playNextChord() {
+  // =========================================================================
+  // TRILHA SONORA GERAL: BOOM-BAP FUNK BRASILEIRO & SAMBA-RAP GROOVE (~98 BPM)
+  // Combina batida pesada de MPC Boom-Bap, síncope de Tamborzão/Miami Bass,
+  // contrabaixo slap à la Tim Maia/Baile Charme, Clavinet/Guitarra Funky, Cuíca e Agogô!
+  // =========================================================================
+  playBoomBapStep() {
     if (!this.ctx || !this.isPlaying) return;
-    const chord = this.bossaProgression[this.chordIndex];
-    this.chordIndex = (this.chordIndex + 1) % this.bossaProgression.length;
+    const step = this.beatStep % 16;
+    const isOddStep = (step % 2 === 1);
+    // Swing brasileiro de MPC + Baile Charme nas semicolcheias ímpares (+18ms)
+    const swingOffset = isOddStep ? 0.018 : 0.0;
+    const t = this.ctx.currentTime + 0.01 + swingOffset;
 
+    if (step === 0) {
+      this.chordIndex = this.barCount % this.bossaProgression.length;
+      this.barCount++;
+    }
+    const currentChord = this.bossaProgression[this.chordIndex];
+    const isTurnaroundBar = (this.barCount % 2 === 0);
+
+    // 1. CORTES DE SAMPLE MPC & CLAVINET FUNK BRASILEIRO (Stabs curtos, animados e sincopados, nada de pad lento!)
+    if (step === 0) {
+      this.playBoomBapRhodesChord(t, currentChord, 0.34, 1.0);
+    } else if (step === 3) {
+      this.playBoomBapRhodesChord(t, currentChord, 0.20, 0.82);
+    } else if (step === 6) {
+      this.playBoomBapRhodesChord(t, currentChord, 0.28, 0.90);
+    } else if (step === 10) {
+      this.playBoomBapRhodesChord(t, currentChord, 0.24, 0.85);
+    } else if (step === 12 && isTurnaroundBar) {
+      this.playBoomBapRhodesChord(t, currentChord, 0.22, 0.78);
+    } else if (step === 14) {
+      this.playBoomBapRhodesChord(t, currentChord, 0.26, 0.88);
+    }
+
+    // 2. BUMBO BOOM-BAP + SUB 808 DE FUNK CARIOCA ("TUM... tá-TUM-TUM... TUM-tá!")
+    // Combina a cabeça do compasso do Boom-Bap (0, 8) com a síncope do Tamborzão/Partido Alto (3, 6, 10, 14)
+    const kickHit =
+      step === 0 ||
+      step === 3 ||
+      (step === 6 && !isTurnaroundBar) ||
+      (step === 7 && isTurnaroundBar) ||
+      step === 8 ||
+      step === 10 ||
+      (step === 11 && isTurnaroundBar) ||
+      (step === 14 && (this.barCount % 4 !== 0));
+
+    if (kickHit) {
+      const kVel = (step === 0 || step === 8) ? 1.05 : (step === 3 || step === 10 ? 0.92 : 0.80);
+      this.playBoomBapKick(t, kVel);
+    }
+
+    // 3. CAIXA ESTALADA DE BOOM-BAP (Beats 2 e 4: steps 4 e 12) + RIMSHOT DE TAMBORZÃO / PARTIDO ALTO
+    if (step === 4 || step === 12) {
+      this.playBoomBapSnare(t, 1.0);
+    } else if (step === 15 && isTurnaroundBar) {
+      this.playBoomBapSnare(t, 0.52);
+    }
+
+    // Rimshot / Tamborim sincopado de Funk Brasileiro ("Pá! Pá-Pá!")
+    if (step === 2 || step === 6 || step === 11 || step === 14) {
+      const rVel = (step === 6 || step === 14) ? 0.85 : 0.58;
+      this.playFunkRimshot(t, rVel);
+    }
+
+    // 4. GANZÁ / CHIMBAL 16-STEPS ANIMADO + PRATO ABERTO NO CONTRATEMPO
+    const isOpenHat = (step === 2 || step === 10 || (step === 14 && isTurnaroundBar));
+    const hVel = (step % 4 === 0) ? 0.82 : (isOpenHat ? 0.76 : (isOddStep ? 0.48 : 0.64));
+    this.playBoomBapHat(t, hVel, isOpenHat);
+
+    // 5. AGOGÔ CARIOCA & CUÍCA DE MPC (Tempero autêntico de Boom-Bap / Funk Brasileiro)
+    if (step === 3 || step === 7 || step === 10 || step === 15) {
+      const highBell = (step === 3 || step === 10);
+      this.playAgogoFunkBell(t, highBell ? 810 : 540, highBell ? 0.65 : 0.52);
+    }
+    if ((step === 6 && !isTurnaroundBar) || (step === 14 && isTurnaroundBar)) {
+      this.playCuicaChop(t, step === 6);
+    }
+
+    // 6. CONTRABAIXO SLAP FUNK BRASILEIRO (Groove dançante com oitavas e filtro envelope)
+    const bassNotes = this.bassProgression[this.chordIndex] || this.bassProgression[0];
+    if (step === 0) {
+      this.playBoomBapBass(t, bassNotes[0], 0.36, 1.05);
+    } else if (step === 2) {
+      this.playBoomBapBass(t, bassNotes[1], 0.14, 0.78); // Oitava Slap!
+    } else if (step === 3) {
+      this.playBoomBapBass(t, bassNotes[0], 0.22, 0.88);
+    } else if (step === 6) {
+      this.playBoomBapBass(t, bassNotes[2], 0.24, 0.85);
+    } else if (step === 8) {
+      this.playBoomBapBass(t, bassNotes[0], 0.32, 1.0);
+    } else if (step === 10) {
+      this.playBoomBapBass(t, bassNotes[1], 0.16, 0.82); // Oitava Slap!
+    } else if (step === 11) {
+      this.playBoomBapBass(t, bassNotes[2], 0.20, 0.76);
+    } else if (step === 14) {
+      this.playBoomBapBass(t, bassNotes[3], 0.26, 0.90); // Passagem funk para o próximo compasso
+    }
+
+    // 7. NAIPE DE METAIS (BRASS HIT) & GUITARRA WAH SAMBA-ROCK
+    if (step === 6 || step === 13 || (step === 15 && isTurnaroundBar)) {
+      const lickFreq = currentChord[step === 6 ? 4 : (step === 13 ? 3 : 2)] * 2.0;
+      this.playBoomBapLick(t, lickFreq, step === 6);
+    }
+
+    this.beatStep = (this.beatStep + 1) % 16;
+  }
+
+  playBoomBapKick(t, velocity = 1.0) {
+    const dest = this.musicGainNode || this.masterGainNode || this.ctx.destination;
+    const osc = this.ctx.createOscillator();
+    const clickOsc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const clickGain = this.ctx.createGain();
+
+    // Sub 808 + Punch de MPC (160Hz -> 52Hz -> 36Hz)
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(160, t);
+    osc.frequency.exponentialRampToValueAtTime(52, t + 0.048);
+    osc.frequency.exponentialRampToValueAtTime(36, t + 0.24);
+
+    const peak = 0.42 * velocity;
+    gain.gain.setValueAtTime(0.001, t);
+    gain.gain.linearRampToValueAtTime(peak, t + 0.004);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+
+    // Transiente de ataque do pedal no bumbo
+    clickOsc.type = 'triangle';
+    clickOsc.frequency.setValueAtTime(340, t);
+    clickOsc.frequency.exponentialRampToValueAtTime(75, t + 0.022);
+    clickGain.gain.setValueAtTime(0.14 * velocity, t);
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+
+    osc.connect(gain);
+    gain.connect(dest);
+    clickOsc.connect(clickGain);
+    clickGain.connect(dest);
+
+    osc.start(t);
+    osc.stop(t + 0.26);
+    clickOsc.start(t);
+    clickOsc.stop(t + 0.028);
+  }
+
+  playBoomBapSnare(t, velocity = 1.0) {
+    const dest = this.musicGainNode || this.masterGainNode || this.ctx.destination;
+
+    // 1. Corpo estalado de Caixa Boom-Bap (Punch em 220Hz -> 125Hz)
+    const osc = this.ctx.createOscillator();
+    const bodyGain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(225, t);
+    osc.frequency.exponentialRampToValueAtTime(122, t + 0.075);
+
+    bodyGain.gain.setValueAtTime(0.22 * velocity, t);
+    bodyGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.095);
+
+    osc.connect(bodyGain);
+    bodyGain.connect(dest);
+    osc.start(t);
+    osc.stop(t + 0.10);
+
+    // 2. Esteira viva e crocante de MPC + Clap de Baile Charme
+    const bufLen = Math.floor(this.ctx.sampleRate * 0.15);
+    const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) {
+      const env = Math.pow(1.0 - i / bufLen, 1.55);
+      data[i] = (Math.random() * 2 - 1) * env * 0.45;
+    }
+
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buf;
+
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(2150, t);
+    filter.Q.setValueAtTime(0.95, t);
+
+    const nGain = this.ctx.createGain();
+    nGain.gain.setValueAtTime(0.24 * velocity, t);
+    nGain.gain.exponentialRampToValueAtTime(0.0001, t + 0.14);
+
+    noise.connect(filter);
+    filter.connect(nGain);
+    nGain.connect(dest);
+
+    noise.start(t);
+    noise.stop(t + 0.15);
+  }
+
+  playFunkRimshot(t, velocity = 0.7) {
+    const dest = this.musicGainNode || this.masterGainNode || this.ctx.destination;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    // Tamborim / Rimshot de Tamborzão Carioca
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(480, t);
+    osc.frequency.exponentialRampToValueAtTime(290, t + 0.032);
+
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1450, t);
+    filter.Q.setValueAtTime(2.4, t);
+
+    gain.gain.setValueAtTime(0.09 * velocity, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.038);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    osc.start(t);
+    osc.stop(t + 0.042);
+  }
+
+  playAgogoFunkBell(t, freq = 810, velocity = 0.6) {
+    const dest = this.musicGainNode || this.masterGainNode || this.ctx.destination;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freq, t);
+
+    gain.gain.setValueAtTime(0.055 * velocity, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.065);
+
+    osc.connect(gain);
+    gain.connect(dest);
+
+    osc.start(t);
+    osc.stop(t + 0.07);
+  }
+
+  playCuicaChop(t, isHigh = true) {
+    const dest = this.musicGainNode || this.masterGainNode || this.ctx.destination;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    // Gemido rítmico clássico de Cuíca / Vocal Chop de Samba-Rap
+    osc.type = 'sawtooth';
+    const startF = isHigh ? 390 : 320;
+    const endF = isHigh ? 520 : 250;
+    osc.frequency.setValueAtTime(startF, t);
+    osc.frequency.exponentialRampToValueAtTime(endF, t + 0.085);
+
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(isHigh ? 950 : 720, t);
+    filter.Q.setValueAtTime(4.2, t);
+
+    gain.gain.setValueAtTime(0.001, t);
+    gain.gain.linearRampToValueAtTime(0.065, t + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.095);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    osc.start(t);
+    osc.stop(t + 0.10);
+  }
+
+  playBoomBapHat(t, velocity = 0.6, isOpen = false) {
+    const dest = this.musicGainNode || this.masterGainNode || this.ctx.destination;
+    const dur = isOpen ? 0.12 : 0.038;
+    const bufLen = Math.floor(this.ctx.sampleRate * dur);
+    const buf = this.ctx.createBuffer(1, bufLen, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) {
+      const env = Math.pow(1.0 - i / bufLen, isOpen ? 1.5 : 2.8);
+      data[i] = (Math.random() * 2 - 1) * env * 0.30;
+    }
+
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buf;
+
+    const hp = this.ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.setValueAtTime(5200, t);
+
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(10500, t);
+
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.10 * velocity, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    noise.connect(hp);
+    hp.connect(lp);
+    lp.connect(gain);
+    gain.connect(dest);
+
+    noise.start(t);
+    noise.stop(t + dur + 0.01);
+  }
+
+  playBoomBapBass(t, freq, duration = 0.32, velocity = 1.0) {
+    const dest = this.musicGainNode || this.masterGainNode || this.ctx.destination;
+    const osc = this.ctx.createOscillator();
+    const subOsc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    // Contrabaixo Slap/Funk com harmônicos ricos (Sawtooth filtrado + Sub Sine)
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(freq, t);
+
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(freq, t);
+
+    // Envelope Filter Funky ("Bootsy / Tim Maia" bass punch)
+    filter.type = 'lowpass';
+    filter.Q.setValueAtTime(2.8, t);
+    filter.frequency.setValueAtTime(640, t);
+    filter.frequency.exponentialRampToValueAtTime(135, t + duration * 0.85);
+
+    const peak = 0.24 * velocity;
+    gain.gain.setValueAtTime(0.001, t);
+    gain.gain.linearRampToValueAtTime(peak, t + 0.010);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+
+    osc.connect(filter);
+    subOsc.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    osc.start(t);
+    subOsc.start(t);
+    osc.stop(t + duration + 0.02);
+    subOsc.stop(t + duration + 0.02);
+  }
+
+  playBoomBapRhodesChord(t, chord, duration = 0.30, velocity = 1.0) {
+    const dest = this.musicGainNode || this.masterGainNode || this.ctx.destination;
+    // Corte percussivo de Clavinet / Wurlitzer / Sample de Samba-Soul no estilo MPC
     chord.forEach((freq, idx) => {
-      const noteDelay = idx * 0.18 + Math.random() * 0.05;
-      const startTime = this.ctx.currentTime + noteDelay;
-
+      const startTime = t + idx * 0.006;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       const filter = this.ctx.createBiquadFilter();
 
-      osc.type = 'triangle';
+      osc.type = idx % 2 === 0 ? 'sawtooth' : 'triangle';
       osc.frequency.setValueAtTime(freq, startTime);
 
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(1200, startTime);
-      filter.frequency.exponentialRampToValueAtTime(300, startTime + 2.8);
+      filter.type = 'bandpass';
+      filter.Q.setValueAtTime(1.8, startTime);
+      filter.frequency.setValueAtTime(1650, startTime);
+      filter.frequency.exponentialRampToValueAtTime(620, startTime + duration);
 
+      const peak = 0.055 * velocity;
       gain.gain.setValueAtTime(0.001, startTime);
-      gain.gain.linearRampToValueAtTime(0.06, startTime + 0.08);
-      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 3.2);
+      gain.gain.linearRampToValueAtTime(peak, startTime + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
 
       osc.connect(filter);
       filter.connect(gain);
-      gain.connect(this.musicGainNode || this.masterGainNode || this.ctx.destination);
+      gain.connect(dest);
 
       osc.start(startTime);
-      osc.stop(startTime + 3.5);
+      osc.stop(startTime + duration + 0.02);
     });
+  }
+
+  playBoomBapLick(t, freq, isBrassStab = false) {
+    const dest = this.musicGainNode || this.masterGainNode || this.ctx.destination;
+    const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
+    const gain = this.ctx.createGain();
+
+    // Guitarra Wah-Wah Samba-Rock ou Brass Stab de Funk Brasileiro
+    osc.type = isBrassStab ? 'sawtooth' : 'triangle';
+    osc.frequency.setValueAtTime(freq * 0.96, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.025);
+
+    filter.type = 'bandpass';
+    filter.Q.setValueAtTime(3.2, t);
+    filter.frequency.setValueAtTime(isBrassStab ? 900 : 750, t);
+    filter.frequency.exponentialRampToValueAtTime(isBrassStab ? 2200 : 1850, t + 0.09);
+    filter.frequency.exponentialRampToValueAtTime(680, t + 0.24);
+
+    gain.gain.setValueAtTime(0.001, t);
+    gain.gain.linearRampToValueAtTime(0.068, t + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(dest);
+
+    osc.start(t);
+    osc.stop(t + 0.27);
   }
 
   // PROCEDURAL SOUND EFFECTS (SFX) SYNTHESIZERS
@@ -336,6 +735,26 @@ export class AmbientSoundtrack {
         targetFreq = 340 + beachProximity * 190; // Até 530Hz para escutar a espuma e o arrebentar fresco das ondas
       }
       this.breezeFilter.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.5);
+    }
+
+    // Crossfade/Ducking automático da Trilha Boom-Bap quando a câmera chega bem pertinho da Roda de Samba (-2, 15.2, -4)
+    if (this.camera && this.musicGainNode) {
+      const sambaX = -2.0, sambaY = 15.2, sambaZ = -4.0;
+      const focusDist = (this.controls && this.controls.target)
+        ? Math.hypot(this.controls.target.x - sambaX, this.controls.target.z - sambaZ)
+        : 999;
+      const camDist = Math.hypot(this.camera.position.x - sambaX, this.camera.position.y - sambaY, this.camera.position.z - sambaZ);
+      const effDist = Math.max(focusDist, camDist * 0.62);
+
+      let targetDuck = 1.0;
+      if (effDist < 28.0) {
+        // Quando chegamos bem pertinho da Roda de Samba (< 28m), reduz suavemente o Boom-Bap para o samba brilhar
+        const prox = Math.max(0.0, Math.min(1.0, (28.0 - effDist) / 18.0));
+        targetDuck = 1.0 - prox * 0.72; // Cai até 28% bem no meio da roda
+      }
+      this.sambaProximityDuck = targetDuck;
+      const musicFraction = (this.volumes.music ?? 65) / 100.0;
+      this.musicGainNode.gain.setTargetAtTime(musicFraction * 0.34 * targetDuck, this.ctx.currentTime, 0.35);
     }
   }
 
@@ -402,7 +821,8 @@ export class AmbientSoundtrack {
 
   connectSpatial(node, pan = 0, channel = 'sfx', filterFreq = null) {
     let dest = this.sfxMasterNode || this.masterGainNode || this.ctx.destination;
-    if (channel === 'construction' && this.constructionGainNode) dest = this.constructionGainNode;
+    if (channel === 'samba' && this.sambaGainNode) dest = this.sambaGainNode;
+    else if (channel === 'construction' && this.constructionGainNode) dest = this.constructionGainNode;
     else if (channel === 'soccer' && this.soccerGainNode) dest = this.soccerGainNode;
     else if (channel === 'generalSfx' && this.generalSfxGainNode) dest = this.generalSfxGainNode;
 
@@ -770,9 +1190,21 @@ export class AmbientSoundtrack {
       this.resumeContext();
       if (!this.ctx) return;
 
-      // Raio acústico generoso do Terreiro de Samba (135m máx, 10m min)
-      const spatial = this.getSpatialInfo(pos, 135.0, 10.0);
-      if (spatial.gain <= 0.008) return;
+      // Roda de Samba espacial: fica bem baixinha ao longe e encorpa/aumenta de verdade só quando chegamos bem pertinho!
+      const spatial = this.getSpatialInfo(pos, 56.0, 5.0);
+      if (spatial.gain <= 0.005) return;
+
+      const px = pos.x !== undefined ? pos.x : -2;
+      const py = pos.y !== undefined ? pos.y : 15.2;
+      const pz = pos.z !== undefined ? pos.z : -4;
+      const focusDist = (this.controls && this.controls.target)
+        ? Math.hypot(this.controls.target.x - px, this.controls.target.z - pz)
+        : 999;
+      const camDist = this.camera
+        ? Math.hypot(this.camera.position.x - px, this.camera.position.y - py, this.camera.position.z - pz)
+        : 999;
+      const effectiveDist = Math.max(focusDist, camDist * 0.62);
+      if (effectiveDist > 56.0) return;
 
       const t = this.ctx.currentTime;
       // Cadência: 2.30s para roda completa, 3.60s para dedilhado acústico suave de dia
@@ -780,7 +1212,17 @@ export class AmbientSoundtrack {
       if (this.lastSambaTime && (t - this.lastSambaTime < (cadence - 0.15))) return;
       this.lastSambaTime = t;
 
-      const gainFactor = Math.min(1.0, Math.max(0.01, spatial.gain));
+      // Curva de proximidade íngreme: de longe (26m..56m) fica um murmúrio baixinho (0.02..0.10);
+      // chegando bem pertinho (< 24m até 6m), o volume sobe com tudo até 1.0!
+      let proximityGain = 0.03;
+      if (effectiveDist <= 26.0) {
+        const closeT = Math.max(0.0, Math.min(1.0, (26.0 - effectiveDist) / 19.0));
+        proximityGain = 0.08 + Math.pow(closeT, 1.85) * 0.92;
+      } else {
+        const farT = Math.max(0.0, Math.min(1.0, (56.0 - effectiveDist) / 30.0));
+        proximityGain = farT * 0.08;
+      }
+      const gainFactor = Math.min(1.0, Math.max(0.008, proximityGain));
 
       // Contador de compasso (0, 1, 2, 3) para progressão harmônica clássica de samba
       this.sambaBarIndex = ((this.sambaBarIndex || 0) + 1) % 4;
@@ -822,7 +1264,7 @@ export class AmbientSoundtrack {
 
           osc.connect(filter);
           filter.connect(gain);
-          this.connectSpatial(gain, spatial.pan, 'generalSfx', spatial.filterFreq);
+          this.connectSpatial(gain, spatial.pan, 'samba', spatial.filterFreq);
           osc.start(hitTime);
           osc.stop(hitTime + 0.45);
         } else {
@@ -838,7 +1280,7 @@ export class AmbientSoundtrack {
 
           osc.connect(filter);
           filter.connect(gain);
-          this.connectSpatial(gain, spatial.pan, 'generalSfx', spatial.filterFreq);
+          this.connectSpatial(gain, spatial.pan, 'samba', spatial.filterFreq);
           osc.start(hitTime);
           osc.stop(hitTime + 0.22);
         }
@@ -879,7 +1321,7 @@ export class AmbientSoundtrack {
 
           osc.connect(filter);
           filter.connect(gain);
-          this.connectSpatial(gain, spatial.pan, 'generalSfx', spatial.filterFreq);
+          this.connectSpatial(gain, spatial.pan, 'samba', spatial.filterFreq);
           osc.start(stringT);
           osc.stop(stringT + 0.18);
         });
@@ -926,7 +1368,7 @@ export class AmbientSoundtrack {
 
           noise.connect(filter);
           filter.connect(gain);
-          this.connectSpatial(gain, spatial.pan, 'generalSfx', spatial.filterFreq);
+          this.connectSpatial(gain, spatial.pan, 'samba', spatial.filterFreq);
           noise.start(hitT);
           noise.stop(hitT + 0.04);
         };
@@ -961,7 +1403,7 @@ export class AmbientSoundtrack {
           gain.gain.setTargetAtTime(0.0001, palmaT + 0.015, 0.03);
           src.connect(filter);
           filter.connect(gain);
-          this.connectSpatial(gain, spatial.pan, 'generalSfx', spatial.filterFreq);
+          this.connectSpatial(gain, spatial.pan, 'samba', spatial.filterFreq);
           src.start(palmaT);
           src.stop(palmaT + 0.045);
         };

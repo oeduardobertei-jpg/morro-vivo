@@ -15,8 +15,8 @@ export class ContributionCuller {
     this.enabled = opts.enabled !== false;
     this.minPixels = opts.minPixels ?? 4;          // diâmetro mínimo na tela (px)
     this.maxUnitRadius = opts.maxUnitRadius ?? 9;  // maior prop tratado como unidade
-    this.interval = opts.interval ?? 0.12;         // segundos entre passes
-    this.rescanEvery = opts.rescanEvery ?? 4;      // segundos entre varreduras da cena
+    this.interval = opts.interval ?? 0.25;         // segundos entre passes
+    this.rescanEvery = opts.rescanEvery ?? 45;     // segundos entre varreduras completas da cena
     this.tinyShadowRadius = opts.tinyShadowRadius ?? 0.4;
     this.units = [];
     this.stats = { units: 0, culledUnits: 0, culledMeshes: 0, totalMeshes: 0 };

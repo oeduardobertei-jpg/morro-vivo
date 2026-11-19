@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CURATED_PALETTE, getSharedStylizedMaterial, createStylizedMaterial } from '../render/StylizedMaterials.js';
 import { HousesMixin } from './architecture/houses.js';
 import { RoadsMixin } from './architecture/roads.js';
 import { WestCoastMixin } from './architecture/westCoast.js';
@@ -7,6 +8,7 @@ import { HillsidesMixin } from './architecture/hillsides.js';
 import { CommunityMixin } from './architecture/community.js';
 import { HighlandsMixin } from './architecture/highlands.js';
 import { UpdatesMixin } from './architecture/updates.js';
+import { MobilityMixin } from './architecture/mobility.js';
 
 export class Architecture {
   constructor(scene, environment, terrain) {
@@ -80,12 +82,19 @@ export class Architecture {
 
     this.sharedFishGeo = new THREE.ConeGeometry(0.10, 0.34, 4);
     this.sharedFishGeo.rotateZ(Math.PI / 2);
-    this.sharedFishMat = new THREE.MeshLambertMaterial({ color: 0xE2E8F0, flatShading: true });
+    this.sharedFishMat = getSharedStylizedMaterial(0xDCE4EC, 'ceramic', { flatShading: true, roughness: 0.35, metalness: 0.15 });
 
     // Shared Water Tank Geometries & Material (v1.1 Performance Optimization)
     this.sharedWaterTankGeo = new THREE.CylinderGeometry(0.65, 0.55, 1.1, 7);
     this.sharedWaterTankLidGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.14, 7);
-    this.sharedWaterTankMat = new THREE.MeshLambertMaterial({ color: 0x0284C7, flatShading: true });
+    this.sharedWaterTankMat = getSharedStylizedMaterial(0x1B78B4, 'ceramic', { flatShading: true, roughness: 0.42 });
+
+    // Janelas PBR compartilhadas (3 variantes de brilho noturno para evitar janelas idênticas e economizar draw calls)
+    this.sharedWindowMats = [
+      createStylizedMaterial({ color: 0x3D5570, roughness: 0.20, metalness: 0.12 }, 'ceramic', { roughness: 0.20, metalness: 0.12 }),
+      createStylizedMaterial({ color: 0x45607D, roughness: 0.24, metalness: 0.10 }, 'ceramic', { roughness: 0.24, metalness: 0.10 }),
+      createStylizedMaterial({ color: 0x31455A, roughness: 0.28, metalness: 0.08 }, 'ceramic', { roughness: 0.28, metalness: 0.08 })
+    ];
 
     // Zonas de Permanência Orgânica (Bancos & Botecos)
     this.botecoSpots = [];
@@ -94,18 +103,8 @@ export class Architecture {
     // Global map of all roads and pathways to prevent houses from spawning on top of them
     this.infrastructureNodes = [];
 
-    // Distinct vibrant Brazilian colors
-    this.palette = [
-      { name: 'Coral Tropical', color: 0xE76F51 },
-      { name: 'Amarelo Canário', color: 0xF4A261 },
-      { name: 'Azul Guanabara', color: 0x2A75D3 },
-      { name: 'Verde Tropical', color: 0x2A9D8F },
-      { name: 'Rosa Queimado', color: 0xD84A75 },
-      { name: 'Tijolo Aparente', color: 0xB55338 },
-      { name: 'Branco Caiado', color: 0xEAEAEA },
-      { name: 'Turquesa Suave', color: 0x48CAE4 },
-      { name: 'Terracota Solar', color: 0xCC5A36 }
-    ];
+    // Paleta curada com harmonia cromática ("Maquete Carioca Viva")
+    this.palette = CURATED_PALETTE;
 
     this.scene.add(this.group);
   }
@@ -120,4 +119,4 @@ export class Architecture {
 
 }
 
-Object.assign(Architecture.prototype, HousesMixin, RoadsMixin, WestCoastMixin, BeachLifeMixin, HillsidesMixin, CommunityMixin, HighlandsMixin, UpdatesMixin);
+Object.assign(Architecture.prototype, HousesMixin, RoadsMixin, WestCoastMixin, BeachLifeMixin, HillsidesMixin, CommunityMixin, HighlandsMixin, UpdatesMixin, MobilityMixin);

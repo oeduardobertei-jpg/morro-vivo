@@ -494,91 +494,145 @@ export const HillsidesMixin = {
     this.group.add(eastExpGroup);
   },
 
-  // CINTURÃO DA MATA ATLÂNTICA (Versão 2.2)
-  // Cria a floresta impenetrável nas bordas do mapa, servindo de pano de fundo natural
+  // CINTURÃO DA MATA ATLÂNTICA (Versão 3.0 — Árvores Tropicais Realistas em Camadas & Fronteira Continental)
+  // Emoldura as bordas externas do continente expandido com árvores de copa multi-camadas em verdes naturais,
+  // mantendo todos os vales expandidos (Oeste, Leste e Norte) 100% livres para estradas, casas e moradores!
   createMataAtlanticaBorders() {
     const forestGroup = new THREE.Group();
+    this.forestGroup = forestGroup;
     
     const rockMat = new THREE.MeshLambertMaterial({ color: 0x4B5052, flatShading: true });
-    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x3E2723, flatShading: true });
-    const leafMat = new THREE.MeshLambertMaterial({ color: 0x1B5E20, flatShading: true });
+    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4E342E, flatShading: true });
+    const leafMats = [
+      new THREE.MeshLambertMaterial({ color: 0x1B4332, flatShading: true }),
+      new THREE.MeshLambertMaterial({ color: 0x2D6A4F, flatShading: true }),
+      new THREE.MeshLambertMaterial({ color: 0x2E7D32, flatShading: true }),
+      new THREE.MeshLambertMaterial({ color: 0x386641, flatShading: true })
+    ];
     const waterMat = new THREE.MeshBasicMaterial({ color: 0x88CCFF, transparent: true, opacity: 0.8 });
 
-    // Helper: generate a dense forest patch
+    const trunkGeo = new THREE.CylinderGeometry(0.20, 0.44, 3.1, 6);
+    const branchGeo = new THREE.CylinderGeometry(0.09, 0.16, 1.4, 5);
+    const foliageGeo = new THREE.IcosahedronGeometry(1.75, 1);
+
     const generatePatch = (startX, endX, startZ, endZ, density) => {
       for (let i = 0; i < density; i++) {
         const px = startX + Math.random() * (endX - startX);
         const pz = startZ + Math.random() * (endZ - startZ);
         
-        // ZONA DE EXCLUSÃO rigorosa (Empurrando a mata muito para as bordas)
-        if (Math.abs(px) < 100 && pz > -105) continue; // Protege TODA a área construível, empurrando pra fora!
-        if (pz > -15) continue; // Protege a praia
+        // ZONA DE EXCLUSÃO RIGOROSA: Protege 100% de toda a área urbana e vales expandidos (-285..+285, z > -192)!
+        if (Math.abs(px) < 285 && pz > -192) continue;
+        if (pz > 10) continue; // Protege toda a faixa costeira e praias
         
+        // PRESERVAÇÃO ESTRITA: NUNCA brotar sobre casas, plateaus, vielas ou monumentos
+        const nearHouse = this.houses && this.houses.some(h => Math.hypot(h.position.x - px, h.position.z - pz) < 9.5);
+        if (nearHouse) continue;
+
+        const plateaus = (this.allPlateaus || []).concat((this.terrain && this.terrain.allPlateaus) || []);
+        const nearPlateau = plateaus.some(pl => Math.hypot(pl.x - px, pl.z - pz) < 9.5);
+        if (nearPlateau) continue;
+
+        const nearInfra = this.infrastructureNodes && this.infrastructureNodes.some(n => Math.hypot(n.x - px, n.z - pz) < 6.5);
+        if (nearInfra) continue;
+
         const py = this.terrain ? this.terrain.getElevation(px, pz) : 0;
+        if (py < 2.2) continue;
         
-        // 15% chance de rochas gigantes, 85% árvores
+        // 15% chance de afloramentos de granito, 85% árvores tropicais realistas em camadas
         if (Math.random() > 0.85) {
-          const rSize = 3 + Math.random() * 4;
-          const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rSize, 0), rockMat);
-          rock.position.set(px, py - rSize * 0.2, pz);
-          rock.rotation.set(Math.random(), Math.random(), Math.random());
-          rock.scale.set(1, 0.6 + Math.random() * 0.8, 1);
+          const rSize = 2.6 + Math.random() * 3.0;
+          const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rSize, 1), rockMat);
+          rock.position.set(px, py - rSize * 0.35, pz);
+          rock.rotation.set(Math.random() * 0.3, Math.random() * Math.PI, Math.random() * 0.3);
+          rock.scale.set(1.3, 0.55 + Math.random() * 0.35, 1.1);
           rock.castShadow = true;
+          rock.userData = { isForestRock: true, x: px, z: pz };
           forestGroup.add(rock);
-          this.natureObstacles.push({ x: px, z: pz, radius: rSize * 1.4 });
+          this.natureObstacles.push({ x: px, z: pz, radius: rSize * 1.2 });
         } else {
-          // Árvore da Floresta da Tijuca
+          // Árvore Tropical Realista da Mata Atlântica (Tronco + Galhos + 3 Camadas de Copa Orgânica)
           const treeGroup = new THREE.Group();
           treeGroup.position.set(px, py, pz);
-          const tScale = 0.8 + Math.random() * 0.8; 
+          const tScale = 0.85 + Math.random() * 0.55; 
           
-          const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * tScale, 0.5 * tScale, 3 * tScale, 5), trunkMat);
-          trunk.position.y = 1.5 * tScale;
+          const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+          trunk.position.y = 1.45 * tScale;
+          trunk.scale.set(tScale, tScale, tScale);
           trunk.castShadow = true;
           treeGroup.add(trunk);
-          
-          const leaves = new THREE.Mesh(new THREE.DodecahedronGeometry(2.5 * tScale, 0), leafMat);
-          leaves.position.y = 3 * tScale;
-          leaves.castShadow = true;
-          treeGroup.add(leaves);
-          
+
+          [-1, 1].forEach(dir => {
+            const br = new THREE.Mesh(branchGeo, trunkMat);
+            br.position.set(dir * 0.38 * tScale, 2.35 * tScale, 0);
+            br.rotation.z = -dir * 0.55;
+            br.scale.set(tScale, tScale, tScale);
+            treeGroup.add(br);
+          });
+
+          const m1 = leafMats[i % leafMats.length];
+          const m2 = leafMats[(i + 1) % leafMats.length];
+          const m3 = leafMats[(i + 2) % leafMats.length];
+
+          const crownL = new THREE.Mesh(foliageGeo, m1);
+          crownL.position.set(-0.85 * tScale, 2.95 * tScale, 0.25 * tScale);
+          crownL.scale.set(1.15 * tScale, 0.68 * tScale, 1.10 * tScale);
+          crownL.castShadow = true;
+          treeGroup.add(crownL);
+
+          const crownR = new THREE.Mesh(foliageGeo, m2);
+          crownR.position.set(0.85 * tScale, 3.15 * tScale, -0.25 * tScale);
+          crownR.scale.set(1.10 * tScale, 0.72 * tScale, 1.12 * tScale);
+          crownR.castShadow = true;
+          treeGroup.add(crownR);
+
+          const crownTop = new THREE.Mesh(foliageGeo, m3);
+          crownTop.position.set(0, 3.85 * tScale, 0);
+          crownTop.scale.set(1.22 * tScale, 0.76 * tScale, 1.18 * tScale);
+          crownTop.castShadow = true;
+          treeGroup.add(crownTop);
+
+          treeGroup.rotation.y = Math.random() * Math.PI * 2;
+          treeGroup.userData = { isForestTree: true, x: px, z: pz };
           forestGroup.add(treeGroup);
-          this.natureObstacles.push({ x: px, z: pz, radius: 4.0 * tScale });
+          this.natureObstacles.push({ x: px, z: pz, radius: 3.2 * tScale });
         }
       }
     };
 
-    // 1. Fundo Profundo (Extrema borda do mapa)
-    generatePatch(-160, 160, -160, -100, 200);
-    // 2. Extremo Oeste Longe (Beirando o precipício)
-    generatePatch(-160, -95, -100, -20, 80);
-    // 3. Extremo Leste Longe (Beirando o precipício)
-    generatePatch(95, 160, -100, -20, 80);
+    // 1. Cordilheira Norte Profunda (Acima da nova área construível norte: Z de -195 a -265)
+    generatePatch(-290, 290, -260, -195, 110);
+    // 2. Borda Extrema Oeste (Além do Vale do Poente: X de -360 a -290)
+    generatePatch(-360, -290, -195, 5, 45);
+    // 3. Borda Extrema Leste (Além do Vale do Levante: X de 290 a 360)
+    generatePatch(290, 360, -195, 5, 45);
 
-    // CACHOEIRA PROCEDURAL COLOSSAL (No Maciço Central Fundo)
+    // CACHOEIRA PROCEDURAL COLOSSAL (No Paredão da Cordilheira Norte em Z = -202)
     const fallGroup = new THREE.Group();
     const fallX = -25;
-    const fallZ = -105;
-    const fallY = this.terrain ? this.terrain.getElevation(fallX, fallZ) : 28;
+    const fallZ = -202;
+    const fallY = this.terrain ? this.terrain.getElevation(fallX, fallZ) : 34;
     fallGroup.position.set(fallX, fallY, fallZ);
     
     // Queda d'água principal
-    const stream = new THREE.Mesh(new THREE.BoxGeometry(6, 28, 1.5), waterMat);
-    stream.position.set(0, -12, 1.5);
-    stream.rotation.x = Math.PI / 12; // Leve inclinação acompanhando o morro
+    const stream = new THREE.Mesh(new THREE.BoxGeometry(6, 26, 1.5), waterMat);
+    stream.position.set(0, -11, 1.5);
+    stream.rotation.x = Math.PI / 12;
     fallGroup.add(stream);
     
     // Piscina Natural Base
     const pool = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 1.5, 12), waterMat);
-    pool.position.set(0, -25, 4.5);
+    pool.position.set(0, -23, 4.5);
     fallGroup.add(pool);
 
     // Pedregulhos emoldurando a cachoeira
-    for(let i=0; i<12; i++) {
-      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(3 + Math.random()*4, 0), rockMat);
-      rock.position.set(-10 + Math.random()*20, -26 + Math.random()*25, 1 + Math.random()*6);
+    for (let i = 0; i < 10; i++) {
+      const rRad = 2.5 + Math.random() * 2.5;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rRad, 0), rockMat);
+      const rx = -9 + Math.random() * 18;
+      const rz = 1 + Math.random() * 5;
+      rock.position.set(rx, -24 + Math.random() * 20, rz);
       fallGroup.add(rock);
-      this.natureObstacles.push({ x: rock.position.x, z: rock.position.z, radius: rock.geometry.parameters.radius * 1.5 });
+      this.natureObstacles.push({ x: fallX + rx, z: fallZ + rz, radius: rRad * 1.3 });
     }
     forestGroup.add(fallGroup);
 
@@ -856,5 +910,264 @@ export const HillsidesMixin = {
 
     this.group.add(olariaGroup);
     this.olaria = olariaGroup;
+  },
+
+  createHillsideCommunityDetails() {
+    if (this.hillsideCommunityCreated) return;
+    this.hillsideCommunityCreated = true;
+
+    const detailsGroup = new THREE.Group();
+
+    // Shared materials for strict performance (< 5% limit):
+    const woodMat = new THREE.MeshLambertMaterial({ color: 0x5D4037, flatShading: true });
+    const darkWoodMat = new THREE.MeshLambertMaterial({ color: 0x3E2723, flatShading: true });
+    const brickStiltMat = new THREE.MeshLambertMaterial({ color: 0xB55338, flatShading: true });
+    const waterTankMat = this.sharedWaterTankMat || new THREE.MeshLambertMaterial({ color: 0x0284C7, flatShading: true });
+    const tankGeo = this.sharedWaterTankGeo || new THREE.CylinderGeometry(0.65, 0.55, 1.1, 7);
+    const lidGeo = this.sharedWaterTankLidGeo || new THREE.CylinderGeometry(0.7, 0.7, 0.14, 7);
+    const pipeMat = new THREE.MeshLambertMaterial({ color: 0x64748B, flatShading: true });
+    const bananaStemMat = new THREE.MeshLambertMaterial({ color: 0x4D7C0F, flatShading: true });
+    const bananaLeafMat = new THREE.MeshLambertMaterial({ color: 0x16A34A, flatShading: true });
+    const bananaBlossomMat = new THREE.MeshLambertMaterial({ color: 0x86198F, flatShading: true });
+    const crateYellowMat = new THREE.MeshLambertMaterial({ color: 0xF59E0B, flatShading: true });
+    const wireMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+
+    // 1. ELEVATED COMMUNITY WATER TANKS ON BRICK / TIMBER STILTS (Caixas d'Água sobre palafitas)
+    // Iconic Rio hillside infrastructure supplying gravity-fed running water to the alleys
+    const waterTankSpots = [
+      { x: -14, z: -10, rot: 0.1 },
+      { x: 14,  z: -10, rot: -0.1 },
+      { x: -25, z: -25, rot: 0.2 },
+      { x: 25,  z: -25, rot: -0.2 },
+      { x: -6,  z: -34, rot: 0.05 },
+      { x: 6,   z: -34, rot: -0.05 },
+      { x: -44, z: -22, rot: 0.15 },
+      { x: 44,  z: -22, rot: -0.15 },
+      { x: -70, z: -44, rot: 0.3 },
+      { x: 70,  z: -44, rot: -0.3 }
+    ];
+
+    waterTankSpots.forEach(spot => {
+      if (this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(spot.x, spot.z, 2.5)) return;
+      if (this.infrastructureNodes && this.infrastructureNodes.some(n => Math.hypot(n.x - spot.x, n.z - spot.z) < 3.2)) return;
+
+      const groundY = this.terrain ? this.terrain.getElevation(spot.x, spot.z) : 10.0;
+      const tankTower = new THREE.Group();
+      tankTower.position.set(spot.x, groundY, spot.z);
+      tankTower.rotation.y = spot.rot;
+
+      // 4 Pilares de sustentação (tijolo ou madeira rústica)
+      const stiltGeo = new THREE.BoxGeometry(0.22, 1.9, 0.22);
+      [-0.65, 0.65].forEach(sx => {
+        [-0.65, 0.65].forEach(sz => {
+          const stilt = new THREE.Mesh(stiltGeo, brickStiltMat);
+          stilt.position.set(sx, 0.95, sz);
+          tankTower.add(stilt);
+        });
+      });
+
+      // Travessas transversais de madeira
+      const beamGeoX = new THREE.BoxGeometry(1.5, 0.12, 0.12);
+      const beam1 = new THREE.Mesh(beamGeoX, darkWoodMat);
+      beam1.position.set(0, 1.4, 0.65);
+      tankTower.add(beam1);
+      const beam2 = new THREE.Mesh(beamGeoX, darkWoodMat);
+      beam2.position.set(0, 1.4, -0.65);
+      tankTower.add(beam2);
+
+      // Deck da plataforma
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.14, 1.6), darkWoodMat);
+      deck.position.set(0, 1.95, 0);
+      tankTower.add(deck);
+
+      // Caixa d'Água cilíndrica azul e tampa
+      const tankMesh = new THREE.Mesh(tankGeo, waterTankMat);
+      tankMesh.position.set(0, 2.55, 0);
+      tankTower.add(tankMesh);
+
+      const lidMesh = new THREE.Mesh(lidGeo, waterTankMat);
+      lidMesh.position.set(0, 3.14, 0);
+      tankTower.add(lidMesh);
+
+      // Tubulação vertical de PVC descendo até a encosta
+      const pipeMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.4, 4), pipeMat);
+      pipeMesh.position.set(0.68, 1.2, 0.4);
+      tankTower.add(pipeMesh);
+
+      tankTower.matrixAutoUpdate = false;
+      tankTower.updateMatrix();
+      detailsGroup.add(tankTower);
+    });
+
+    // 2. VARAIS DE ROUPA COMUNITÁRIOS (Free-standing hillside clotheslines)
+    // Clotheslines stretched on rustic timber posts with colorful fluttering laundry
+    const clotheslineSpots = [
+      { x: -18, z: -7,  rot: 0.3 },
+      { x: 18,  z: -7,  rot: -0.3 },
+      { x: -10, z: -19, rot: 0.1 },
+      { x: 10,  z: -19, rot: -0.1 },
+      { x: -22, z: -31, rot: 0.4 },
+      { x: 22,  z: -31, rot: -0.4 },
+      { x: -36, z: -15, rot: 0.2 },
+      { x: 36,  z: -15, rot: -0.2 },
+      { x: -52, z: -34, rot: 0.35 },
+      { x: 52,  z: -34, rot: -0.35 }
+    ];
+
+    const clothesColors = [0xFF5964, 0x35A7FF, 0xFFE74C, 0xFFFFFF, 0x10B981, 0xEC4899];
+    const stickGeo = new THREE.CylinderGeometry(0.04, 0.05, 1.6, 4);
+    const wireGeo = new THREE.BoxGeometry(2.0, 0.02, 0.02);
+    const clothGeo = new THREE.BoxGeometry(0.38, 0.52, 0.03);
+
+    clotheslineSpots.forEach((clSpot, idx) => {
+      if (this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(clSpot.x, clSpot.z, 2.0)) return;
+      if (this.infrastructureNodes && this.infrastructureNodes.some(n => Math.hypot(n.x - clSpot.x, n.z - clSpot.z) < 2.8)) return;
+
+      const groundY = this.terrain ? this.terrain.getElevation(clSpot.x, clSpot.z) : 10.0;
+      const clGroup = new THREE.Group();
+      clGroup.position.set(clSpot.x, groundY, clSpot.z);
+      clGroup.rotation.y = clSpot.rot;
+
+      [-0.95, 0.95].forEach(px => {
+        const pole = new THREE.Mesh(stickGeo, darkWoodMat);
+        pole.position.set(px, 0.8, 0);
+        clGroup.add(pole);
+      });
+
+      const wire = new THREE.Mesh(wireGeo, wireMat);
+      wire.position.set(0, 1.45, 0);
+      clGroup.add(wire);
+
+      for (let c = 0; c < 3; c++) {
+        const cMat = new THREE.MeshLambertMaterial({
+          color: clothesColors[(idx * 3 + c) % clothesColors.length],
+          flatShading: true
+        });
+        const cloth = new THREE.Mesh(clothGeo, cMat);
+        cloth.position.set(-0.5 + c * 0.5, 1.15, 0);
+        clGroup.add(cloth);
+        if (this.clotheslines) {
+          this.clotheslines.push({ mesh: cloth, phase: idx * 0.7 + c * 0.9 });
+        }
+      }
+
+      detailsGroup.add(clGroup);
+    });
+
+    // 3. BOSQUES DE BANANEIRAS & VEGETAÇÃO DE ENCOSTA (Banana groves & tropical greenery)
+    // Banana plants with arching leaves and pendant purple banana flower clusters
+    const bananaClusters = [
+      { x: -8,  z: -12 }, { x: 8,   z: -12 },
+      { x: -16, z: -23 }, { x: 16,  z: -23 },
+      { x: -32, z: -19 }, { x: 32,  z: -19 },
+      { x: -3,  z: -36 }, { x: 3,   z: -36 },
+      { x: -50, z: -44 }, { x: 50,  z: -44 },
+      { x: -68, z: -28 }, { x: 68,  z: -28 }
+    ];
+
+    const bLeafGeo = new THREE.BoxGeometry(0.32, 0.03, 1.35);
+    const trunkGeo = new THREE.CylinderGeometry(0.12, 0.18, 2.0, 5);
+    const blossomGeo = new THREE.ConeGeometry(0.14, 0.38, 5);
+
+    bananaClusters.forEach((cluster, cIdx) => {
+      if (this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(cluster.x, cluster.z, 2.5)) return;
+      if (this.infrastructureNodes && this.infrastructureNodes.some(n => Math.hypot(n.x - cluster.x, n.z - cluster.z) < 3.2)) return;
+
+      const numPlants = 2 + (cIdx % 2);
+      for (let p = 0; p < numPlants; p++) {
+        const px = cluster.x + Math.sin(p * 2.3 + cIdx) * 1.4;
+        const pz = cluster.z + Math.cos(p * 2.3 + cIdx) * 1.4;
+        const groundY = this.terrain ? this.terrain.getElevation(px, pz) : 10.0;
+
+        const bGroup = new THREE.Group();
+        bGroup.position.set(px, groundY, pz);
+        bGroup.rotation.y = (cIdx + p) * 1.6;
+
+        // Tronco levemente inclinado
+        const trunk = new THREE.Mesh(trunkGeo, bananaStemMat);
+        trunk.position.set(0, 1.0, 0);
+        trunk.rotation.x = 0.08 * (p === 0 ? 1 : -1);
+        bGroup.add(trunk);
+
+        // 5 Folhas largas arqueadas em leque
+        for (let l = 0; l < 5; l++) {
+          const lAngle = (l / 5) * Math.PI * 2 + 0.3;
+          const leaf = new THREE.Mesh(bLeafGeo, bananaLeafMat);
+          leaf.position.set(Math.sin(lAngle) * 0.65, 1.95 - (l % 2) * 0.1, Math.cos(lAngle) * 0.65);
+          leaf.rotation.y = lAngle;
+          leaf.rotation.x = 0.42;
+          bGroup.add(leaf);
+        }
+
+        // Cacho de bananas e flor pêndula roxa (coração da bananeira)
+        if (p === 0) {
+          const blossom = new THREE.Mesh(blossomGeo, bananaBlossomMat);
+          blossom.position.set(0.2, 1.4, 0.3);
+          blossom.rotation.x = Math.PI;
+          bGroup.add(blossom);
+        }
+
+        bGroup.matrixAutoUpdate = false;
+        bGroup.updateMatrix();
+        detailsGroup.add(bGroup);
+      }
+    });
+
+    // 4. MIRANTES DE BOLSO & PONTOS DE RESENHA NA LADEIRA (Resting spots with crates & solar lights)
+    const restSpots = [
+      { x: -12, z: -8,  rot: 0.15 },
+      { x: 12,  z: -8,  rot: -0.15 },
+      { x: -20, z: -21, rot: 0.25 },
+      { x: 20,  z: -21, rot: -0.25 },
+      { x: -4,  z: -30, rot: 0.0 }
+    ];
+
+    const benchSeatGeo = new THREE.BoxGeometry(1.5, 0.10, 0.45);
+    const crateGeo = new THREE.BoxGeometry(0.44, 0.28, 0.35);
+
+    restSpots.forEach(rst => {
+      if (this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(rst.x, rst.z, 2.0)) return;
+      if (this.infrastructureNodes && this.infrastructureNodes.some(n => Math.hypot(n.x - rst.x, n.z - rst.z) < 2.5)) return;
+
+      const groundY = this.terrain ? this.terrain.getElevation(rst.x, rst.z) : 10.0;
+      const rGroup = new THREE.Group();
+      rGroup.position.set(rst.x, groundY, rst.z);
+      rGroup.rotation.y = rst.rot;
+
+      const bSeat = new THREE.Mesh(benchSeatGeo, woodMat);
+      bSeat.position.set(0, 0.35, 0);
+      rGroup.add(bSeat);
+
+      [-0.6, 0.6].forEach(bx => {
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.35, 0.4), darkWoodMat);
+        leg.position.set(bx, 0.175, 0);
+        rGroup.add(leg);
+      });
+
+      const bBack = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.32, 0.06), woodMat);
+      bBack.position.set(0, 0.62, -0.2);
+      rGroup.add(bBack);
+
+      // Engradado amarelo de refrigerante/cerveja ao lado do banco
+      const crate = new THREE.Mesh(crateGeo, crateYellowMat);
+      crate.position.set(1.05, 0.14, 0);
+      rGroup.add(crate);
+
+      // Postezinho com luminária solar
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 2.4, 4), darkWoodMat);
+      post.position.set(-1.05, 1.2, 0);
+      rGroup.add(post);
+
+      const lamp = new THREE.Mesh(new THREE.DodecahedronGeometry(0.12, 0), new THREE.MeshBasicMaterial({ color: 0xFEF08A }));
+      lamp.position.set(-1.05, 2.4, 0);
+      rGroup.add(lamp);
+
+      rGroup.matrixAutoUpdate = false;
+      rGroup.updateMatrix();
+      detailsGroup.add(rGroup);
+    });
+
+    this.group.add(detailsGroup);
+    this.hillsideCommunityGroup = detailsGroup;
   }
 };

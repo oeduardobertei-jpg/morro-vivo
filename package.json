@@ -6,13 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "verify:lookdev": "node scripts/verify-lookdev.mjs"
   },
   "devDependencies": {
     "puppeteer-core": "^24.43.1",
     "vite": "^5.4.10"
   },
   "dependencies": {
-    "three": "^0.186.1"
+    "lil-gui": "^0.21.0",
+    "postprocessing": "^6.39.6",
+    "three": "^0.186.1",
+    "three-mesh-bvh": "^0.9.18"
   }
 }

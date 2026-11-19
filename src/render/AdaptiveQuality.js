@@ -1,26 +1,34 @@
 /**
  * Qualidade adaptativa: ajusta o pixel ratio para manter o FPS estável.
- * Desce rápido quando o FPS cai e sobe devagar (com recuo exponencial) quando sobra folga.
+ * IMPORTANTE: Deve sempre ser atualizado ANTES do render() do frame, pois
+ * renderer.setPixelRatio() redimensiona o canvas WebGL (o que limpa o buffer se chamado após o render).
  */
 export class AdaptiveQuality {
   constructor(renderer, opts = {}) {
     this.renderer = renderer;
     this.enabled = opts.enabled !== false;
-    this.maxRatio = Math.min(window.devicePixelRatio || 1, opts.maxRatio ?? 2);
-    this.minRatio = opts.minRatio ?? 0.6;
-    this.lowFps = opts.lowFps ?? 38;
-    this.highFps = opts.highFps ?? 56;
-    this.window = opts.window ?? 2; // segundos por janela de medição
+    this.onRatioChange = opts.onRatioChange || null;
+    this.maxRatio = Math.min(window.devicePixelRatio || 1, opts.maxRatio ?? 1.5);
+    this.minRatio = opts.minRatio ?? 0.85;
+    this.lowFps = opts.lowFps ?? 28;
+    this.highFps = opts.highFps ?? 57;
+    this.window = opts.window ?? 4.0; // janela de 4s evita qualquer oscilação de buffer
     this.ratio = this.maxRatio;
+    this._appliedRatio = -1;
     this._t = 0;
     this._frames = 0;
     this._goodWindows = 0;
-    this._upNeeded = 3;
+    this._upNeeded = 4;
     this.apply();
   }
 
   apply() {
+    if (this._appliedRatio === this.ratio) return;
+    this._appliedRatio = this.ratio;
     this.renderer.setPixelRatio(this.ratio);
+    if (this.onRatioChange) {
+      this.onRatioChange(this.ratio);
+    }
   }
 
   update(delta) {

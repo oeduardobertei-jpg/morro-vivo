@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createStylizedFigure } from '../npcs/population.js';
 
 /** Orla: calçadão, barracas, quiosques, esportes de praia e comércio. */
 export const BeachLifeMixin = {
@@ -30,21 +31,52 @@ export const BeachLifeMixin = {
     // Central boardwalk: starts at z: 20.4 (cleanly on sand at the foot of the curb, never overlapping concrete stones!)
     addPlankRun({ x: 0, z: 20.4 }, { x: 0, z: 47.0 }, 2.8, 0.8);
 
-    // Western boardwalk: starts at z: 20.4 down to fishing pier (x: -78, z: 74)
-    addPlankRun({ x: -78, z: 20.4 }, { x: -78, z: 74 }, 3.0, 0.8);
+    // Western boardwalk: conecta da orla (z: 20.4) exatamente até a cabeceira de pedra e rampa do Píer (x: -78, z: 61.2)
+    addPlankRun({ x: -78, z: 20.4 }, { x: -78, z: 61.2 }, 3.2, 0.8);
 
     // Eastern boardwalk: starts at z: 20.4 down to altinha & leisure zone (x: 55, z: 66)
     addPlankRun({ x: 55, z: 20.4 }, { x: 55, z: 66 }, 2.8, 0.8);
 
-    // Horizontal promenade boardwalk connecting all 4 stalls in front of their counters (z: 47.0, from west pier to east altinha)
+    // Passarela central ligando as 4 barracas históricas do centro (z: 47.0, de X = -78 a X = 55)
     addPlankRun({ x: -78, z: 47.0 }, { x: 55, z: 47.0 }, 2.6, 0.85);
+
+    // Rampas rústicas curtas e orgânicas de acesso às barracas das enseadas Oeste e Leste
+    // (Deixando a faixa de areia livre e natural sem grade matemática de tábuas!)
+    addPlankRun({ x: -222, z: 20.4 }, { x: -215, z: 41.5 }, 2.2, 0.9);
+    addPlankRun({ x: -162, z: 20.4 }, { x: -155, z: 41.5 }, 2.2, 0.9);
+    addPlankRun({ x: 154,  z: 20.4 }, { x: 160,  z: 41.5 }, 2.2, 0.9);
+    addPlankRun({ x: 218,  z: 20.4 }, { x: 225,  z: 41.5 }, 2.2, 0.9);
 
     this.group.add(boardwalkGroup);
   },
 
-  // 2. AS 4 BARRACAS TRADICIONAIS DA PRAIA (Beach Stalls)
+  // 2. BARRACAS TRADICIONAIS DA PRAIA (Beach Stalls — Orla Central + Expansão Oeste & Leste)
   createBeachStalls() {
     this.beachStalls = [
+      {
+        id: 'caldo',
+        name: 'Barraca do Caldo de Cana & Pastel',
+        x: -215,
+        z: 44.0,
+        colorA: 0x15803D,
+        colorB: 0xFEF08A,
+        icon: '🎋',
+        product: 'Caldo de Cana com Limão & Pastel',
+        customerSpot: new THREE.Vector3(-215, 0, 46.2),
+        vendorSpot: new THREE.Vector3(-215, 0, 42.8)
+      },
+      {
+        id: 'caipirinha',
+        name: 'Barraca Tropical do Poente',
+        x: -155,
+        z: 44.0,
+        colorA: 0x0284C7,
+        colorB: 0xFDE047,
+        icon: '🍹',
+        product: 'Água de Coco & Suco de Abacaxi com Hortelã',
+        customerSpot: new THREE.Vector3(-155, 0, 46.2),
+        vendorSpot: new THREE.Vector3(-155, 0, 42.8)
+      },
       {
         id: 'coco',
         name: 'Barraca do Coco Verde',
@@ -92,6 +124,30 @@ export const BeachLifeMixin = {
         product: 'Pastel de Camarão & Isca de Peixe',
         customerSpot: new THREE.Vector3(50, 0, 46.2),
         vendorSpot: new THREE.Vector3(50, 0, 42.8)
+      },
+      {
+        id: 'milho',
+        name: 'Barraca do Milho Verde & Coco',
+        x: 160,
+        z: 44.0,
+        colorA: 0xEA580C,
+        colorB: 0xFEF08A,
+        icon: '🌽',
+        product: 'Milho Verde Cozido na Manteiga & Coco',
+        customerSpot: new THREE.Vector3(160, 0, 46.2),
+        vendorSpot: new THREE.Vector3(160, 0, 42.8)
+      },
+      {
+        id: 'sorvete',
+        name: 'Barraca de Picolé & Açaí do Levante',
+        x: 225,
+        z: 44.0,
+        colorA: 0x0D9488,
+        colorB: 0xFFFFFF,
+        icon: '🍦',
+        product: 'Picolé Artesanal de Frutas Tropicais',
+        customerSpot: new THREE.Vector3(225, 0, 46.2),
+        vendorSpot: new THREE.Vector3(225, 0, 42.8)
       }
     ];
 
@@ -181,7 +237,7 @@ export const BeachLifeMixin = {
       singleStall.add(signBoard);
 
       // Specialized Props per Stall:
-      if (st.id === 'coco') {
+      if (st.id === 'coco' || st.id === 'caldo') {
         // Pyramids of fresh green coconuts
         const cocoMat = new THREE.MeshLambertMaterial({ color: 0x2D6A4F });
         for (let c = 0; c < 6; c++) {
@@ -200,7 +256,7 @@ export const BeachLifeMixin = {
         );
         cooler.position.set(-1.1, 0.38, -0.9);
         singleStall.add(cooler);
-      } else if (st.id === 'mate') {
+      } else if (st.id === 'mate' || st.id === 'caipirinha') {
         // Classic dual stainless steel cylindrical Mate Leão canisters
         const steelMat = new THREE.MeshStandardMaterial({ color: 0xD1D5DB, metalness: 0.7, roughness: 0.2 });
         [-0.45, 0.45].forEach(kx => {
@@ -216,7 +272,7 @@ export const BeachLifeMixin = {
           bag.position.set(-1.0 + b * 0.3, 1.15, 0.45);
           singleStall.add(bag);
         }
-      } else if (st.id === 'acai') {
+      } else if (st.id === 'acai' || st.id === 'sorvete') {
         // Blender & bowls of açaí
         const bowlMat = new THREE.MeshLambertMaterial({ color: 0x4A044E });
         for (let a = 0; a < 3; a++) {
@@ -228,7 +284,7 @@ export const BeachLifeMixin = {
         const crate = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.35, 0.6), woodMat);
         crate.position.set(0.9, 1.18, 0.45);
         singleStall.add(crate);
-      } else if (st.id === 'petiscos') {
+      } else if (st.id === 'petiscos' || st.id === 'milho') {
         // Charcoal grill with chimney
         const grillMat = new THREE.MeshLambertMaterial({ color: 0x1E293B });
         const grill = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.7, 0.6), grillMat);
@@ -251,6 +307,8 @@ export const BeachLifeMixin = {
       });
 
       stallGroup.add(singleStall);
+      this.propObstacles = this.propObstacles || [];
+      this.propObstacles.push({ x: st.x, z: st.z, r: 2.35 });
     });
 
     this.group.add(stallGroup);
@@ -264,12 +322,18 @@ export const BeachLifeMixin = {
     const counterMat = new THREE.MeshLambertMaterial({ color: 0x582F0E, flatShading: true });
 
     // Carefully chosen coordinates along upper beach edge (Z ≈ 23..24):
-    // Strictly AWAY from the 3 boardwalk entrances (x: -78, 0, 55)!
+    // Strictly AWAY from all boardwalk entrances!
     const kioskLocations = [
-      { x: -48, z: 23.5, roofColor: 0xD4A373, name: 'Quiosque da Praia da Prainha' },
-      { x: -22, z: 24.0, roofColor: 0x38BDF8, name: 'Quiosque Onda Azul' },
-      { x: 24,  z: 24.0, roofColor: 0xFACC15, name: 'Quiosque Sol Carioca' },
-      { x: 76,  z: 22.5, roofColor: 0xFB923C, name: 'Quiosque Vista da Várzea' }
+      { x: -235, z: 23.5, roofColor: 0x10B981, name: 'Quiosque Brisa do Poente' },
+      { x: -172, z: 23.5, roofColor: 0xF97316, name: 'Quiosque Pôr do Sol' },
+      { x: -118, z: 23.5, roofColor: 0x06B6D4, name: 'Quiosque Farol Velho' },
+      { x: -48,  z: 23.5, roofColor: 0xD4A373, name: 'Quiosque da Praia da Prainha' },
+      { x: -22,  z: 24.0, roofColor: 0x38BDF8, name: 'Quiosque Onda Azul' },
+      { x: 24,   z: 24.0, roofColor: 0xFACC15, name: 'Quiosque Sol Carioca' },
+      { x: 76,   z: 22.5, roofColor: 0xFB923C, name: 'Quiosque Vista da Várzea' },
+      { x: 152,  z: 23.5, roofColor: 0x38BDF8, name: 'Quiosque Recanto do Surfe' },
+      { x: 208,  z: 23.5, roofColor: 0xEAB308, name: 'Quiosque Maré Mansa' },
+      { x: 265,  z: 23.5, roofColor: 0xEC4899, name: 'Quiosque Mirante do Levante' }
     ];
 
     kioskLocations.forEach(loc => {
@@ -353,54 +417,91 @@ export const BeachLifeMixin = {
       this.kioskLamps.push({ light: kioskLight, mat: lanternMat });
 
       kioskGroup.add(singleKiosk);
+      this.propObstacles = this.propObstacles || [];
+      this.propObstacles.push({ x: loc.x, z: loc.z, r: 2.3 });
     });
 
     this.group.add(kioskGroup);
   },
 
-  // 3. GUARDA-SÓIS & CADEIRAS DE PRAIA DINÂMICOS (Dynamic Umbrellas & Beach Chairs)
+  // 3. GUARDA-SÓIS, CADEIRAS DE PRAIA INTERATIVAS & RODINHAS DE LUAU (Dynamic Umbrellas, Chairs & Bonfires)
   createBeachLeisureZones() {
     this.beachUmbrellas = [];
+    this.beachChairSpots = [];
     const leisureGroup = new THREE.Group();
 
-    // 12 stations arranged naturally in clusters along x: [-55, 45], z: [30, 62]
+    // Agrupamentos orgânicos de guarda-sóis + 2 cadeiras reclináveis + cooler + canga (Sem linhas retas matemáticas!)
     const stations = [
-      // Cluster 1 (West beach)
-      { x: -52, z: 34, colorA: 0x2A75D3, colorB: 0xFFFFFF },
+      // Bolsões Orgânicos da Enseada do Poente (Oeste: profundidades e distâncias variadas entre z: 31 e z: 63)
+      { x: -258, z: 41, colorA: 0x2A9D8F, colorB: 0xFFFFFF },
+      { x: -246, z: 57, colorA: 0x0284C7, colorB: 0xFDE047 },
+      { x: -224, z: 51, colorA: 0xF97316, colorB: 0xFDE047 },
+      { x: -206, z: 34, colorA: 0x2A75D3, colorB: 0xFFFFFF },
+      { x: -194, z: 61, colorA: 0x10B981, colorB: 0xFDE047 },
+      { x: -178, z: 46, colorA: 0xE76F51, colorB: 0xFFFFFF },
+      { x: -162, z: 56, colorA: 0x2A75D3, colorB: 0xFFFFFF },
+      { x: -146, z: 33, colorA: 0x06B6D4, colorB: 0xFFFFFF },
+      { x: -134, z: 59, colorA: 0xF97316, colorB: 0xFDE047 },
+      { x: -121, z: 39, colorA: 0x10B981, colorB: 0xFDE047 },
+
+      // Faixa Superior / Média da Areia — Orla Central (z: 33..40)
+      { x: -54, z: 35, colorA: 0x2A75D3, colorB: 0xFFFFFF },
       { x: -44, z: 38, colorA: 0xE76F51, colorB: 0xFDE047 },
-      { x: -35, z: 32, colorA: 0x2A9D8F, colorB: 0xF97316 },
-      { x: -48, z: 54, colorA: 0x2A75D3, colorB: 0xFFFFFF },
-      // Cluster 2 (Central beach)
-      { x: -22, z: 36, colorA: 0xF43F5E, colorB: 0xFFFFFF },
-      { x: -14, z: 52, colorA: 0x06B6D4, colorB: 0xFDE047 },
-      { x: -6,  z: 34, colorA: 0x2A9D8F, colorB: 0xFFFFFF },
-      { x: 4,   z: 56, colorA: 0xE76F51, colorB: 0xFDE047 },
-      // Cluster 3 (East beach)
-      { x: 14,  z: 36, colorA: 0x2A75D3, colorB: 0xFFFFFF },
-      { x: 26,  z: 52, colorA: 0xF97316, colorB: 0xFDE047 },
-      { x: 38,  z: 35, colorA: 0x2A9D8F, colorB: 0xFFFFFF },
-      { x: 46,  z: 54, colorA: 0xF43F5E, colorB: 0xFFFFFF }
+      { x: -32, z: 34, colorA: 0x2A9D8F, colorB: 0xF97316 },
+      { x: -20, z: 36, colorA: 0xF43F5E, colorB: 0xFFFFFF },
+      { x: -6,  z: 35, colorA: 0x2A9D8F, colorB: 0xFFFFFF },
+      { x: 12,  z: 36, colorA: 0x2A75D3, colorB: 0xFDE047 },
+      { x: 28,  z: 35, colorA: 0xF97316, colorB: 0xFFFFFF },
+      { x: 40,  z: 36, colorA: 0x8B5CF6, colorB: 0xFDE047 },
+
+      // Faixa Inferior da Areia — Próxima à Beira d'Água Central (z: 52..64)
+      { x: -64, z: 55, colorA: 0x06B6D4, colorB: 0xFFFFFF },
+      { x: -50, z: 58, colorA: 0x2A75D3, colorB: 0xFDE047 },
+      { x: -28, z: 54, colorA: 0xE76F51, colorB: 0xFFFFFF },
+      { x: -22, z: 62, colorA: 0x10B981, colorB: 0xFDE047 },
+      { x: -12, z: 55, colorA: 0x06B6D4, colorB: 0xFDE047 },
+      { x: -4,  z: 63, colorA: 0xF43F5E, colorB: 0xFFFFFF },
+      { x: 15,  z: 55, colorA: 0xE76F51, colorB: 0xFDE047 },
+      { x: 22,  z: 63, colorA: 0x2A75D3, colorB: 0xFFFFFF },
+      { x: 31,  z: 53, colorA: 0xF97316, colorB: 0xFDE047 },
+      { x: 49,  z: 62, colorA: 0x2A9D8F, colorB: 0xFFFFFF },
+      { x: 63,  z: 58, colorA: 0xF43F5E, colorB: 0xFDE047 },
+      { x: 84,  z: 58, colorA: 0x0284C7, colorB: 0xFFFFFF },
+
+      // Bolsões Orgânicos da Praia do Levante (Leste: profundidades e distâncias variadas entre z: 32 e z: 63)
+      { x: 118, z: 52, colorA: 0x2A9D8F, colorB: 0xFDE047 },
+      { x: 148, z: 34, colorA: 0xE76F51, colorB: 0xFDE047 },
+      { x: 156, z: 58, colorA: 0x2A75D3, colorB: 0xFFFFFF },
+      { x: 172, z: 49, colorA: 0xF43F5E, colorB: 0xFDE047 },
+      { x: 186, z: 36, colorA: 0x2A9D8F, colorB: 0xFFFFFF },
+      { x: 201, z: 61, colorA: 0x06B6D4, colorB: 0xFFFFFF },
+      { x: 216, z: 33, colorA: 0xF97316, colorB: 0xFDE047 },
+      { x: 232, z: 52, colorA: 0xF97316, colorB: 0xFDE047 },
+      { x: 248, z: 39, colorA: 0x2A75D3, colorB: 0xFFFFFF },
+      { x: 259, z: 59, colorA: 0x10B981, colorB: 0xFFFFFF }
     ];
 
     const poleMat = new THREE.MeshLambertMaterial({ color: 0xD1D5DB });
-    const chairAlumMat = new THREE.MeshLambertMaterial({ color: 0x94A3B8 });
+    const chairAlumMat = new THREE.MeshLambertMaterial({ color: 0xCBD5E1 });
+    const woodArmMat = new THREE.MeshLambertMaterial({ color: 0x8C5A32, flatShading: true });
+    const coolerWhiteMat = new THREE.MeshLambertMaterial({ color: 0xF8FAFC });
 
     stations.forEach((st, idx) => {
       const y = this.terrain ? this.terrain.getElevation(st.x, st.z) : 0.45;
       const stationGroup = new THREE.Group();
       stationGroup.position.set(st.x, y, st.z);
 
-      // Large Carioca Parasol
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 2.6, 5), poleMat);
-      pole.position.y = 1.3;
+      // Guarda-Sol Carioca Grande (Hastes + Gomos Listrados)
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 2.65, 6), poleMat);
+      pole.position.y = 1.32;
       stationGroup.add(pole);
 
       const canopy = new THREE.Group();
-      canopy.position.y = 2.4;
+      canopy.position.y = 2.45;
+      canopy.rotation.x = 0.08;
 
-      // 8 striped cone segments
       for (let s = 0; s < 8; s++) {
-        const segGeo = new THREE.ConeGeometry(2.1, 0.75, 4);
+        const segGeo = new THREE.ConeGeometry(2.15, 0.78, 4);
         segGeo.rotateY((s / 8) * Math.PI * 2);
         const segMat = new THREE.MeshLambertMaterial({
           color: s % 2 === 0 ? st.colorA : st.colorB,
@@ -412,35 +513,82 @@ export const BeachLifeMixin = {
       }
       stationGroup.add(canopy);
 
-      // 2 Folding beach chairs (cadeiras de praia reclinadas)
-      [-0.75, 0.75].forEach((cx, cIdx) => {
-        const chair = new THREE.Group();
-        chair.position.set(cx, 0.12, 0.45);
-        chair.rotation.y = (cIdx === 0 ? 0.25 : -0.25);
+      // Mesinha baixa / Cooler térmico entre as duas cadeiras
+      const coolerMat = new THREE.MeshLambertMaterial({ color: st.colorA, flatShading: true });
+      const cooler = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.32, 0.34), coolerMat);
+      cooler.position.set(0, 0.16, 0.42);
+      stationGroup.add(cooler);
+      const coolerLid = new THREE.Mesh(new THREE.BoxGeometry(0.40, 0.06, 0.36), coolerWhiteMat);
+      coolerLid.position.set(0, 0.34, 0.42);
+      stationGroup.add(coolerLid);
 
-        // Frame
-        const frame = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.06, 0.65), chairAlumMat);
+      // 2 Cadeiras de Praia Reclináveis (com braços e encosto anatômico para os NPCs sentarem)
+      [-0.84, 0.84].forEach((cx, cIdx) => {
+        const chair = new THREE.Group();
+        const cz = 0.48;
+        const chairRotY = (cIdx === 0 ? 0.20 : -0.20);
+        chair.position.set(cx, 0.12, cz);
+        chair.rotation.y = chairRotY;
+
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.06, 0.68), chairAlumMat);
         chair.add(frame);
-        // Fabric back
+
+        const seatFabricMat = new THREE.MeshLambertMaterial({ color: cIdx === 0 ? st.colorA : st.colorB, flatShading: true });
+        const seatFabric = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.07, 0.60), seatFabricMat);
+        seatFabric.position.set(0, 0.02, 0.02);
+        chair.add(seatFabric);
+
+        [-0.28, 0.28].forEach(lx => {
+          const leg = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.56), chairAlumMat);
+          leg.position.set(lx, -0.06, 0);
+          chair.add(leg);
+
+          const armRest = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.035, 0.54), woodArmMat);
+          armRest.position.set(lx, 0.22, 0.02);
+          chair.add(armRest);
+        });
+
         const backMat = new THREE.MeshLambertMaterial({ color: st.colorA, flatShading: true });
-        const back = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.65, 0.05), backMat);
-        back.position.set(0, 0.32, -0.28);
-        back.rotation.x = -0.32;
+        const back = new THREE.Mesh(new THREE.BoxGeometry(0.60, 0.68, 0.05), backMat);
+        back.position.set(0, 0.31, -0.28);
+        back.rotation.x = -0.34;
         chair.add(back);
 
         stationGroup.add(chair);
+
+        const worldChairX = st.x + cx;
+        const worldChairZ = st.z + cz;
+        const worldChairY = this.terrain ? this.terrain.getElevation(worldChairX, worldChairZ) : y;
+        this.beachChairSpots.push({
+          id: `chair_${idx}_${cIdx}`,
+          stationIdx: idx,
+          x: worldChairX,
+          y: worldChairY,
+          z: worldChairZ,
+          seatY: worldChairY + 0.24,
+          frontX: worldChairX + Math.sin(chairRotY) * 0.72,
+          frontZ: worldChairZ + Math.cos(chairRotY) * 0.72,
+          rotY: chairRotY,
+          isOccupied: false,
+          occupant: null
+        });
       });
 
-      // Beach towel (canga) laid on the sand
+      // Canga estampada estendida na areia ao lado do guarda-sol
       const cangaMat = new THREE.MeshLambertMaterial({ color: st.colorB, side: THREE.DoubleSide });
-      const canga = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.85), cangaMat);
+      const cangaBorderMat = new THREE.MeshLambertMaterial({ color: st.colorA, side: THREE.DoubleSide });
+      const canga = new THREE.Mesh(new THREE.PlaneGeometry(1.45, 0.90), cangaBorderMat);
       canga.rotateX(-Math.PI / 2);
-      canga.position.set(0, 0.03, -0.6);
+      canga.position.set(0, 0.03, -0.68);
       stationGroup.add(canga);
 
-      // Initially active if index < 4 (starter beach setup), else scales dynamically
-      const initialActive = idx < 4;
-      stationGroup.scale.set(initialActive ? 1 : 0.001, initialActive ? 1 : 0.001, initialActive ? 1 : 0.001);
+      const cangaInner = new THREE.Mesh(new THREE.PlaneGeometry(1.22, 0.68), cangaMat);
+      cangaInner.rotateX(-Math.PI / 2);
+      cangaInner.position.set(0, 0.035, -0.68);
+      stationGroup.add(cangaInner);
+
+      const initialActive = true;
+      stationGroup.scale.set(1, 1, 1);
       stationGroup.visible = initialActive;
 
       leisureGroup.add(stationGroup);
@@ -448,39 +596,271 @@ export const BeachLifeMixin = {
       this.beachUmbrellas.push({
         group: stationGroup,
         order: idx,
-        targetScale: initialActive ? 1.0 : 0.0,
-        currentScale: initialActive ? 1.0 : 0.0,
+        targetScale: 1.0,
+        currentScale: 1.0,
         pos: { x: st.x, y, z: st.z }
       });
+      this.propObstacles = this.propObstacles || [];
+      this.propObstacles.push({ x: st.x, z: st.z, r: 0.72 }); // Haste central do guarda-sol e cooler
     });
 
-    // Decorative sandcastles (Castelos de areia artesanais na beira da água)
+    // Castelos de areia artesanais distribuídos na beira d'água (z: 66..68)
     const sandcastleMat = new THREE.MeshLambertMaterial({ color: 0xD8B365, flatShading: true });
-    [-18, 35].forEach((scX, scIdx) => {
-      const scZ = 67.0;
-      const scY = this.terrain ? this.terrain.getElevation(scX, scZ) : 0.25;
+    [-245, -180, -125, -55, -26, -9, 18, 52, 130, 185, 245].forEach((scX, scIdx) => {
+      const scZ = 67.2 + (scIdx % 2) * 1.1;
+      const scY = this.terrain ? this.terrain.getElevation(scX, scZ) : 0.22;
       const castle = new THREE.Group();
       castle.position.set(scX, scY, scZ);
 
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.9, 0.45, 6), sandcastleMat);
-      base.position.y = 0.22;
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.88, 0.42, 6), sandcastleMat);
+      base.position.y = 0.21;
       castle.add(base);
 
-      const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.4, 0.6, 6), sandcastleMat);
-      tower.position.y = 0.65;
+      const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.38, 0.58, 6), sandcastleMat);
+      tower.position.y = 0.62;
       castle.add(tower);
 
+      const flagColors = [0xEF4444, 0x3B82F6, 0x10B981, 0xF59E0B, 0xEC4899];
       const flag = new THREE.Mesh(
         new THREE.BoxGeometry(0.22, 0.12, 0.02),
-        new THREE.MeshBasicMaterial({ color: scIdx === 0 ? 0xEF4444 : 0x3B82F6 })
+        new THREE.MeshLambertMaterial({ color: flagColors[scIdx % flagColors.length] })
       );
-      flag.position.set(0.12, 1.05, 0);
+      flag.position.set(0.11, 1.0, 0);
       castle.add(flag);
 
       leisureGroup.add(castle);
+      this.propObstacles = this.propObstacles || [];
+      this.propObstacles.push({ x: scX, z: scZ, r: 1.25 });
+    });
+
+    // Pranchas de Surfe e Stand-Up Paddle fincadas/apoiadas na areia próxima às ondas
+    const boardColors = [0x38BDF8, 0xF43F5E, 0xFACC15, 0x10B981];
+    [-255, -195, -140, -60, -16, 26, 58, 145, 200, 255].forEach((bx, bIdx) => {
+      const bz = 64.5;
+      const by = this.terrain ? this.terrain.getElevation(bx, bz) : 0.28;
+      const boardMat = new THREE.MeshLambertMaterial({ color: boardColors[bIdx % boardColors.length], flatShading: true });
+      const stripeMat = new THREE.MeshLambertMaterial({ color: 0xFFFFFF });
+      const bGroup = new THREE.Group();
+      bGroup.position.set(bx, by, bz);
+      bGroup.rotation.y = (bIdx % 2 === 0 ? 0.35 : -0.35);
+
+      const board = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.08, 1.75), boardMat);
+      board.position.set(0, 0.06, 0);
+      board.rotation.x = 0.08;
+      bGroup.add(board);
+
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.09, 1.65), stripeMat);
+      stripe.position.set(0, 0.065, 0);
+      stripe.rotation.x = 0.08;
+      bGroup.add(stripe);
+
+      leisureGroup.add(bGroup);
+      this.propObstacles = this.propObstacles || [];
+      this.propObstacles.push({ x: bx, z: bz, r: 1.15 });
     });
 
     this.group.add(leisureGroup);
+
+    // 4. Rodinhas Noturnas de Luau & Fogueiras na Praia
+    this.createBeachBonfireCircles();
+  },
+
+  // 4. RODINHAS NA PRAIA DE NOITE COM FOGUEIRAS (Luau & Beach Bonfire Circles)
+  createBeachBonfireCircles() {
+    this.beachBonfires = [];
+    const bonfireRoot = new THREE.Group();
+
+    const stoneMat = new THREE.MeshLambertMaterial({ color: 0x64748B, flatShading: true });
+    const emberMat = new THREE.MeshLambertMaterial({ color: 0x451A03, flatShading: true });
+    const logMat = new THREE.MeshLambertMaterial({ color: 0x5C3A21, flatShading: true });
+    const benchWoodMat = new THREE.MeshLambertMaterial({ color: 0x7C5333, flatShading: true });
+    const guitarBodyMat = new THREE.MeshLambertMaterial({ color: 0xB45309, flatShading: true });
+    const guitarNeckMat = new THREE.MeshLambertMaterial({ color: 0x3E2723, flatShading: true });
+
+    const fireOuterMat = new THREE.MeshBasicMaterial({
+      color: 0xFF5500,
+      transparent: true,
+      opacity: 0.90
+    });
+    const fireInnerMat = new THREE.MeshBasicMaterial({
+      color: 0xFDE047,
+      transparent: true,
+      opacity: 0.94
+    });
+
+    const circleConfigs = [
+      { id: 'luau_far_west', x: -180.0, z: 60.5, name: 'Rodinha do Luau do Poente', cangaColor: 0xF97316 },
+      { id: 'luau_west',     x: -38.0,  z: 60.5, name: 'Rodinha do Luau da Prainha', cangaColor: 0x38BDF8 },
+      { id: 'luau_center',   x: 5.0,    z: 60.5, name: 'Rodinha de Violão & Fogueira da Orla', cangaColor: 0xF43F5E },
+      { id: 'luau_east',     x: 42.0,   z: 60.0, name: 'Rodinha do Luau das Dunas', cangaColor: 0x10B981 },
+      { id: 'luau_far_east', x: 185.0,  z: 60.5, name: 'Rodinha do Luau do Levante', cangaColor: 0x38BDF8 }
+    ];
+
+    circleConfigs.forEach((cfg, cIdx) => {
+      const cy = this.terrain ? this.terrain.getElevation(cfg.x, cfg.z) : 0.34;
+      const circleGroup = new THREE.Group();
+      circleGroup.position.set(cfg.x, cy, cfg.z);
+      this.propObstacles = this.propObstacles || [];
+      this.propObstacles.push({ x: cfg.x, z: cfg.z, r: 1.38 }); // Fogueira central de pedras
+
+      // Base circular de brasas e cinzas na areia
+      const ashBed = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.10, 0.08, 8), emberMat);
+      ashBed.position.y = 0.04;
+      circleGroup.add(ashBed);
+
+      // Anel de 10 pedras costeiras ao redor da fogueira
+      for (let s = 0; s < 10; s++) {
+        const ang = (s / 10) * Math.PI * 2;
+        const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.22 + (s % 2) * 0.05, 0), stoneMat);
+        stone.position.set(Math.cos(ang) * 0.92, 0.14, Math.sin(ang) * 0.92);
+        stone.rotation.set(s * 0.4, ang, 0);
+        circleGroup.add(stone);
+      }
+
+      // Toras de lenha cruzadas no centro
+      for (let l = 0; l < 4; l++) {
+        const log = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 1.25, 5), logMat);
+        log.position.y = 0.22;
+        log.rotation.z = Math.PI / 2.5;
+        log.rotation.y = (l / 4) * Math.PI;
+        circleGroup.add(log);
+      }
+
+      // Grupo dinâmico das chamas + luz quente noturna (aceso no pôr do sol e à noite)
+      const fireGroup = new THREE.Group();
+      const fireOuter = new THREE.Mesh(new THREE.ConeGeometry(0.58, 1.35, 6), fireOuterMat);
+      fireOuter.position.y = 0.68;
+      fireGroup.add(fireOuter);
+
+      const fireInner = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.95, 5), fireInnerMat);
+      fireInner.position.y = 0.56;
+      fireGroup.add(fireInner);
+
+      const fireLight = new THREE.PointLight(0xFF6B00, 0.0, 18.0);
+      fireLight.position.set(0, 1.35, 0);
+      fireGroup.add(fireLight);
+
+      circleGroup.add(fireGroup);
+
+      // Violão acústico apoiado junto ao tronco do músico da roda
+      const guitarGroup = new THREE.Group();
+      guitarGroup.position.set(1.85, 0.26, -1.15);
+      guitarGroup.rotation.set(-0.35, 0.6, 0.25);
+      const gBody = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.10, 8), guitarBodyMat);
+      gBody.rotation.x = Math.PI / 2;
+      guitarGroup.add(gBody);
+      const gNeck = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.48, 0.04), guitarNeckMat);
+      gNeck.position.set(0, 0.34, 0);
+      guitarGroup.add(gNeck);
+      circleGroup.add(guitarGroup);
+
+      // 8 lugares na rodinha ao redor da fogueira (5 sentados em troncos/esteiras + 3 em pé batendo papo)
+      const seats = [];
+      const totalSlots = 8;
+      for (let i = 0; i < totalSlots; i++) {
+        const ang = (i / totalSlots) * Math.PI * 2 + (cIdx * 0.25);
+        const isSeatedSpot = (i % 2 === 0 || i === 1); // 5 sentados, 3 de pé
+        const radius = isSeatedSpot ? 2.45 : 3.05;
+        const lx = Math.cos(ang) * radius;
+        const lz = Math.sin(ang) * radius;
+        const wx = cfg.x + lx;
+        const wz = cfg.z + lz;
+        const wy = this.terrain ? this.terrain.getElevation(wx, wz) : cy;
+        const faceCenterRotY = Math.atan2(-lx, -lz);
+
+        if (isSeatedSpot) {
+          if (i % 4 === 0) {
+            // Tronco de coqueiro rústico como banco de praia
+            const logBench = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 1.15, 6), benchWoodMat);
+            logBench.rotation.z = Math.PI / 2;
+            logBench.rotation.y = faceCenterRotY;
+            logBench.position.set(lx, (wy - cy) + 0.18, lz);
+            circleGroup.add(logBench);
+          } else {
+            // Esteira / canga de praia para sentar na areia pertinho do fogo
+            const matMesh = new THREE.Mesh(
+              new THREE.PlaneGeometry(0.95, 0.75),
+              new THREE.MeshLambertMaterial({ color: cfg.cangaColor, side: THREE.DoubleSide })
+            );
+            matMesh.rotateX(-Math.PI / 2);
+            matMesh.rotation.z = -faceCenterRotY;
+            matMesh.position.set(lx, (wy - cy) + 0.03, lz);
+            circleGroup.add(matMesh);
+          }
+        }
+
+        seats.push({
+          slotIndex: i,
+          bonfireId: cfg.id,
+          bonfireName: cfg.name,
+          centerX: cfg.x,
+          centerZ: cfg.z,
+          x: wx,
+          y: wy,
+          z: wz,
+          seatY: isSeatedSpot ? (wy + (i % 4 === 0 ? 0.28 : 0.12)) : wy,
+          rotY: faceCenterRotY,
+          isSeatedSpot,
+          isGuitarSpot: (i === 0),
+          isOccupied: false,
+          occupant: null
+        });
+      }
+
+      bonfireRoot.add(circleGroup);
+
+      this.beachBonfires.push({
+        id: cfg.id,
+        name: cfg.name,
+        x: cfg.x,
+        y: cy,
+        z: cfg.z,
+        group: circleGroup,
+        fireGroup,
+        fireOuter,
+        fireInner,
+        fireLight,
+        seats
+      });
+    });
+
+    this.group.add(bonfireRoot);
+  },
+
+  // Efeito de gotículas de água do mar quando banhistas chutam água ou nadam
+  spawnWaterSplash(pos, count = 4) {
+    if (!this.particles || this.particles.length > 50) return;
+    if (!this.waterSplashMat) {
+      this.waterSplashMat = new THREE.MeshBasicMaterial({
+        color: 0xBAE6FD,
+        transparent: true,
+        opacity: 0.82,
+        depthWrite: false
+      });
+    }
+    const geo = this.stallDropletGeo || new THREE.DodecahedronGeometry(0.11, 0);
+    for (let i = 0; i < count; i++) {
+      const drop = new THREE.Mesh(geo, this.waterSplashMat);
+      drop.position.set(
+        pos.x + (Math.random() - 0.5) * 0.55,
+        Math.max(0.05, (pos.y || 0.05) + 0.15 + Math.random() * 0.20),
+        pos.z + (Math.random() - 0.5) * 0.55
+      );
+      drop.scale.setScalar(0.55 + Math.random() * 0.35);
+      this.group.add(drop);
+      const maxLife = 0.45 + Math.random() * 0.25;
+      this.particles.push({
+        mesh: drop,
+        vel: new THREE.Vector3(
+          (Math.random() - 0.5) * 1.4,
+          1.35 + Math.random() * 1.1,
+          (Math.random() - 0.5) * 1.4
+        ),
+        gravity: 4.8,
+        life: maxLife,
+        maxLife
+      });
+    }
   },
 
   createBeachLifeEdges() {
@@ -499,12 +879,31 @@ export const BeachLifeMixin = {
 
     const netPostWoodMat = new THREE.MeshLambertMaterial({ color: 0x78350F, flatShading: true });
     const netPostSteelMat = new THREE.MeshLambertMaterial({ color: 0x0284C7, flatShading: true });
-    const netWhiteMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF, transparent: true, opacity: 0.65, wireframe: true });
-    const tapeBlueMat = new THREE.MeshBasicMaterial({ color: 0x2563EB });
-    const tapeRedMat = new THREE.MeshBasicMaterial({ color: 0xDC2626 });
+    const netWhiteMat = new THREE.MeshLambertMaterial({ color: 0xE2E8F0, transparent: true, opacity: 0.55, wireframe: true });
+    const tapeBlueMat = new THREE.MeshLambertMaterial({ color: 0x1D4ED8, flatShading: true });
+    const tapeRedMat = new THREE.MeshLambertMaterial({ color: 0xB91C1C, flatShading: true });
     const ballMat = new THREE.MeshLambertMaterial({ color: 0xF8FAFC, flatShading: true });
     const thatchMat = new THREE.MeshLambertMaterial({ color: 0xB48C56, flatShading: true });
     const counterWoodMat = new THREE.MeshLambertMaterial({ color: 0x5C381E, flatShading: true });
+
+    // Helper: Fitas de demarcação esportiva na areia (4 linhas planas e contínuas sem brilho unlit)
+    const buildCourtBoundary = (w, l, mat) => {
+      const g = new THREE.Group();
+      const tw = 0.12;
+      const top = new THREE.Mesh(new THREE.BoxGeometry(w, 0.015, tw), mat);
+      top.position.set(0, 0.01, -l / 2);
+      g.add(top);
+      const btm = new THREE.Mesh(new THREE.BoxGeometry(w, 0.015, tw), mat);
+      btm.position.set(0, 0.01, l / 2);
+      g.add(btm);
+      const left = new THREE.Mesh(new THREE.BoxGeometry(tw, 0.015, l), mat);
+      left.position.set(-w / 2, 0.01, 0);
+      g.add(left);
+      const right = new THREE.Mesh(new THREE.BoxGeometry(tw, 0.015, l), mat);
+      right.position.set(w / 2, 0.01, 0);
+      g.add(right);
+      return g;
+    };
 
     // 1. QUADRA DE FUTEVÔLEI CARIOCA (x: 78, z: 42)
     const fvY = this.terrain ? this.terrain.getElevation(78, 42) : 0.45;
@@ -522,14 +921,12 @@ export const BeachLifeMixin = {
     fvNet.position.set(0, 1.75, 0);
     fvGroup.add(fvNet);
 
-    const topTape = new THREE.Mesh(new THREE.BoxGeometry(9.0, 0.08, 0.04), new THREE.MeshBasicMaterial({ color: 0xFACC15 }));
+    const topTape = new THREE.Mesh(new THREE.BoxGeometry(9.0, 0.08, 0.04), new THREE.MeshLambertMaterial({ color: 0xFACC15 }));
     topTape.position.set(0, 2.12, 0);
     fvGroup.add(topTape);
 
-    const fvTape = new THREE.Mesh(new THREE.BoxGeometry(9.0, 0.02, 16.0), tapeBlueMat);
-    fvTape.position.set(0, 0.01, 0);
-    fvTape.material.wireframe = true;
-    fvGroup.add(fvTape);
+    const fvBoundary = buildCourtBoundary(9.0, 16.0, tapeBlueMat);
+    fvGroup.add(fvBoundary);
 
     const soccerBall = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18, 1), ballMat);
     soccerBall.position.set(1.2, 0.18, 1.5);
@@ -552,7 +949,7 @@ export const BeachLifeMixin = {
       pad.position.set(px, 0.7, 0);
       vbGroup.add(pad);
 
-      const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.8, 4), new THREE.MeshBasicMaterial({ color: 0xEF4444 }));
+      const antenna = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 1.8, 4), new THREE.MeshLambertMaterial({ color: 0xEF4444 }));
       antenna.position.set(px * 0.88, 2.5, 0);
       vbGroup.add(antenna);
     });
@@ -561,14 +958,12 @@ export const BeachLifeMixin = {
     vbNet.position.set(0, 2.0, 0);
     vbGroup.add(vbNet);
 
-    const vbTopTape = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.09, 0.04), new THREE.MeshBasicMaterial({ color: 0xFFFFFF }));
+    const vbTopTape = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.09, 0.04), new THREE.MeshLambertMaterial({ color: 0xE2E8F0 }));
     vbTopTape.position.set(0, 2.45, 0);
     vbGroup.add(vbTopTape);
 
-    const vbTape = new THREE.Mesh(new THREE.BoxGeometry(8.6, 0.02, 16.0), tapeRedMat);
-    vbTape.position.set(0, 0.01, 0);
-    vbTape.material.wireframe = true;
-    vbGroup.add(vbTape);
+    const vbBoundary = buildCourtBoundary(8.6, 16.0, tapeRedMat);
+    vbGroup.add(vbBoundary);
 
     const volleyBall = new THREE.Mesh(new THREE.DodecahedronGeometry(0.19, 1), new THREE.MeshLambertMaterial({ color: 0xFDE047 }));
     volleyBall.position.set(-1.8, 0.19, -2.2);
@@ -631,7 +1026,7 @@ export const BeachLifeMixin = {
       cangaGroup.add(cloth);
 
       [-0.12, 0.12].forEach(hx => {
-        const flipFlop = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.26), new THREE.MeshBasicMaterial({ color: 0x1E293B }));
+        const flipFlop = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.02, 0.26), new THREE.MeshLambertMaterial({ color: 0x1E293B }));
         flipFlop.position.set(0.65 + hx, 0.02, 0.2);
         cangaGroup.add(flipFlop);
       });
@@ -783,82 +1178,46 @@ export const BeachLifeMixin = {
 
     const altinhaGroup = new THREE.Group();
 
-    // Player 1 (Boardshorts, sunglasses, facing +X)
-    const p1 = new THREE.Group();
+    // Player 1 (Boardshorts, sunglasses, facing +X — Anatomia Esculpida Claude Opus)
+    const p1Fig = createStylizedFigure({
+      skinColor: 0x8D5524,
+      pantsColor: 0x06B6D4,
+      hairColor: 0x1F1917,
+      bareChest: true,
+      wearsShorts: true,
+      hasShades: true,
+      includeShoes: false
+    });
+    const p1 = p1Fig.group;
     p1.position.copy(p1Pos);
     p1.rotation.y = Math.PI / 2;
-
-    const skinMat = new THREE.MeshLambertMaterial({ color: 0x8D5524 });
-    const p1Torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.65, 0.3), skinMat);
-    p1Torso.position.y = 0.85;
-    p1.add(p1Torso);
-
-    const p1Head = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.34, 0.32), skinMat);
-    p1Head.position.y = 1.34;
-    p1.add(p1Head);
-
-    const shadesMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
-    const shades1 = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.1), shadesMat);
-    shades1.position.set(0, 1.36, 0.17);
-    p1.add(shades1);
-
-    const shorts1Mat = new THREE.MeshLambertMaterial({ color: 0x06B6D4 }); // Vibrant Cyan boardshorts
-    const p1LegL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.18), shorts1Mat);
-    p1LegL.position.set(-0.13, 0.29, 0);
-    p1.add(p1LegL);
-    const p1LegR = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.18), shorts1Mat);
-    p1LegR.position.set(0.13, 0.29, 0);
-    p1.add(p1LegR);
-
-    // Arms for Player 1
-    const p1ArmL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.52, 0.12), skinMat);
-    p1ArmL.position.set(-0.31, 0.90, 0);
-    p1.add(p1ArmL);
-    const p1ArmR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.52, 0.12), skinMat);
-    p1ArmR.position.set(0.31, 0.90, 0);
-    p1.add(p1ArmR);
-
+    const p1Torso = p1Fig.torso;
+    const p1Head = p1Fig.head;
+    const p1LegL = p1Fig.leftLeg;
+    const p1LegR = p1Fig.rightLeg;
+    const p1ArmL = p1Fig.leftArm;
+    const p1ArmR = p1Fig.rightArm;
     altinhaGroup.add(p1);
 
-    // Player 2 (Classic Sunga Carioca, sunglasses, facing -X)
-    const p2 = new THREE.Group();
+    // Player 2 (Classic Sunga Carioca, sunglasses, facing -X — Anatomia Esculpida Claude Opus)
+    const p2Fig = createStylizedFigure({
+      skinColor: 0x70411B,
+      hairColor: 0x141416,
+      bareChest: true,
+      bareLegs: true,
+      sungaColor: 0xF43F5E,
+      hasShades: true,
+      includeShoes: false
+    });
+    const p2 = p2Fig.group;
     p2.position.copy(p2Pos);
     p2.rotation.y = -Math.PI / 2;
-
-    const skinMat2 = new THREE.MeshLambertMaterial({ color: 0x70411B });
-    const p2Torso = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.65, 0.3), skinMat2);
-    p2Torso.position.y = 0.85;
-    p2.add(p2Torso);
-
-    const p2Head = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.34, 0.32), skinMat2);
-    p2Head.position.y = 1.34;
-    p2.add(p2Head);
-
-    const shades2 = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, 0.1), shadesMat);
-    shades2.position.set(0, 1.36, 0.17);
-    p2.add(shades2);
-
-    const sungaMat = new THREE.MeshLambertMaterial({ color: 0xF43F5E }); // Pink Sunga
-    const p2LegL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.18), skinMat2);
-    p2LegL.position.set(-0.13, 0.29, 0);
-    p2.add(p2LegL);
-    const p2LegR = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.58, 0.18), skinMat2);
-    p2LegR.position.set(0.13, 0.29, 0);
-    p2.add(p2LegR);
-
-    // Sunga brief
-    const sunga = new THREE.Mesh(new THREE.BoxGeometry(0.47, 0.22, 0.32), sungaMat);
-    sunga.position.set(0, 0.52, 0);
-    p2.add(sunga);
-
-    // Arms for Player 2
-    const p2ArmL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.52, 0.12), skinMat2);
-    p2ArmL.position.set(-0.31, 0.90, 0);
-    p2.add(p2ArmL);
-    const p2ArmR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.52, 0.12), skinMat2);
-    p2ArmR.position.set(0.31, 0.90, 0);
-    p2.add(p2ArmR);
-
+    const p2Torso = p2Fig.torso;
+    const p2Head = p2Fig.head;
+    const p2LegL = p2Fig.leftLeg;
+    const p2LegR = p2Fig.rightLeg;
+    const p2ArmL = p2Fig.leftArm;
+    const p2ArmR = p2Fig.rightArm;
     altinhaGroup.add(p2);
 
     // Ball for Altinha
@@ -970,5 +1329,203 @@ export const BeachLifeMixin = {
       maxLife: 1.2,
       isCoin: true
     });
+  },
+
+  // =========================================================================
+  // REVITALIZAÇÃO DA PRAIA SUDESTE (DECK LOUNGE, FRESCOBOL & QUEBRA-MAR COM FAROLETE)
+  // =========================================================================
+  createSoutheastDunesLounge() {
+    const southeastGroup = new THREE.Group();
+
+    // 1. DECK & LOUNGE DAS DUNAS (x: 86, z: 40)
+    const lx = 86.0, lz = 40.0;
+    const ly = this.terrain ? this.terrain.getElevation(lx, lz) : 0.55;
+    const loungeGroup = new THREE.Group();
+    loungeGroup.position.set(lx, ly, lz);
+
+    const deckMat = new THREE.MeshLambertMaterial({ color: 0x8C7456, flatShading: true });
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(6.2, 0.22, 5.2), deckMat);
+    deck.position.y = 0.11;
+    deck.receiveShadow = true;
+    loungeGroup.add(deck);
+
+    // Pergolado de toras com teto de palha de piaçava
+    const timberMat = new THREE.MeshLambertMaterial({ color: 0x5C3D28, flatShading: true });
+    const thatchMat = new THREE.MeshLambertMaterial({ color: 0xB48C56, flatShading: true });
+    const postGeo = new THREE.CylinderGeometry(0.08, 0.10, 2.8, 6);
+
+    [[-2.7, -2.2], [2.7, -2.2], [-2.7, 2.2], [2.7, 2.2]].forEach(([px, pz]) => {
+      const p = new THREE.Mesh(postGeo, timberMat);
+      p.position.set(px, 1.4, pz);
+      p.castShadow = true;
+      loungeGroup.add(p);
+    });
+
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(4.2, 1.1, 4), thatchMat);
+    roof.rotation.y = Math.PI / 4;
+    roof.position.set(0, 3.1, 0);
+    loungeGroup.add(roof);
+
+    // 3 Espreguiçadeiras de madeira com almofadas listradas
+    const loungerMat = new THREE.MeshLambertMaterial({ color: 0x6D4C41 });
+    const cushionColors = [0x06B6D4, 0xF97316, 0x10B981];
+    [-1.8, 0, 1.8].forEach((lxPos, idx) => {
+      const lounger = new THREE.Group();
+      lounger.position.set(lxPos, 0.18, 0.4);
+      lounger.rotation.y = 0.15;
+
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.15, 1.8), loungerMat);
+      lounger.add(base);
+
+      const cushion = new THREE.Mesh(new THREE.BoxGeometry(0.70, 0.08, 1.7), new THREE.MeshLambertMaterial({ color: cushionColors[idx] }));
+      cushion.position.y = 0.11;
+      lounger.add(cushion);
+
+      // Encosto reclinado
+      const back = new THREE.Mesh(new THREE.BoxGeometry(0.70, 0.08, 0.65), new THREE.MeshLambertMaterial({ color: cushionColors[idx] }));
+      back.position.set(0, 0.32, -0.65);
+      back.rotation.x = -0.55;
+      lounger.add(back);
+
+      loungeGroup.add(lounger);
+    });
+
+    // Mesinha de apoio com cocos gelados
+    const table = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.40, 0.45, 8), timberMat);
+    table.position.set(0, 0.33, -1.5);
+    loungeGroup.add(table);
+
+    const cocoMat = new THREE.MeshLambertMaterial({ color: 0x2D6A4F });
+    const coco = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 6), cocoMat);
+    coco.position.set(0, 0.62, -1.5);
+    loungeGroup.add(coco);
+
+    southeastGroup.add(loungeGroup);
+
+    // 2. ARENA DE FRESCOBOL CARIOCA (x: 96, z: 54)
+    const fx = 96.0, fz = 54.0;
+    const fy = this.terrain ? this.terrain.getElevation(fx, fz) : 0.35;
+    const frescobolGroup = new THREE.Group();
+    frescobolGroup.position.set(fx, fy, fz);
+
+    // Linha divisória de fita na areia (MeshLambertMaterial: iluminação natural dia/noite)
+    const fbTapeMat = new THREE.MeshLambertMaterial({ color: 0xD97706, flatShading: true });
+    const tw = 0.10;
+    const fbTop = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.015, tw), fbTapeMat);
+    fbTop.position.set(0, 0.01, -5.0);
+    frescobolGroup.add(fbTop);
+    const fbBtm = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.015, tw), fbTapeMat);
+    fbBtm.position.set(0, 0.01, 5.0);
+    frescobolGroup.add(fbBtm);
+    const fbLeft = new THREE.Mesh(new THREE.BoxGeometry(tw, 0.015, 10.0), fbTapeMat);
+    fbLeft.position.set(-3.0, 0.01, 0);
+    frescobolGroup.add(fbLeft);
+    const fbRight = new THREE.Mesh(new THREE.BoxGeometry(tw, 0.015, 10.0), fbTapeMat);
+    fbRight.position.set(3.0, 0.01, 0);
+    frescobolGroup.add(fbRight);
+
+    // Dois atletas jogando Frescobol com anatomia esculpida Claude Opus
+    const paddleMat = new THREE.MeshLambertMaterial({ color: 0x3E2723, flatShading: false });
+    const ballMat = new THREE.MeshLambertMaterial({ color: 0xF97316, flatShading: false });
+
+    // Player 1 (x: 0, z: -3.5)
+    const fb1 = createStylizedFigure({
+      skinColor: 0xA06236,
+      pantsColor: 0x2563EB,
+      hairColor: 0x2D1E18,
+      bareChest: true,
+      wearsShorts: true,
+      hasShades: true,
+      includeShoes: false
+    });
+    const p1 = fb1.group;
+    p1.position.set(0, 0, -3.5);
+    const p1Paddle = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.04, 12), paddleMat);
+    p1Paddle.position.set(0.32, 0.95, 0.35);
+    p1Paddle.rotation.x = Math.PI / 2;
+    p1.add(p1Paddle);
+    frescobolGroup.add(p1);
+
+    // Player 2 (x: 0, z: 3.5)
+    const fb2 = createStylizedFigure({
+      skinColor: 0xC68642,
+      shirtColor: 0xDC2626,
+      pantsColor: 0xDC2626,
+      hairColor: 0x1F1917,
+      isFemale: true,
+      wearsShorts: true,
+      hasShades: true,
+      includeShoes: false
+    });
+    const p2 = fb2.group;
+    p2.position.set(0, 0, 3.5);
+    p2.rotation.y = Math.PI;
+    const p2Paddle = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.04, 12), paddleMat);
+    p2Paddle.position.set(0.32, 0.95, 0.35);
+    p2Paddle.rotation.x = Math.PI / 2;
+    p2.add(p2Paddle);
+    frescobolGroup.add(p2);
+
+    // Bolinha de Frescobol laranja
+    const frescoball = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), ballMat);
+    frescoball.position.set(0, 1.1, 0);
+    frescobolGroup.add(frescoball);
+
+    // Cooler / Caixa térmica de bebidas
+    const cooler = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.45, 0.45), new THREE.MeshLambertMaterial({ color: 0x0284C7 }));
+    cooler.position.set(2.2, 0.22, 0);
+    frescobolGroup.add(cooler);
+
+    southeastGroup.add(frescobolGroup);
+
+    this.frescobolMatch = {
+      p1,
+      p2,
+      ball: frescoball,
+      progress: 0.0,
+      direction: 1
+    };
+
+    // 3. QUEBRA-MAR DE PEDRA & FAROLETE SOLAR (x: 108, z: 66)
+    const bx = 108.0, bz = 66.0;
+    const by = this.terrain ? this.terrain.getElevation(bx, bz) : 0.25;
+    const breakwaterGroup = new THREE.Group();
+    breakwaterGroup.position.set(bx, by, bz);
+
+    // Grandes blocos de granito sobrepostos formando o quebra-mar
+    const rockMat = new THREE.MeshLambertMaterial({ color: 0x475569, flatShading: true });
+    for (let r = 0; r < 8; r++) {
+      const rock = new THREE.Mesh(
+        new THREE.DodecahedronGeometry(1.2 + Math.random() * 0.6, 0),
+        rockMat
+      );
+      rock.position.set((r - 3.5) * 1.5, 0.6 + Math.sin(r * 0.8) * 0.2, (r - 3.5) * 0.8);
+      rock.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+      rock.receiveShadow = true;
+      breakwaterGroup.add(rock);
+    }
+
+    // Farolete solar verde na ponta mais avançada do quebra-mar
+    const beaconPostMat = new THREE.MeshLambertMaterial({ color: 0xF8FAFC });
+    const beaconPost = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 3.4, 6), beaconPostMat);
+    beaconPost.position.set(3.2, 1.7, 2.0);
+    beaconPost.castShadow = true;
+    breakwaterGroup.add(beaconPost);
+
+    // Luz de sinalização marítima verde
+    const beaconGlass = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.18, 0.18, 0.35, 8),
+      new THREE.MeshBasicMaterial({ color: 0x22C55E })
+    );
+    beaconGlass.position.set(3.2, 3.45, 2.0);
+    breakwaterGroup.add(beaconGlass);
+
+    const greenLight = new THREE.PointLight(0x22C55E, 1.5, 18);
+    greenLight.position.set(3.2, 3.5, 2.0);
+    breakwaterGroup.add(greenLight);
+
+    southeastGroup.add(breakwaterGroup);
+
+    this.group.add(southeastGroup);
   }
 };

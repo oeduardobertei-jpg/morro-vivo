@@ -179,6 +179,75 @@ try {
     return { ok: !!(hit && hit.type === 'house'), hitType: hit ? hit.type : null, pickMs: Number(m.fastPicker.lastPickMs.toFixed(2)) };
   });
 
+  // 7B. Validação acústica real (Karplus-Strong banks, Bossa Nova scheduler, mar/pássaros, Roda de Samba e Foley)
+  const audioCheck = await page.evaluate(async () => {
+    const m = window.__morro;
+    const st = m.soundtrack;
+    if (!st) return { ok: false, reason: 'no-soundtrack' };
+
+    const t0 = performance.now();
+    st.init();
+    const initMs = Number((performance.now() - t0).toFixed(2));
+    if (st.ctx.state === 'suspended') {
+      await st.ctx.resume();
+    }
+    st.play();
+
+    // Conecta AnalyserNode para medir sinal real gerado na saída master
+    const analyser = st.ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    st.core.masterGain.connect(analyser);
+    const buf = new Float32Array(analyser.fftSize);
+
+    // Exercita todos os efeitos sonoros e fauna perto da câmera
+    const nearPos = m.controls.target.clone();
+    st.playCelebrationChime(nearPos);
+    st.playConstructionSound(nearPos);
+    st.playBeachCommerceSound(nearPos);
+    st.playSoccerKick(nearPos);
+    st.playAltinhaKick(nearPos);
+    st.playGoalWhistle(nearPos);
+    st.playCartRattle(nearPos);
+    st.playMaresiaBreeze(nearPos);
+    st.playUiClick('cam');
+    st.playUiSelect('house');
+    st.playUiTimeShift('sunset');
+    st.playSambaRhythm(nearPos, true);
+    st.soundscape._playSabiaSong(0.9);
+    st.soundscape._playBemTeViCall(0.8);
+    st.soundscape._playDistantSeagull(0.8);
+    st.soundscape._playNightCricketChirp(0.8);
+
+    let maxPeak = 0;
+    let sumSq = 0;
+    let samplesCount = 0;
+    for (let s = 0; s < 12; s++) {
+      await new Promise((r) => setTimeout(r, 120));
+      analyser.getFloatTimeDomainData(buf);
+      for (let i = 0; i < buf.length; i++) {
+        const a = Math.abs(buf[i]);
+        if (a > maxPeak) maxPeak = a;
+        sumSq += buf[i] * buf[i];
+      }
+      samplesCount += buf.length;
+    }
+    const rms = Math.sqrt(sumSq / Math.max(1, samplesCount));
+    st.core.masterGain.disconnect(analyser);
+
+    return {
+      ok: st.ctx.state === 'running' && rms > 0.001 && maxPeak < 0.995,
+      ctxState: st.ctx.state,
+      initMs,
+      nylonBankSize: st.core.nylonBank.length,
+      cavacoBankSize: st.core.cavacoBank.length,
+      marimbaBankSize: st.core.marimbaBank.length,
+      rms: Number(rms.toFixed(4)),
+      peak: Number(maxPeak.toFixed(4)),
+      phase: st.musicEngine ? st.musicEngine.phase : null,
+      barIndex: st.musicEngine ? st.musicEngine.barIndex : -1
+    };
+  });
+
   // 8. Telemetria estabilizada (Panorâmica Dia em ambos os modos)
   await setCam(-45, 42, 108, 0, 8, -10);
   const metrics = await page.evaluate(async () => {
@@ -221,7 +290,7 @@ try {
     };
   });
 
-  console.log(JSON.stringify({ outDir, wasdMovedDist, pickCheck, metrics, errors, warningCount: warnings.length }, null, 2));
+  console.log(JSON.stringify({ outDir, wasdMovedDist, pickCheck, audioCheck, metrics, errors, warningCount: warnings.length }, null, 2));
   if (errors.length > 0) process.exitCode = 1;
 } finally {
   await browser.close();

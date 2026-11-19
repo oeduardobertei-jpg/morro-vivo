@@ -82,6 +82,7 @@ architecture.setNPCManager(npcs);
 const simulation = new SimulationEngine(architecture, npcs, savedGameData);
 const soundtrack = new AmbientSoundtrack();
 soundtrack.setCamera(camera, controls);
+soundtrack.setEnvironment(env);
 architecture.setSoundtrack(soundtrack);
 npcs.setSoundtrack(soundtrack);
 npcs.setSimulation(simulation);
@@ -252,6 +253,9 @@ window.addEventListener('click', (event) => {
   const hit = fastPicker.pick(mouse);
   if (!hit) return;
 
+  if (soundtrack && soundtrack.playUiSelect) {
+    soundtrack.playUiSelect(hit.type);
+  }
   if (hit.type === 'npc') {
     showCitizenInspector(hit.data);
   } else if (hit.type === 'mobility') {
@@ -1014,7 +1018,10 @@ function selectCameraPreset(key) {
 
 Object.keys(camButtons).forEach(key => {
   if (camButtons[key]) {
-    camButtons[key].onclick = () => selectCameraPreset(key);
+    camButtons[key].onclick = () => {
+      if (soundtrack && soundtrack.playUiClick) soundtrack.playUiClick('cam');
+      selectCameraPreset(key);
+    };
   }
 });
 
@@ -1108,12 +1115,12 @@ Object.keys(mixerSliders).forEach(ch => {
 
 if (btnMixerReset) {
   btnMixerReset.onclick = () => {
-    const defaults = { master: 80, music: 65, samba: 75, construction: 45, soccer: 18, sea: 65, sfx: 55 };
+    const defaults = { master: 80, music: 70, samba: 78, construction: 42, soccer: 22, sea: 68, sfx: 58 };
     Object.keys(defaults).forEach(ch => {
       soundtrack.setVolume(ch, defaults[ch]);
     });
     syncMixerUI();
-    simulation.addEvent('🎚️ Volumes da Trilha Boom-Bap, Roda de Samba e Efeitos restaurados para o padrão.', 'culture');
+    simulation.addEvent('🎚️ Volumes da Trilha Bossa Nova, Roda de Samba, Natureza e Efeitos restaurados para o padrão.', 'culture');
   };
 }
 
@@ -1190,6 +1197,7 @@ if (btnTimeCycle) {
     const info = phaseLabels[phaseKey] || phaseLabels.day;
     if (timeIcon) timeIcon.innerText = info.icon;
     if (timeLabel) timeLabel.innerText = info.name;
+    if (soundtrack && soundtrack.playUiTimeShift) soundtrack.playUiTimeShift(phaseKey);
     simulation.addEvent(`${info.icon} Horário avançado para: ${info.name}!`, 'culture');
   };
 }
@@ -1420,7 +1428,8 @@ window.__morro = {
   batcher,
   fastPicker,
   postFX,
-  env
+  env,
+  soundtrack
 };
 
 // Initial simulation notification

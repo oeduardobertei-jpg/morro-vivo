@@ -427,6 +427,7 @@ export const RoadsMixin = {
   // Apenas 2 pontos orgânicos e discretos na colina para encontros e pausas
   createBotecoPockets() {
     this.botecoSpots = [];
+    this.propObstacles = this.propObstacles || [];
     const botecoGroup = new THREE.Group();
 
     const tableMat = new THREE.MeshLambertMaterial({ color: 0xF8FAFC, flatShading: true });
@@ -501,6 +502,7 @@ export const RoadsMixin = {
 
     configs.forEach(cfg => {
       const tableY = this.terrain ? this.terrain.getElevation(cfg.tableX, cfg.tableZ) : 4.0;
+      this.propObstacles.push({ x: cfg.tableX, z: cfg.tableZ, r: 0.82 });
 
       // Mesa de Boteco
       const tableMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.05, 8), tableMat);

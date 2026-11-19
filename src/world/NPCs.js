@@ -7,8 +7,19 @@ import { SambaMixin } from './npcs/sambaSound.js';
 import { EconomyBehaviors } from './npcs/economyBehaviors.js';
 import { BeachBehaviorsMixin } from './npcs/beachBehaviors.js';
 
+const TORSO_BASE_Y = 0.85;
+const ARM_BASE_Y = 1.06;
+const HEAD_BASE_Y = 1.37;
+
 function dampLimb(current, target, lambda, delta) {
   return THREE.MathUtils.damp(current, target, lambda, delta);
+}
+
+function smoothAngle(current, target, lambda, delta) {
+  let diff = target - current;
+  while (diff > Math.PI) diff -= Math.PI * 2;
+  while (diff < -Math.PI) diff += Math.PI * 2;
+  return current + diff * (1.0 - Math.exp(-lambda * delta));
 }
 
 export class NPCManager {
@@ -101,10 +112,166 @@ export class NPCManager {
       this._sambaSlots[st._claimed] = null;
     }
     if (st) st._claimed = undefined;
+    if (npc.pandeiroItem) npc.pandeiroItem.visible = false;
     // Restaura postura de pé ao sair do banco
-    if (npc.torso) npc.torso.rotation.set(0, 0, 0);
+    if (npc.group) {
+      npc.group.rotation.x = 0;
+      npc.group.rotation.z = 0;
+    }
+    if (npc.torso) {
+      npc.torso.rotation.set(0, 0, 0);
+      npc.torso.position.y = TORSO_BASE_Y;
+    }
+    if (npc.head) {
+      npc.head.rotation.set(0, 0, 0);
+      npc.head.position.y = HEAD_BASE_Y;
+    }
+    if (npc.leftArm) {
+      npc.leftArm.rotation.set(0, 0, 0);
+      npc.leftArm.position.y = ARM_BASE_Y;
+    }
+    if (npc.rightArm) {
+      npc.rightArm.rotation.set(0, 0, 0);
+      npc.rightArm.position.y = ARM_BASE_Y;
+    }
     if (npc.leftLeg) npc.leftLeg.rotation.x = 0;
     if (npc.rightLeg) npc.rightLeg.rotation.x = 0;
+  }
+
+  /**
+   * Colisão global unificada (OBB real das casas + props/estruturas + barreiras de segurança).
+   * Empurra pelo menor eixo de penetração com deslize tangencial em direção ao destino.
+   */
+  resolveHouseAndWorldObstacles(npc, delta) {
+    const pos = npc.group.position;
+    const tx = npc.targetPos ? npc.targetPos.x : pos.x;
+    const tz = npc.targetPos ? npc.targetPos.z : pos.z;
+
+    // 1. OBB exata contra todas as casas da colina (incluindo degraus frontais em +Z local)
+    if (this.arch && this.arch.houses) {
+      const halfW = 2.52;
+      const halfD = 2.42;
+      const effHalfD = halfD + 0.25; // cobre +0.50 em +Z local com centro deslocado +0.25
+      const maxCheckR = halfW + effHalfD + 0.6;
+
+      for (let h = 0; h < this.arch.houses.length; h++) {
+        const house = this.arch.houses[h];
+        if (!house || !house.position) continue;
+        if (npc.isBuilder && npc.builderState === 'working' && npc.assignedSite &&
+          (npc.assignedSite.house === house || npc.assignedSite.plateau === house.plateau)) {
+          continue;
+        }
+
+        const hx = house.position.x;
+        const hz = house.position.z;
+        const dx = pos.x - hx;
+        if (Math.abs(dx) > maxCheckR) continue;
+        const dz = pos.z - hz;
+        if (Math.abs(dz) > maxCheckR) continue;
+        const dy = pos.y - house.position.y;
+        if (dy > 4.5 || dy < -6.8) continue;
+
+        const rotY = house.meshGroup ? house.meshGroup.rotation.y : 0;
+        const c = rotY ? Math.cos(rotY) : 1.0;
+        const s = rotY ? Math.sin(rotY) : 0.0;
+        const lx = dx * c - dz * s;
+        const lz = (dx * s + dz * c) - 0.25;
+
+        const penX = halfW - Math.abs(lx);
+        const penZ = effHalfD - Math.abs(lz);
+        if (penX > 0 && penZ > 0) {
+          let nlx = lx;
+          let nlz = lz;
+          let lnx = 0;
+          let lnz = 0;
+          if (penX < penZ) {
+            lnx = lx >= 0 ? 1 : -1;
+            nlx = lnx * halfW;
+          } else {
+            lnz = lz >= 0 ? 1 : -1;
+            nlz = lnz * effHalfD;
+          }
+
+          const localZ = nlz + 0.25;
+          pos.x = hx + nlx * c + localZ * s;
+          pos.z = hz - nlx * s + localZ * c;
+
+          const wnx = lnx * c + lnz * s;
+          const wnz = -lnx * s + lnz * c;
+          const tanX = -wnz;
+          const tanZ = wnx;
+          const dot = (tx - pos.x) * tanX + (tz - pos.z) * tanZ;
+          const slideSign = dot >= 0 ? 1 : -1;
+          const slideDist = (npc.speed || 1.8) * (delta || 0.016) * 1.35;
+          pos.x += tanX * slideSign * slideDist;
+          pos.z += tanZ * slideSign * slideDist;
+        }
+      }
+    }
+
+    // 2. Obstáculos de estruturas, pedras, barracas, píer, fornos e mobiliário
+    if (this.resolvePropObstacles) {
+      this.resolvePropObstacles(npc, tx, tz, delta);
+    }
+
+    // 3. Barreira do penhasco frontal do Morro do Sol
+    if (!npc.isScenicMirante && pos.x >= -12.5 && pos.x <= 12.5 && pos.z >= 2.2 && pos.z <= 16.8) {
+      if (pos.z < 9.5) {
+        pos.z = 1.4;
+        if (npc.targetPos && npc.targetPos.z > 2.5 && this.roadNodesMap) {
+          const exitNode = this.roadNodesMap.get('sol_plaza_portico') || this.roadNodesMap.get('alameda_crossroads');
+          if (exitNode) {
+            npc.targetPos.copy(exitNode.position);
+            if (npc.pathQueue) npc.pathQueue.unshift('alameda_crossroads');
+          }
+        }
+      } else {
+        pos.z = 17.6;
+      }
+    }
+
+    // 4. Barreira rígida do Campinho de Várzea (apenas jogadores entram no gramado)
+    if (npc.role !== 'Jogador da Pelada') {
+      if (pos.x >= 40.0 && pos.x <= 70.0 && pos.z >= -5.5 && pos.z <= 13.5) {
+        if (pos.z < 3.5) {
+          pos.x = pos.x < 55.0 ? 37.0 : 73.0;
+        } else {
+          pos.z = 14.5;
+        }
+      } else if (pos.x > 43.2 && pos.x < 66.8 && pos.z > -3.6 && pos.z < 11.6) {
+        const dLeft = pos.x - 43.2;
+        const dRight = 66.8 - pos.x;
+        const dTop = pos.z - (-3.6);
+        const dBottom = 11.6 - pos.z;
+        const minD = Math.min(dLeft, dRight, dTop, dBottom);
+        if (minD === dLeft) pos.x = 43.2;
+        else if (minD === dRight) pos.x = 66.8;
+        else if (minD === dTop) pos.z = -3.6;
+        else pos.z = 11.6;
+      }
+    }
+
+    // 5. Zona de Santuário Exclusiva do Seu Agenor (Mirante Sul: x = 1.4, z = 2.8)
+    if (npc.citizenName !== 'Seu Agenor') {
+      const dAgenor = Math.hypot(pos.x - 1.4, pos.z - 2.8);
+      if (dAgenor < 1.75 && dAgenor > 0.001) {
+        const ang = Math.atan2(pos.z - 2.8, pos.x - 1.4);
+        pos.x = 1.4 + Math.cos(ang) * 1.75;
+        pos.z = 2.8 + Math.sin(ang) * 1.75;
+      }
+    }
+
+    // 6. Guarda-corpo e resgate do Píer dos Pescadores
+    if (pos.z >= 60.5 && pos.z <= 96.0 && Math.abs(pos.x - (-78.0)) < 3.2) {
+      pos.x = -78.0 + Math.max(-0.45, Math.min(0.45, pos.x - (-78.0)));
+    }
+    if (!npc.isDedicatedBeachgoer && !npc.isFisherman && Math.abs(pos.x - (-78.0)) <= 6.5 && pos.z >= 64.0 && pos.z <= 98.0) {
+      if (Math.abs(pos.x - (-78.0)) > 1.2 || pos.y < 1.0) {
+        pos.x = -78.0;
+        pos.z = 54.0;
+        npc.targetPos = new THREE.Vector3(-78.0, this.getFloorElevation(-78.0, 54.0), 54.0);
+      }
+    }
   }
 
   setEnvironment(env) {
@@ -156,48 +323,10 @@ export class NPCManager {
     }
 
     this.npcs.forEach(npc => {
-      // 1. Manter pés firmemente apoiados no piso/lajes/deck (exceto sentados, cênicos e banhistas na água/cadeira)
-      if (npc.builderState !== 'celebrating' && !npc.isScenicMirante && !npc.isSitting && !npc.isBeachCustomY && !npc.isBeachSeated) {
+      // 1. Manter pés firmemente apoiados no piso/lajes/deck (exceto sentados, cênicos e banhistas/atletas)
+      if (npc.builderState !== 'celebrating' && !npc.isScenicMirante && !npc.isSitting && !npc.isBeachCustomY && !npc.isBeachSeated && !npc.isBarraqueiro && !npc.isAthlete && !npc.isCalistenia) {
         const groundY = this.getFloorElevation(npc.group.position.x, npc.group.position.z);
         npc.group.position.y = groundY;
-      }
-
-      // 1b. BARREIRA FÍSICA INCONDICIONAL DO PENHASCO FRONTAL DO MORRO DO SOL
-      // Impede 100% que qualquer cidadão escorregue na face sul e evita travamento contra a mureta da Praça do Samba
-      const px = npc.group.position.x;
-      const pz = npc.group.position.z;
-      if (!npc.isScenicMirante && px >= -12.5 && px <= 12.5 && pz >= 2.2 && pz <= 16.8) {
-        if (pz < 9.5) {
-          npc.group.position.z = 1.4; // Retém dentro da área livre do Terreiro, longe dos bancos sul
-          // Se estava tentando sair pelo penhasco sul, redireciona suavemente pela Alameda Norte!
-          if (npc.targetPos && npc.targetPos.z > 2.5 && this.roadNodesMap) {
-            const exitNode = this.roadNodesMap.get('sol_plaza_portico') || this.roadNodesMap.get('alameda_crossroads');
-            if (exitNode) {
-              npc.targetPos.copy(exitNode.position);
-              if (npc.pathQueue) npc.pathQueue.unshift('alameda_crossroads');
-            }
-          }
-        } else {
-          npc.group.position.z = 17.6; // Retém na base, no calçadão litorâneo
-        }
-      }
-
-      // 1b3. BARREIRA FÍSICA INCONDICIONAL DO CAMPINHO DE VÁRZEA (Apenas Jogadores Entram no Gramado)
-      // Impede 100% que pedestres, construtores e banhistas atravessem o jogo ou pisem no campo
-      if (npc.role !== 'Jogador da Pelada') {
-        const cnx = npc.group.position.x;
-        const cnz = npc.group.position.z;
-        if (cnx >= 40.0 && cnx <= 70.0 && cnz >= -5.5 && cnz <= 13.5) {
-          if (cnz < 3.5) {
-            if (cnx < 55.0) {
-              npc.group.position.x = 37.0;
-            } else {
-              npc.group.position.x = 73.0;
-            }
-          } else {
-            npc.group.position.z = 14.5;
-          }
-        }
       }
 
       // 1b2. MICRO-ECONOMIA COMUNITÁRIA ORGÂNICA (Vendas e Trocas Solidárias)
@@ -215,20 +344,20 @@ export class NPCManager {
         if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, -1.45, 11.0, delta);
         if (npc.leftArm) {
           npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.38 + Math.sin(time * 1.4 + npc.walkCycle) * 0.05, 10.0, delta);
-          npc.leftArm.position.y = dampLimb(npc.leftArm.position.y, 1.04, 10.0, delta);
+          npc.leftArm.position.y = dampLimb(npc.leftArm.position.y, ARM_BASE_Y, 10.0, delta);
         }
         if (npc.rightArm) {
           npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.38 + Math.cos(time * 1.6 + npc.walkCycle) * 0.06, 10.0, delta);
-          npc.rightArm.position.y = dampLimb(npc.rightArm.position.y, 1.04, 10.0, delta);
+          npc.rightArm.position.y = dampLimb(npc.rightArm.position.y, ARM_BASE_Y, 10.0, delta);
         }
         if (npc.torso) {
           npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.05, 10.0, delta);
           npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, Math.sin(time * 0.9 + npc.walkCycle) * 0.06, 10.0, delta);
           npc.torso.rotation.z = dampLimb(npc.torso.rotation.z, 0, 10.0, delta);
-          npc.torso.position.y = dampLimb(npc.torso.position.y, 0.85, 10.0, delta);
+          npc.torso.position.y = dampLimb(npc.torso.position.y, TORSO_BASE_Y, 10.0, delta);
         }
         if (npc.head) {
-          npc.head.position.y = dampLimb(npc.head.position.y, 1.35, 10.0, delta);
+          npc.head.position.y = dampLimb(npc.head.position.y, HEAD_BASE_Y, 10.0, delta);
         }
 
         if (npc.sittingTimer <= 0) {
@@ -245,17 +374,38 @@ export class NPCManager {
         return;
       }
 
-      // 1d. MORADOR EMPINANDO PIPA NA LAJE/CRISTA
+      // 1d. MORADOR EMPINANDO PIPA NA LAJE/CRISTA (puxões rítmicos alternados na linha)
       if (npc.isFlyingKite) {
-        if (npc.rightArm) npc.rightArm.rotation.x = -1.25 + Math.sin(time * 3) * 0.08;
-        if (npc.head) npc.head.rotation.x = -0.45;
-        if (npc.leftArm) npc.leftArm.rotation.x = -0.35;
+        const pullWave = Math.sin(time * 3.6 + (npc.seed || 0));
+        if (npc.rightArm) {
+          npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -1.28 + pullWave * 0.22, 10.0, delta);
+          npc.rightArm.rotation.z = dampLimb(npc.rightArm.rotation.z, -0.08 + Math.cos(time * 2.2) * 0.06, 10.0, delta);
+          npc.rightArm.position.y = dampLimb(npc.rightArm.position.y, ARM_BASE_Y, 10.0, delta);
+        }
+        if (npc.leftArm) {
+          npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.78 - pullWave * 0.24, 10.0, delta);
+          npc.leftArm.position.y = dampLimb(npc.leftArm.position.y, ARM_BASE_Y, 10.0, delta);
+        }
+        if (npc.torso) {
+          npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, -0.10 + Math.sin(time * 1.8) * 0.04, 8.0, delta);
+          npc.torso.rotation.z = dampLimb(npc.torso.rotation.z, Math.cos(time * 2.4) * 0.05, 8.0, delta);
+        }
+        if (npc.head) {
+          npc.head.rotation.x = dampLimb(npc.head.rotation.x, -0.42 + Math.sin(time * 1.5) * 0.06, 8.0, delta);
+          npc.head.rotation.y = dampLimb(npc.head.rotation.y, Math.sin(time * 1.2) * 0.14, 8.0, delta);
+        }
+        if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, 0.06, 10.0, delta);
+        if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, -0.08, 10.0, delta);
         npc.currentAction = '🪁 Empinando pipa no céu da colina aproveitando a brisa favorável';
         return;
       }
 
-      // 2. BARRAQUEIRO BEHAVIOR (Comércio nas Barracas da Praia — gestos fluidos e naturais atrás do balcão)
+      // 2. BARRAQUEIRO BEHAVIOR (Comércio nas Barracas da Praia — gestos fluidos sobre o deck!)
       if (npc.isBarraqueiro) {
+        if (npc.assignedStall && npc.assignedStall.vendorSpot) {
+          npc.group.position.copy(npc.assignedStall.vendorSpot);
+          npc.group.rotation.y = 0;
+        }
         const ph = npc.walkCycle || 0;
         let customer = null;
         if (npc.assignedStall) {
@@ -318,20 +468,22 @@ export class NPCManager {
           npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, targetTorsoX, 6.5, delta);
           npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, targetTorsoY, 6.0, delta);
           npc.torso.rotation.z = dampLimb(npc.torso.rotation.z, targetTorsoZ, 6.5, delta);
-          npc.torso.position.y = dampLimb(npc.torso.position.y, 0.85 + breatheY, 8.0, delta);
+          npc.torso.position.y = dampLimb(npc.torso.position.y, TORSO_BASE_Y + breatheY, 8.0, delta);
         }
         if (npc.head) {
           npc.head.rotation.y = dampLimb(npc.head.rotation.y, targetHeadY, 5.5, delta);
           npc.head.rotation.x = dampLimb(npc.head.rotation.x, targetHeadX, 6.5, delta);
-          npc.head.position.y = dampLimb(npc.head.position.y, 1.35 + breatheY, 8.0, delta);
+          npc.head.position.y = dampLimb(npc.head.position.y, HEAD_BASE_Y + breatheY, 8.0, delta);
         }
         if (npc.rightArm) {
           npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, targetArmRX, 7.5, delta);
           npc.rightArm.rotation.z = dampLimb(npc.rightArm.rotation.z, targetArmRZ, 7.5, delta);
+          npc.rightArm.position.y = dampLimb(npc.rightArm.position.y, ARM_BASE_Y + breatheY, 8.0, delta);
         }
         if (npc.leftArm) {
           npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, targetArmLX, 7.5, delta);
           npc.leftArm.rotation.z = dampLimb(npc.leftArm.rotation.z, targetArmLZ, 7.5, delta);
+          npc.leftArm.position.y = dampLimb(npc.leftArm.position.y, ARM_BASE_Y + breatheY, 8.0, delta);
         }
         if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, 0, 8.0, delta);
         if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, 0, 8.0, delta);
@@ -362,25 +514,35 @@ export class NPCManager {
       // 2b. PERSONAGENS CÊNICOS DEDICADOS (Alameda das Flores, Terreiro de Samba, Mirante Sul & Botecos da Expansão)
       if (npc.isScenicMirante) {
         if (npc.isMusician) {
-          // Tião do Cavaco: ginga e dedilhado rítmico no cavaquinho
-          if (npc.cavacoGroup) {
-            npc.cavacoGroup.rotation.z = -0.65 + Math.sin(time * 6) * 0.06;
-          }
+          // Tião do Cavaco: ginga e palhetada sincopada no cavaquinho
+          const strum = Math.sin(time * 9.5) * 0.22 + Math.sin(time * 19.0) * 0.08;
           if (npc.torso) {
-            npc.torso.rotation.x = 0.08 + Math.sin(time * 3) * 0.04;
-            npc.torso.rotation.y = Math.sin(time * 4) * 0.06;
+            npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.08 + Math.sin(time * 3.0) * 0.04, 10.0, delta);
+            npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, Math.sin(time * 3.6) * 0.08, 10.0, delta);
+            npc.torso.rotation.z = dampLimb(npc.torso.rotation.z, Math.cos(time * 3.6) * 0.03, 10.0, delta);
           }
-          if (npc.leftArm) npc.leftArm.rotation.x = -0.60 + Math.sin(time * 6) * 0.14;
-          if (npc.rightArm) npc.rightArm.rotation.x = 0.38 + Math.sin(time * 12) * 0.28;
-          if (npc.head) npc.head.rotation.x = Math.sin(time * 3) * 0.08;
+          if (npc.leftArm) {
+            npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.62 + Math.sin(time * 4.2) * 0.10, 12.0, delta);
+            npc.leftArm.rotation.z = dampLimb(npc.leftArm.rotation.z, -0.14, 10.0, delta);
+          }
+          if (npc.rightArm) {
+            npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.45 + strum, 16.0, delta);
+            npc.rightArm.rotation.z = dampLimb(npc.rightArm.rotation.z, 0.16, 10.0, delta);
+          }
+          if (npc.head) {
+            npc.head.rotation.x = dampLimb(npc.head.rotation.x, Math.sin(time * 3.6) * 0.09, 10.0, delta);
+            npc.head.rotation.y = dampLimb(npc.head.rotation.y, Math.cos(time * 1.8) * 0.14, 8.0, delta);
+          }
           npc.currentAction = '🎶 Tocando cavaquinho com harmonia e ginga na roda de samba';
         } else if (npc.citizenName === 'Dona Teresa' || (typeof npc.role === 'string' && npc.role.includes('Florista'))) {
           // Dona Teresa cuidando dos canteiros de flores da Alameda
           if (npc.torso) {
-            npc.torso.rotation.y = Math.sin(time * 1.8) * 0.18;
+            npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.12 + Math.sin(time * 1.4) * 0.05, 8.0, delta);
+            npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, Math.sin(time * 1.6) * 0.22, 8.0, delta);
           }
-          if (npc.leftArm) npc.leftArm.rotation.x = -0.25 + Math.sin(time * 2.5) * 0.22;
-          if (npc.rightArm) npc.rightArm.rotation.x = 0.20 + Math.cos(time * 2.8) * 0.20;
+          if (npc.leftArm) npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.42 + Math.sin(time * 2.4) * 0.18, 10.0, delta);
+          if (npc.rightArm) npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.36 + Math.cos(time * 2.6) * 0.20, 10.0, delta);
+          if (npc.head) npc.head.rotation.x = dampLimb(npc.head.rotation.x, 0.16, 8.0, delta);
           npc.currentAction = '🌺 Cuidando com carinho dos canteiros floridos da Alameda';
         } else if (npc.citizenName === 'Seu Agenor' || (typeof npc.role === 'string' && npc.role.includes('Mirante Sul'))) {
           // APENAS Seu Agenor fica sentado no banco do Mirante Sul (sem jamais empilhar outros NPCs cênicos aqui!)
@@ -388,88 +550,101 @@ export class NPCManager {
           const seatY = plazaBaseY + 0.24 + 0.35;
           npc.group.position.set(1.4, seatY - 0.50, 2.80);
           npc.group.rotation.y = 0.0;
-          if (npc.leftLeg) npc.leftLeg.rotation.x = -1.45;
-          if (npc.rightLeg) npc.rightLeg.rotation.x = -1.45;
+          if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, -1.45, 10.0, delta);
+          if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, -1.45, 10.0, delta);
           if (npc.torso) {
-            npc.torso.rotation.x = 0.06;
-            npc.torso.rotation.y = Math.sin(time * 0.8) * 0.04;
+            npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.06, 8.0, delta);
+            npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, Math.sin(time * 0.7) * 0.05, 8.0, delta);
           }
-          if (npc.leftArm) npc.leftArm.rotation.x = -0.45;
-          if (npc.rightArm) npc.rightArm.rotation.x = -0.45 + Math.sin(time * 1.5) * 0.08;
-          if (npc.head) npc.head.rotation.x = -0.05 + Math.sin(time * 0.8) * 0.04;
+          if (npc.leftArm) npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.45, 8.0, delta);
+          if (npc.rightArm) npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.45 + Math.sin(time * 1.4) * 0.08, 8.0, delta);
+          if (npc.head) {
+            npc.head.rotation.x = dampLimb(npc.head.rotation.x, -0.04 + Math.sin(time * 0.8) * 0.04, 6.0, delta);
+            npc.head.rotation.y = dampLimb(npc.head.rotation.y, Math.sin(time * 0.55) * 0.18, 5.0, delta);
+          }
           npc.currentAction = '🌊 Sentado no banco do Mirante Sul apreciando a vista panorâmica do oceano';
         } else {
-          // Anfitriões dos Botecos e Vendas das Vilas Expandidas (Seu Moacir, Dona Dalva, Seu Bento) permanecem em seus próprios balcões!
+          // Anfitriões dos Botecos e Vendas das Vilas Expandidas permanecem em seus balcões acolhendo fregueses
+          const ph = npc.walkCycle || 0;
           if (npc.torso) {
-            npc.torso.rotation.y = Math.sin(time * 1.5 + npc.walkCycle) * 0.12;
-            npc.torso.rotation.x = Math.sin(time * 2.2 + npc.walkCycle) * 0.04;
+            npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, Math.sin(time * 1.4 + ph) * 0.14, 8.0, delta);
+            npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.04 + Math.sin(time * 2.0 + ph) * 0.04, 8.0, delta);
           }
-          if (npc.leftArm) npc.leftArm.rotation.x = -0.22 + Math.sin(time * 2.4 + npc.walkCycle) * 0.14;
-          if (npc.rightArm) npc.rightArm.rotation.x = -0.18 + Math.cos(time * 2.1 + npc.walkCycle) * 0.14;
-          if (npc.head) npc.head.rotation.y = Math.sin(time * 1.1 + npc.walkCycle) * 0.15;
+          if (npc.leftArm) npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.28 + Math.sin(time * 2.2 + ph) * 0.14, 9.0, delta);
+          if (npc.rightArm) npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.32 + Math.cos(time * 2.4 + ph) * 0.18, 9.0, delta);
+          if (npc.head) npc.head.rotation.y = dampLimb(npc.head.rotation.y, Math.sin(time * 1.0 + ph) * 0.20, 7.0, delta);
         }
         return;
       }
 
-      // 2c. SEU ZÉ DO COVO - PESCADOR DO PÍER (Atualização 1.2)
+      // 2c. SEU ZÉ DO COVO - PESCADOR DO PÍER (vara presa à mão direita com fisgada orgânica)
       if (npc.isFisherman) {
-        if (npc.fishingRod) {
-          const biteTug = Math.sin(time * 7.5) > 0.82 ? -0.10 : 0;
-          npc.fishingRod.rotation.x = Math.PI / 3.8 + Math.sin(time * 2.2) * 0.04 + biteTug;
+        const tug = Math.sin(time * 6.5) > 0.84 ? -0.18 : 0.0;
+        if (npc.torso) {
+          npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.06 + tug * 0.35 + Math.sin(time * 1.4) * 0.025, 8.0, delta);
+          npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, Math.sin(time * 0.7) * 0.06, 6.0, delta);
         }
-        if (npc.torso) npc.torso.rotation.x = 0.08 + Math.sin(time * 1.5) * 0.03;
-        if (npc.rightArm) npc.rightArm.rotation.x = -0.4 + Math.sin(time * 2.2) * 0.05;
+        if (npc.rightArm) {
+          npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.52 + tug + Math.sin(time * 1.8) * 0.05, 10.0, delta);
+          npc.rightArm.rotation.z = dampLimb(npc.rightArm.rotation.z, 0.06, 8.0, delta);
+        }
+        if (npc.leftArm) {
+          npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.35 + tug * 0.5, 8.0, delta);
+        }
+        if (npc.head) {
+          npc.head.rotation.x = dampLimb(npc.head.rotation.x, 0.06, 6.0, delta);
+          npc.head.rotation.y = dampLimb(npc.head.rotation.y, Math.sin(time * 0.5) * 0.22, 5.0, delta);
+        }
         npc.currentAction = '🎣 Pescando pacientemente no extremo do píer sentindo o puxão das marés';
         return;
       }
 
-      // 2d. ATLETAS DE AREIA - FUTEVÔLEI & VÔLEI DE PRAIA (Atualização 1.2)
+      // 2d. ATLETAS DE AREIA - FUTEVÔLEI & VÔLEI DE PRAIA (aterrados no piso + salto parabólico suave)
       if (npc.isAthlete) {
+        const baseY = this.getFloorElevation(npc.group.position.x, npc.group.position.z);
         if (npc.athleteType === 'futevolei') {
-          // Betinho (x: 76.2) e Pedrão (x: 79.8) trocando cabeceios e peitadas
           const s = Math.sin(time * 3.5);
-          const isMyTurn = (npc.group.position.x < 78.0) ? (s < -0.3) : (s > 0.3);
-          if (isMyTurn) {
-            const hop = Math.abs(Math.sin(time * 7.0)) * 0.28;
-            npc.group.position.y += hop;
-            if (npc.torso) npc.torso.rotation.x = -0.22;
-            if (npc.leftArm) npc.leftArm.rotation.x = 0.6;
-            if (npc.rightArm) npc.rightArm.rotation.x = -0.6;
-            if (npc.head) npc.head.rotation.x = -0.35;
-          } else {
-            if (npc.torso) npc.torso.rotation.x = 0.05;
-            if (npc.leftArm) npc.leftArm.rotation.x = 0.1;
-            if (npc.rightArm) npc.rightArm.rotation.x = -0.1;
-            if (npc.head) npc.head.rotation.x = -0.1;
+          const isMyTurn = (npc.group.position.x < 78.0) ? (s < -0.25) : (s > 0.25);
+          const hop = isMyTurn ? Math.abs(Math.sin(time * 7.0)) * 0.28 : Math.abs(Math.sin(time * 5.2 + npc.walkCycle)) * 0.04;
+          npc.group.position.y = baseY + hop;
+          if (npc.torso) npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, isMyTurn ? -0.22 : 0.06, 14.0, delta);
+          if (npc.leftArm) {
+            npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, isMyTurn ? 0.55 : -0.15, 14.0, delta);
+            npc.leftArm.rotation.z = dampLimb(npc.leftArm.rotation.z, isMyTurn ? -0.45 : -0.15, 14.0, delta);
           }
+          if (npc.rightArm) {
+            npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, isMyTurn ? -0.55 : -0.15, 14.0, delta);
+            npc.rightArm.rotation.z = dampLimb(npc.rightArm.rotation.z, isMyTurn ? 0.45 : 0.15, 14.0, delta);
+          }
+          if (npc.head) npc.head.rotation.x = dampLimb(npc.head.rotation.x, isMyTurn ? -0.35 : -0.12, 12.0, delta);
           npc.currentAction = '⚽ Disputando peitadas e cabeceios plásticos na arena de futevôlei';
         } else if (npc.athleteType === 'volei') {
-          // Rodrigo (x: 95.8) e Carlos (x: 100.2) na manchete e saque
           const s = Math.sin(time * 2.8);
-          const isMyTurn = (npc.group.position.x < 98.0) ? (s < -0.3) : (s > 0.3);
-          if (isMyTurn) {
-            const hop = Math.abs(Math.sin(time * 5.6)) * 0.32;
-            npc.group.position.y += hop;
-            if (npc.leftArm) npc.leftArm.rotation.x = -0.85;
-            if (npc.rightArm) npc.rightArm.rotation.x = -0.85;
-            if (npc.torso) npc.torso.rotation.x = 0.15;
-          } else {
-            if (npc.leftArm) npc.leftArm.rotation.x = -0.2;
-            if (npc.rightArm) npc.rightArm.rotation.x = -0.2;
-            if (npc.torso) npc.torso.rotation.x = 0;
-          }
+          const isMyTurn = (npc.group.position.x < 98.0) ? (s < -0.25) : (s > 0.25);
+          const hop = isMyTurn ? Math.abs(Math.sin(time * 5.6)) * 0.30 : Math.abs(Math.sin(time * 4.5 + npc.walkCycle)) * 0.04;
+          npc.group.position.y = baseY + hop;
+          if (npc.leftArm) npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, isMyTurn ? -0.90 : -0.26, 14.0, delta);
+          if (npc.rightArm) npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, isMyTurn ? -0.90 : -0.26, 14.0, delta);
+          if (npc.torso) npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, isMyTurn ? 0.18 : 0.05, 12.0, delta);
+          if (npc.head) npc.head.rotation.x = dampLimb(npc.head.rotation.x, -0.22, 10.0, delta);
           npc.currentAction = '🏐 Treinando recepção e saques rápidos na quadra de vôlei de praia';
         }
         return;
       }
 
-      // 2e. BETO DO MATE - AMBULANTE ICÔNICO DE PRAIA (Atualização 1.2)
+      // 2e. BETO DO MATE - AMBULANTE ICÔNICO DE PRAIA (rotação e gestos suavizados)
       if (npc.isMateiro) {
         if (npc.waitTimer > 0) {
           npc.waitTimer -= delta;
-          if (npc.torso) npc.torso.rotation.y = Math.sin(time * 3) * 0.15;
-          if (npc.leftArm) npc.leftArm.rotation.x = 0.2 + Math.sin(time * 2) * 0.1;
-          if (npc.rightArm) npc.rightArm.rotation.x = -0.4 + Math.sin(time * 4) * 0.2;
+          if (npc.torso) {
+            npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, Math.sin(time * 2.4) * 0.18, 10.0, delta);
+            npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.04, 10.0, delta);
+            npc.torso.position.y = dampLimb(npc.torso.position.y, TORSO_BASE_Y, 12.0, delta);
+          }
+          if (npc.leftArm) npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.25 + Math.sin(time * 2.2) * 0.12, 10.0, delta);
+          if (npc.rightArm) npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.62 + Math.sin(time * 3.6) * 0.20, 12.0, delta);
+          if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, 0, 12.0, delta);
+          if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, 0, 12.0, delta);
           npc.currentAction = '🥤 "Olha o mate geladinho e o biscoito Globo fresquinho!"';
           return;
         }
@@ -491,82 +666,136 @@ export class NPCManager {
           const mateSpeed = 1.9;
           npc.group.position.x += normX * mateSpeed * delta;
           npc.group.position.z += normZ * mateSpeed * delta;
-          npc.group.rotation.y = Math.atan2(normX, normZ);
+          npc.group.rotation.y = smoothAngle(npc.group.rotation.y, Math.atan2(normX, normZ), 8.5, delta);
 
           npc.walkCycle += delta * 8;
           const swing = Math.sin(npc.walkCycle) * 0.55;
-          if (npc.leftLeg) npc.leftLeg.rotation.x = swing;
-          if (npc.rightLeg) npc.rightLeg.rotation.x = -swing;
+          const mBob = Math.abs(Math.sin(npc.walkCycle)) * 0.036;
+          if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, swing, 15.0, delta);
+          if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, -swing, 15.0, delta);
+          if (npc.leftArm) {
+            npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -swing * 0.55, 14.0, delta);
+            npc.leftArm.position.y = dampLimb(npc.leftArm.position.y, ARM_BASE_Y + mBob, 15.0, delta);
+          }
+          if (npc.rightArm) {
+            npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.42 + swing * 0.16, 14.0, delta);
+            npc.rightArm.position.y = dampLimb(npc.rightArm.position.y, ARM_BASE_Y + mBob, 15.0, delta);
+          }
+          if (npc.torso) {
+            npc.torso.position.y = dampLimb(npc.torso.position.y, TORSO_BASE_Y + mBob, 15.0, delta);
+            npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, -swing * 0.12, 12.0, delta);
+          }
+          if (npc.head) npc.head.position.y = dampLimb(npc.head.position.y, HEAD_BASE_Y + mBob, 15.0, delta);
           if (npc.canisterGroup) {
-            npc.canisterGroup.rotation.z = Math.sin(npc.walkCycle) * 0.05;
+            npc.canisterGroup.rotation.z = Math.sin(npc.walkCycle) * 0.04;
           }
           npc.currentAction = '🚶 Caminhando pelas areias oferecendo Mate Leão e biscoito';
         }
         return;
       }
 
-      // 2f. MESTRE BIMBA - TERREIRO DE CAPOEIRA (Atualização 1.2.2)
+      // 2f. MESTRE BIMBA - GINGA AUTÊNTICA DE CAPOEIRA (esquiva, base atrás e guarda)
       if (npc.isCapoeira) {
-        const s = Math.sin(time * 3.2);
-        const c = Math.cos(time * 3.2);
+        const gCycle = time * 2.55;
+        const s = Math.sin(gCycle);
+        const c = Math.cos(gCycle);
+        const drop = Math.abs(c) * 0.08;
+        const baseY = this.getFloorElevation(npc.group.position.x, npc.group.position.z);
+        npc.group.position.y = baseY - drop;
         if (npc.torso) {
-          npc.torso.rotation.z = s * 0.18;
-          npc.torso.rotation.x = 0.12 + Math.abs(c) * 0.08;
+          npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.20 + Math.abs(c) * 0.10, 12.0, delta);
+          npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, s * 0.34, 12.0, delta);
+          npc.torso.rotation.z = dampLimb(npc.torso.rotation.z, -s * 0.18, 12.0, delta);
         }
-        if (npc.leftLeg) npc.leftLeg.rotation.x = s * 0.45;
-        if (npc.rightLeg) npc.rightLeg.rotation.x = -s * 0.45;
-        if (npc.leftArm) npc.leftArm.rotation.x = -0.3 + c * 0.35;
-        if (npc.rightArm) npc.rightArm.rotation.x = -0.3 - c * 0.35;
+        if (npc.leftLeg) {
+          npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, s > 0 ? (0.58 * s) : (0.28 * s), 12.0, delta);
+          npc.leftLeg.rotation.z = dampLimb(npc.leftLeg.rotation.z, -0.14, 10.0, delta);
+        }
+        if (npc.rightLeg) {
+          npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, s < 0 ? (-0.58 * s) : (-0.28 * s), 12.0, delta);
+          npc.rightLeg.rotation.z = dampLimb(npc.rightLeg.rotation.z, 0.14, 10.0, delta);
+        }
+        // Braço de guarda na frente do rosto alternando com o balanço da esquiva
+        if (npc.leftArm) {
+          npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, s > 0 ? (-1.05 * s - 0.35) : -0.35, 12.0, delta);
+          npc.leftArm.rotation.z = dampLimb(npc.leftArm.rotation.z, s > 0 ? 0.32 : -0.25, 12.0, delta);
+        }
+        if (npc.rightArm) {
+          npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, s < 0 ? (1.05 * s - 0.35) : -0.35, 12.0, delta);
+          npc.rightArm.rotation.z = dampLimb(npc.rightArm.rotation.z, s < 0 ? -0.32 : 0.25, 12.0, delta);
+        }
+        if (npc.head) {
+          npc.head.rotation.x = dampLimb(npc.head.rotation.x, -0.12, 10.0, delta);
+          npc.head.rotation.y = dampLimb(npc.head.rotation.y, -s * 0.22, 10.0, delta);
+        }
         npc.currentAction = '🥋 Praticando a ginga e ensinando cantigas de capoeira com o berimbau';
         return;
       }
 
-      // 2g. DONA NAIR - HORTA COMUNITÁRIA EM SOCALCOS (Atualização 1.2.2)
+      // 2g. DONA NAIR - HORTA COMUNITÁRIA EM SOCALCOS (ciclo agacha-colhe-ergue suave)
       if (npc.isHorta) {
-        const s = Math.sin(time * 1.6);
+        const tendPhase = (time * 0.8 + 1.1) % 6.0;
+        const bend = tendPhase < 3.6 ? Math.sin((tendPhase / 3.6) * Math.PI) : 0;
         if (npc.torso) {
-          npc.torso.rotation.x = 0.28 + s * 0.12;
-          npc.torso.rotation.y = Math.cos(time * 0.8) * 0.2;
+          npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.12 + bend * 0.32, 8.0, delta);
+          npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, Math.sin(time * 1.1) * 0.24, 7.0, delta);
         }
-        if (npc.leftArm) npc.leftArm.rotation.x = -0.5 + s * 0.25;
-        if (npc.rightArm) npc.rightArm.rotation.x = -0.3 - s * 0.25;
+        if (npc.leftArm) npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.35 - bend * 0.42 + Math.sin(time * 3.0) * 0.15, 10.0, delta);
+        if (npc.rightArm) npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.30 - bend * 0.38 + Math.cos(time * 3.2) * 0.16, 10.0, delta);
+        if (npc.head) npc.head.rotation.x = dampLimb(npc.head.rotation.x, 0.18 * bend, 8.0, delta);
         npc.currentAction = '🌱 Cuidando dos canteiros de couve, hortelã e tomate orgânico na encosta';
         return;
       }
 
-      // 2h. TIAGO MOTOTÁXI - PONTO OFICIAL DE MOTOTÁXI (Atualização 1.2.2)
+      // 2h. TIAGO MOTOTÁXI - PONTO OFICIAL DE MOTOTÁXI (chama passageiros e ajusta viseira)
       if (npc.isMototaxi) {
-        const s = Math.sin(time * 1.8);
-        if (npc.torso) npc.torso.rotation.y = s * 0.25;
-        if (npc.leftArm) npc.leftArm.rotation.x = -0.2 + Math.sin(time * 3.0) * 0.1;
-        if (npc.rightArm) npc.rightArm.rotation.x = 0.1 + Math.cos(time * 2.0) * 0.08;
+        const motoPhase = (time * 0.55) % 8.0;
+        const waving = motoPhase < 2.2;
+        if (npc.torso) npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, Math.sin(time * 1.3) * 0.22, 7.0, delta);
+        if (npc.rightArm) {
+          npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, waving ? (-1.85 + Math.sin(time * 6.0) * 0.22) : -0.18, 9.0, delta);
+          npc.rightArm.rotation.z = dampLimb(npc.rightArm.rotation.z, waving ? 0.22 : 0.04, 8.0, delta);
+        }
+        if (npc.leftArm) npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.22 + Math.sin(time * 2.0) * 0.08, 8.0, delta);
+        if (npc.head) npc.head.rotation.y = dampLimb(npc.head.rotation.y, Math.sin(time * 1.4) * 0.32, 6.0, delta);
         npc.currentAction = '🛵 Pronto no ponto de mototáxi para subir o morro com passageiros';
         return;
       }
 
-      // 2i. GUGA DO SURFE - ESCOLA DE SURFE & PRANCHÁRIO (Atualização 1.2.2)
+      // 2i. GUGA DO SURFE - ESCOLA DE SURFE & PRANCHÁRIO (encerando prancha e olhando as ondas)
       if (npc.isSurfer) {
-        const s = Math.sin(time * 2.2);
+        const waxCycle = time * 4.5;
         if (npc.torso) {
-          npc.torso.rotation.y = 0.3 + s * 0.15;
-          npc.torso.rotation.x = 0.1;
+          npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.14, 8.0, delta);
+          npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, Math.sin(time * 1.2) * 0.16, 7.0, delta);
         }
-        if (npc.rightArm) npc.rightArm.rotation.x = -0.6 + s * 0.3; // Encerando prancha
-        if (npc.leftArm) npc.leftArm.rotation.x = -0.2;
+        if (npc.rightArm) {
+          npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.68 + Math.sin(waxCycle) * 0.24, 12.0, delta);
+          npc.rightArm.rotation.z = dampLimb(npc.rightArm.rotation.z, 0.14 + Math.cos(waxCycle) * 0.16, 12.0, delta);
+        }
+        if (npc.leftArm) npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.35 + Math.sin(time * 1.5) * 0.06, 9.0, delta);
+        if (npc.head) npc.head.rotation.y = dampLimb(npc.head.rotation.y, Math.sin(time * 0.7) * 0.28, 5.0, delta);
         npc.currentAction = '🏄 Checando a ondulação e preparando pranchas de surfe para os alunos';
         return;
       }
 
-      // 2j. JONAS DA CALISTENIA - ACADEMIA AO AR LIVRE (Atualização 1.2.2)
+      // 2j. JONAS DA CALISTENIA - MERGULHOS REAIS NAS BARRAS PARALELAS
       if (npc.isCalistenia) {
-        const s = Math.sin(time * 2.5);
-        const dip = Math.max(0, s);
-        npc.group.position.y = (this.terrain ? this.terrain.getElevation(112, -12) : 2.0) + dip * 0.35;
-        if (npc.torso) npc.torso.rotation.x = 0.15;
-        if (npc.leftArm) npc.leftArm.rotation.x = -0.8 + dip * 0.5;
-        if (npc.rightArm) npc.rightArm.rotation.x = -0.8 + dip * 0.5;
-        if (npc.leftLeg) npc.leftLeg.rotation.x = 0.3;
-        if (npc.rightLeg) npc.rightLeg.rotation.x = 0.3;
+        const baseY = this.getFloorElevation(114.4, -10.8);
+        const repCycle = (Math.sin(time * 2.1) * 0.5 + 0.5);
+        const press = repCycle * repCycle * (3 - 2 * repCycle); // curva suave com respiro no topo e fundo
+        npc.group.position.set(114.4, baseY + 0.20 + press * 0.24, -10.8);
+        if (npc.torso) npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.18 + (1 - press) * 0.10, 12.0, delta);
+        if (npc.leftArm) {
+          npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.45 - (1 - press) * 0.42, 12.0, delta);
+          npc.leftArm.rotation.z = dampLimb(npc.leftArm.rotation.z, -0.22, 10.0, delta);
+        }
+        if (npc.rightArm) {
+          npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.45 - (1 - press) * 0.42, 12.0, delta);
+          npc.rightArm.rotation.z = dampLimb(npc.rightArm.rotation.z, 0.22, 10.0, delta);
+        }
+        if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, 0.42, 10.0, delta);
+        if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, 0.42, 10.0, delta);
         npc.currentAction = '💪 Treinando barras paralelas e exercícios de calistenia ao ar livre';
         return;
       }
@@ -650,12 +879,29 @@ export class NPCManager {
           npc.group.position.x += normX * npc.speed * delta;
           npc.group.position.z += normZ * npc.speed * delta;
 
-          npc.group.rotation.y = Math.atan2(normX, normZ);
+          npc.group.rotation.y = smoothAngle(npc.group.rotation.y, Math.atan2(normX, normZ), 10.0, delta);
 
           npc.walkCycle += delta * 9;
           const swing = Math.sin(npc.walkCycle) * 0.48;
-          npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, swing, 14.0, delta);
-          npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, -swing, 14.0, delta);
+          const cBob = Math.abs(Math.sin(npc.walkCycle)) * 0.03;
+          if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, swing, 14.0, delta);
+          if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, -swing, 14.0, delta);
+          if (npc.leftArm) {
+            npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.82, 14.0, delta);
+            npc.leftArm.position.y = ARM_BASE_Y + cBob;
+          }
+          if (npc.rightArm) {
+            npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.82, 14.0, delta);
+            npc.rightArm.position.y = ARM_BASE_Y + cBob;
+          }
+          if (npc.torso) {
+            npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.16, 12.0, delta);
+            npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, -swing * 0.08, 12.0, delta);
+            npc.torso.position.y = TORSO_BASE_Y + cBob;
+          }
+          if (npc.head) {
+            npc.head.position.y = HEAD_BASE_Y + cBob * 0.85;
+          }
         }
         return;
       }
@@ -669,14 +915,22 @@ export class NPCManager {
 
           // Goal celebration if goal was recently scored
           if (this.arch.soccerGoalCooldown > 1.2) {
-            npc.group.position.y = pitchBaseY + Math.abs(Math.sin(time * 16 + npc.walkCycle)) * 0.4;
+            const celPhase = time * 14 + (npc.walkCycle || 0);
+            npc.group.position.y = pitchBaseY + Math.abs(Math.sin(celPhase)) * 0.34;
+            if (npc.leftArm) npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -2.35 + Math.sin(celPhase) * 0.25, 16.0, delta);
+            if (npc.rightArm) npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -2.35 - Math.sin(celPhase) * 0.25, 16.0, delta);
+            if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, Math.sin(celPhase) * 0.35, 16.0, delta);
+            if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, -Math.sin(celPhase) * 0.35, 16.0, delta);
+            if (npc.torso) {
+              npc.torso.position.y = TORSO_BASE_Y;
+              npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, -0.08, 12.0, delta);
+            }
             npc.currentAction = `🎉 Comemorando o golaço no campinho pelo time ${npc.team === 'yellow' ? 'Amarelo' : 'Azul'}!`;
             return;
           }
 
-          if (npc.kickTimer > 0) {
-            npc.kickTimer -= delta;
-          }
+          if (npc.kickTimer > 0) npc.kickTimer -= delta;
+          if (npc.kickAnimTimer > 0) npc.kickAnimTimer -= delta;
 
           const distToBall = Math.hypot(ball.position.x - npc.group.position.x, ball.position.z - npc.group.position.z);
           const isYellow = (npc.team === 'yellow');
@@ -686,6 +940,7 @@ export class NPCManager {
           // Raio de chute: se a bola estiver perto e o jogador puder chutar
           if (distToBall < 1.85 && npc.kickTimer <= 0) {
             npc.kickTimer = 0.75 + Math.random() * 0.45;
+            npc.kickAnimTimer = 0.28;
 
             let kx = targetGoalX - ball.position.x;
             let kz = (4.0 + (Math.random() - 0.5) * 3.4) - ball.position.z;
@@ -696,7 +951,9 @@ export class NPCManager {
             const kickForce = (role === 'goleiro') ? 9.2 : (7.0 + Math.random() * 4.0);
             this.arch.kickSoccerBall(kx, kz, kickForce);
 
-            if (npc.rightLeg) npc.rightLeg.rotation.x = -1.35;
+            if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, -1.25, 22.0, delta);
+            if (npc.leftArm) npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.55, 18.0, delta);
+            if (npc.rightArm) npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, 0.45, 18.0, delta);
             npc.currentAction = (role === 'goleiro')
               ? `🧤 Defesa e reposição de bola do goleiro (${isYellow ? 'Amarelo' : 'Azul'})!`
               : `⚽ Chute a gol do time ${isYellow ? 'Amarelo Canário' : 'Azul Guanabara'}!`;
@@ -705,12 +962,10 @@ export class NPCManager {
             let targetX, targetZ;
 
             if (role === 'goleiro') {
-              // Goleiro acompanha a linha do gol e segue a coordenada Z da bola
               targetX = isYellow ? 46.2 : 63.8;
               targetZ = Math.max(1.8, Math.min(6.2, ball.position.z));
               npc.currentAction = `🧤 Guardando a meta do time ${isYellow ? 'Amarelo' : 'Azul'}`;
             } else if (role === 'zagueiro') {
-              // Zagueiro dá combate se a bola invadir seu campo; caso contrário, cobre a intermediária
               const ballInOwnHalf = isYellow ? (ball.position.x < 56.0) : (ball.position.x > 54.0);
               if (ballInOwnHalf) {
                 targetX = ball.position.x + (isYellow ? -0.4 : 0.4);
@@ -722,7 +977,6 @@ export class NPCManager {
                 npc.currentAction = `🛡️ Posicionado na linha defensiva (${isYellow ? 'Amarelo' : 'Azul'})`;
               }
             } else {
-              // Atacante busca a bola ativamente para finalizar
               targetX = ball.position.x + (isYellow ? -0.3 : 0.3);
               targetZ = ball.position.z + (npc.id.endsWith('1') ? 0.4 : -0.4);
               npc.currentAction = `⚽ Partindo pro drible e ataque (${isYellow ? 'Amarelo' : 'Azul'})`;
@@ -739,18 +993,68 @@ export class NPCManager {
               const speed = (role === 'atacante' || (role === 'zagueiro' && distToBall < 5.0)) ? 3.6 : 2.5;
               npc.group.position.x += nx * speed * delta;
               npc.group.position.z += nz * speed * delta;
-              npc.group.rotation.y = Math.atan2(nx, nz);
+              npc.group.rotation.y = smoothAngle(npc.group.rotation.y, Math.atan2(nx, nz), 12.0, delta);
 
               npc.walkCycle += delta * 14;
               const swing = Math.sin(npc.walkCycle) * 0.70;
-              if (npc.leftLeg) npc.leftLeg.rotation.x = swing;
-              if (npc.rightLeg) npc.rightLeg.rotation.x = -swing;
+              const pBob = Math.abs(Math.sin(npc.walkCycle)) * 0.045;
+              if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, swing, 16.0, delta);
+              if (npc.rightLeg) {
+                npc.rightLeg.rotation.x = (npc.kickAnimTimer > 0)
+                  ? dampLimb(npc.rightLeg.rotation.x, -1.15, 22.0, delta)
+                  : dampLimb(npc.rightLeg.rotation.x, -swing, 16.0, delta);
+              }
+              if (npc.leftArm) {
+                npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -swing * 0.82, 16.0, delta);
+                npc.leftArm.rotation.z = dampLimb(npc.leftArm.rotation.z, 0, 12.0, delta);
+                npc.leftArm.position.y = ARM_BASE_Y + pBob;
+              }
+              if (npc.rightArm) {
+                npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, swing * 0.82, 16.0, delta);
+                npc.rightArm.rotation.z = dampLimb(npc.rightArm.rotation.z, 0, 12.0, delta);
+                npc.rightArm.position.y = ARM_BASE_Y + pBob;
+              }
+              if (npc.torso) {
+                npc.torso.position.y = TORSO_BASE_Y + pBob;
+                npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.10, 12.0, delta);
+                npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, -swing * 0.14, 14.0, delta);
+              }
+              if (npc.head) npc.head.position.y = HEAD_BASE_Y + pBob * 0.85;
             } else {
-              // Quando parado, encara a bola
+              // Quando parado, encara a bola (goleiro em guarda pronta!)
               const faceAngle = Math.atan2(ball.position.x - npc.group.position.x, ball.position.z - npc.group.position.z);
-              npc.group.rotation.y = faceAngle;
-              if (npc.leftLeg) npc.leftLeg.rotation.x = 0;
-              if (npc.rightLeg) npc.rightLeg.rotation.x = 0;
+              npc.group.rotation.y = smoothAngle(npc.group.rotation.y, faceAngle, 12.0, delta);
+              if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, 0, 12.0, delta);
+              if (npc.rightLeg) {
+                npc.rightLeg.rotation.x = (npc.kickAnimTimer > 0)
+                  ? dampLimb(npc.rightLeg.rotation.x, -1.10, 20.0, delta)
+                  : dampLimb(npc.rightLeg.rotation.x, 0, 12.0, delta);
+              }
+              if (role === 'goleiro') {
+                if (npc.leftArm) {
+                  npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.62, 10.0, delta);
+                  npc.leftArm.rotation.z = dampLimb(npc.leftArm.rotation.z, 0.42, 10.0, delta);
+                }
+                if (npc.rightArm) {
+                  npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.62, 10.0, delta);
+                  npc.rightArm.rotation.z = dampLimb(npc.rightArm.rotation.z, -0.42, 10.0, delta);
+                }
+                if (npc.torso) npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.12, 10.0, delta);
+              } else {
+                if (npc.leftArm) {
+                  npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, 0, 10.0, delta);
+                  npc.leftArm.rotation.z = dampLimb(npc.leftArm.rotation.z, 0, 10.0, delta);
+                }
+                if (npc.rightArm) {
+                  npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, 0, 10.0, delta);
+                  npc.rightArm.rotation.z = dampLimb(npc.rightArm.rotation.z, 0, 10.0, delta);
+                }
+                if (npc.torso) npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0, 10.0, delta);
+              }
+              if (npc.torso) npc.torso.position.y = TORSO_BASE_Y;
+              if (npc.leftArm) npc.leftArm.position.y = ARM_BASE_Y;
+              if (npc.rightArm) npc.rightArm.position.y = ARM_BASE_Y;
+              if (npc.head) npc.head.position.y = HEAD_BASE_Y;
             }
 
             // Força de Separação Mútua (impede 100% o amontoamento de jogadores)
@@ -794,6 +1098,7 @@ export class NPCManager {
         const distToSlot = Math.hypot(plazaX - npc.group.position.x, plazaZ - npc.group.position.z);
 
         if (distToSlot > 1.2) {
+          if (npc.pandeiroItem) npc.pandeiroItem.visible = false;
           if (!npc.sambaRoutingActive) {
             npc.sambaRoutingActive = true;
             const curId = npc.currentNodeId || (this.getNearestRoadNode(npc.group.position.x, npc.group.position.z) ? this.getNearestRoadNode(npc.group.position.x, npc.group.position.z).id : 'alameda_crossroads');
@@ -809,13 +1114,15 @@ export class NPCManager {
           }
 
           const dToTarget = Math.hypot(npc.targetPos.x - npc.group.position.x, npc.targetPos.z - npc.group.position.z);
-          if (dToTarget < 1.2) {
+          const sambaArriveDist = (npc.targetNodeId === 'sol_plaza_center') ? 2.1 : 1.2;
+          if (dToTarget < sambaArriveDist) {
             if (npc.pathQueue && npc.pathQueue.length > 0) {
               npc.currentNodeId = npc.targetNodeId;
               npc.targetNodeId = npc.pathQueue.shift();
               const nxt = this.roadNodesMap.get(npc.targetNodeId);
               if (nxt) npc.targetPos = nxt.position.clone();
             } else {
+              npc.targetNodeId = null;
               npc.targetPos.set(plazaX, plazaY, plazaZ);
             }
           }
@@ -826,7 +1133,7 @@ export class NPCManager {
           const sambaSpeed = 2.8;
           npc.group.position.x += (dirX / norm) * sambaSpeed * delta;
           npc.group.position.z += (dirZ / norm) * sambaSpeed * delta;
-          npc.group.rotation.y = Math.atan2(dirX, dirZ);
+          npc.group.rotation.y = smoothAngle(npc.group.rotation.y, Math.atan2(dirX, dirZ), 10.0, delta);
 
           npc.walkCycle += delta * 12;
           const swing = Math.sin(npc.walkCycle) * 0.55;
@@ -835,61 +1142,84 @@ export class NPCManager {
           if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, -swing, 16.0, delta);
           if (npc.leftArm) {
             npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -swing * 0.65, 16.0, delta);
-            npc.leftArm.position.y = 1.04 + sBob;
+            npc.leftArm.position.y = ARM_BASE_Y + sBob;
           }
           if (npc.rightArm) {
             npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, swing * 0.65, 16.0, delta);
-            npc.rightArm.position.y = 1.04 + sBob;
+            npc.rightArm.position.y = ARM_BASE_Y + sBob;
           }
           if (npc.torso) {
-            npc.torso.position.y = 0.85 + sBob;
+            npc.torso.position.y = TORSO_BASE_Y + sBob;
             npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, -swing * 0.14, 14.0, delta);
           }
-          if (npc.head) npc.head.position.y = 1.35 + sBob;
+          if (npc.head) npc.head.position.y = HEAD_BASE_Y + sBob * 0.85;
           npc.currentAction = (npc.currentNodeId && npc.currentNodeId.startsWith('alameda'))
             ? 'Descendo a Alameda do Samba em direção à festa'
             : 'Subindo as ruas do morro a caminho da roda de samba';
         } else {
           npc.sambaState.isActive = true;
-          // Face the campfire center (-2, -4)
           const toFireX = -2.0 - npc.group.position.x;
           const toFireZ = -4.0 - npc.group.position.z;
-          npc.group.rotation.y = Math.atan2(toFireX, toFireZ);
 
-          // Rhythmic samba bounce & dance
-          const bounce = Math.abs(Math.sin(time * 8.2 + slot)) * 0.22;
-          
           if (isInner) {
-            // Sentado com postura realista tocando pandeiro/cavaco no banco
+            if (npc.pandeiroItem) npc.pandeiroItem.visible = (slot < 4);
             if (this.arch && this.arch.sambaBenches && this.arch.sambaBenches[slot]) {
               const bench = this.arch.sambaBenches[slot];
               npc.group.position.set(bench.x, bench.seatY - 0.50, bench.z);
-              npc.group.rotation.y = bench.rotY;
+              npc.group.rotation.y = smoothAngle(npc.group.rotation.y, bench.rotY, 10.0, delta);
             } else {
               npc.group.position.y = plazaY + 0.12;
+              npc.group.rotation.y = smoothAngle(npc.group.rotation.y, Math.atan2(toFireX, toFireZ), 10.0, delta);
             }
-            if (npc.leftLeg) npc.leftLeg.rotation.x = -1.45;
-            if (npc.rightLeg) npc.rightLeg.rotation.x = -1.45;
+            const beat = Math.sin(time * 8.2 + slot);
+            if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, -1.45, 12.0, delta);
+            if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, -1.45, 12.0, delta);
             if (npc.torso) {
-              npc.torso.rotation.x = 0.08;
-              npc.torso.rotation.y = Math.sin(time * 3.8) * 0.12;
+              npc.torso.position.y = TORSO_BASE_Y;
+              npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.08, 10.0, delta);
+              npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, Math.sin(time * 3.8 + slot) * 0.12, 10.0, delta);
             }
-            if (npc.leftArm) npc.leftArm.rotation.x = -0.40 - Math.sin(time * 8.2) * 0.35;
-            if (npc.rightArm) npc.rightArm.rotation.x = 0.38 + Math.sin(time * 8.2) * 0.35;
-            if (npc.head) npc.head.rotation.x = Math.sin(time * 4.0) * 0.10;
-            npc.currentAction = '🎶 Tocando e cantando na roda de samba ao redor da fogueira';
+            if (npc.leftArm) {
+              npc.leftArm.position.y = ARM_BASE_Y;
+              npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.58 - beat * 0.28, 16.0, delta);
+            }
+            if (npc.rightArm) {
+              npc.rightArm.position.y = ARM_BASE_Y;
+              npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.42 + beat * 0.36, 16.0, delta);
+            }
+            if (npc.head) {
+              npc.head.position.y = HEAD_BASE_Y;
+              npc.head.rotation.x = dampLimb(npc.head.rotation.x, Math.sin(time * 4.0 + slot) * 0.10, 10.0, delta);
+            }
+            npc.currentAction = (slot < 4)
+              ? '🪘 Batendo pandeiro firme na roda de samba'
+              : '🎶 Tocando e cantando na roda de samba ao redor da fogueira';
           } else {
-            // De pé dançando (Ginga carioca e Bounce)
+            if (npc.pandeiroItem) npc.pandeiroItem.visible = false;
+            npc.group.rotation.y = smoothAngle(npc.group.rotation.y, Math.atan2(toFireX, toFireZ), 10.0, delta);
+            const bounce = Math.abs(Math.sin(time * 7.8 + slot)) * 0.07;
+            const sambaStep = Math.sin(time * 7.8 + slot);
             npc.group.position.y = plazaY + bounce;
             if (npc.torso) {
-              npc.torso.rotation.x = Math.sin(time * 3 + slot) * 0.12;
-              npc.torso.rotation.y = Math.sin(time * 4 + slot) * 0.25;
+              npc.torso.position.y = TORSO_BASE_Y;
+              npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, Math.sin(time * 3.2 + slot) * 0.10, 12.0, delta);
+              npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, Math.sin(time * 4.2 + slot) * 0.24, 12.0, delta);
+              npc.torso.rotation.z = dampLimb(npc.torso.rotation.z, Math.cos(time * 3.9 + slot) * 0.07, 12.0, delta);
             }
-            if (npc.leftLeg) npc.leftLeg.rotation.x = Math.sin(time * 8.2 + slot) * 0.32;
-            if (npc.rightLeg) npc.rightLeg.rotation.x = -Math.sin(time * 8.2 + slot) * 0.32;
-            if (npc.leftArm) npc.leftArm.rotation.x = 0.40 + Math.sin(time * 8.2 + slot) * 0.45;
-            if (npc.rightArm) npc.rightArm.rotation.x = -0.40 - Math.sin(time * 8.2 + slot) * 0.45;
-            if (npc.head) npc.head.rotation.y = Math.sin(time * 2.5 + slot) * 0.18;
+            if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, sambaStep * 0.30, 14.0, delta);
+            if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, -sambaStep * 0.30, 14.0, delta);
+            if (npc.leftArm) {
+              npc.leftArm.position.y = ARM_BASE_Y;
+              npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.45 + sambaStep * 0.40, 14.0, delta);
+            }
+            if (npc.rightArm) {
+              npc.rightArm.position.y = ARM_BASE_Y;
+              npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -0.45 - sambaStep * 0.40, 14.0, delta);
+            }
+            if (npc.head) {
+              npc.head.position.y = HEAD_BASE_Y;
+              npc.head.rotation.y = dampLimb(npc.head.rotation.y, Math.sin(time * 2.5 + slot) * 0.18, 10.0, delta);
+            }
             npc.currentAction = '💃 Sambando e batendo palmas em volta da praça iluminada';
           }
 
@@ -901,7 +1231,7 @@ export class NPCManager {
       } else if (!isNightOrSunset && npc.sambaState && (npc.sambaState.isActive || npc.sambaRoutingActive)) {
         npc.sambaState.isActive = false;
         this._releaseSambaSlot(npc);
-        npc.sambaRoutingActive = false; // Permite reagendamento e rota limpa para a próxima noite
+        npc.sambaRoutingActive = false;
         npc.sambaStairStep = undefined;
         npc.currentAction = npc.originalAction || 'Caminhando pelas ruas pavimentadas da comunidade';
       }
@@ -915,35 +1245,44 @@ export class NPCManager {
       // 4b. VIDA NOTURNA NAS RUAS & ENCONTROS NA CALÇADA
       // Moradores que não estão no samba se encontram na frente de casas/postes para bater papo breve!
       if (isNightOrSunset && !npc.isBuilder && !npc.isCourier && !npc.isBarraqueiro && !npc.isScenicMirante && !npc.isFisherman && !npc.isAthlete && !npc.isMateiro && !npc.isCapoeira && !npc.isHorta && !npc.isMototaxi && !npc.isSurfer && !npc.isCalistenia && (!npc.sambaState || !npc.sambaState.isParticipant) && npc.role !== 'Jogador da Pelada') {
-        // Se já estiver em conversa ativa com um vizinho:
         if (npc.chatPartner) {
           const partner = npc.chatPartner;
           if (!partner || !partner.group) {
             npc.chatPartner = null;
             return;
           }
+          if (npc.pandeiroItem) npc.pandeiroItem.visible = false;
 
           const partnerName = partner.citizenName || 'vizinho';
           const npcName = npc.citizenName || 'morador';
           npc.chatTimer = (npc.chatTimer || 0) + delta;
 
-          // Ambos olham um para o outro
           const dx = partner.group.position.x - npc.group.position.x;
           const dz = partner.group.position.z - npc.group.position.z;
-          npc.group.rotation.y = Math.atan2(dx, dz);
+          npc.group.rotation.y = smoothAngle(npc.group.rotation.y, Math.atan2(dx, dz), 10.0, delta);
 
-          // Pés firmes e alinhados
-          if (npc.leftLeg) npc.leftLeg.rotation.x = 0;
-          if (npc.rightLeg) npc.rightLeg.rotation.x = 0;
+          if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, 0, 12.0, delta);
+          if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, 0, 12.0, delta);
 
-          // Animação de conversa brasileira com gesticulação viva e cabeça acenando
           const animOffset = (npc.citizenName ? npc.citizenName.length : 1);
-          if (npc.torso) npc.torso.rotation.y = Math.sin(time * 3.0 + animOffset) * 0.14;
-          if (npc.leftArm) npc.leftArm.rotation.x = -0.35 + Math.sin(time * 2.8 + animOffset) * 0.28;
-          if (npc.rightArm) npc.rightArm.rotation.x = 0.25 - Math.cos(time * 2.5 + animOffset) * 0.22;
-          if (npc.head) npc.head.rotation.x = Math.sin(time * 3.5 + animOffset) * 0.12;
+          if (npc.torso) {
+            npc.torso.position.y = TORSO_BASE_Y;
+            npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0, 10.0, delta);
+            npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, Math.sin(time * 3.0 + animOffset) * 0.14, 12.0, delta);
+          }
+          if (npc.leftArm) {
+            npc.leftArm.position.y = ARM_BASE_Y;
+            npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.35 + Math.sin(time * 2.8 + animOffset) * 0.28, 12.0, delta);
+          }
+          if (npc.rightArm) {
+            npc.rightArm.position.y = ARM_BASE_Y;
+            npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, 0.25 - Math.cos(time * 2.5 + animOffset) * 0.22, 12.0, delta);
+          }
+          if (npc.head) {
+            npc.head.position.y = HEAD_BASE_Y;
+            npc.head.rotation.x = dampLimb(npc.head.rotation.x, Math.sin(time * 3.5 + animOffset) * 0.12, 10.0, delta);
+          }
 
-          // Conversa breve e expressiva de 3.5s - NUNCA congela ou empaca pedestres na calçada!
           if (npc.chatTimer > 3.5 || Math.hypot(dx, dz) > 2.6) {
             npc.currentAction = `Despedindo-se de ${partnerName} e seguindo caminho`;
             partner.currentAction = `Despedindo-se de ${npcName} e seguindo caminho`;
@@ -1049,14 +1388,12 @@ export class NPCManager {
               // Chegou fisicamente ao canteiro de obras!
               npc.builderState = 'working';
               npc.currentAction = 'Modelando o terreno e assentando vigas e fiadas';
-              npc.leftLeg.rotation.x = 0;
-              npc.rightLeg.rotation.x = 0;
 
               // Vira o corpo em direção ao centro da construção
               if (npc.assignedSite && npc.assignedSite.plateau) {
                 const toCenterX = npc.assignedSite.plateau.x - npc.group.position.x;
                 const toCenterZ = npc.assignedSite.plateau.z - npc.group.position.z;
-                npc.group.rotation.y = Math.atan2(toCenterX, toCenterZ);
+                npc.group.rotation.y = smoothAngle(npc.group.rotation.y, Math.atan2(toCenterX, toCenterZ), 12.0, delta);
               }
               return;
             }
@@ -1070,48 +1407,79 @@ export class NPCManager {
             npc.group.position.x += normX * moveStep;
             npc.group.position.z += normZ * moveStep;
 
-            const angle = Math.atan2(normX, normZ);
-            npc.group.rotation.y = angle;
+            npc.group.rotation.y = smoothAngle(npc.group.rotation.y, Math.atan2(normX, normZ), 10.0, delta);
 
             npc.walkCycle += delta * 9;
             const swing = Math.sin(npc.walkCycle) * 0.58;
-            npc.leftLeg.rotation.x = swing;
-            npc.rightLeg.rotation.x = -swing;
+            const bBob = Math.abs(Math.sin(npc.walkCycle)) * 0.036;
+            if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, swing, 14.0, delta);
+            if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, -swing, 14.0, delta);
+            if (npc.leftArm) {
+              npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -swing * 0.65, 14.0, delta);
+              npc.leftArm.position.y = ARM_BASE_Y + bBob;
+            }
+            if (npc.toolArm) {
+              npc.toolArm.rotation.x = dampLimb(npc.toolArm.rotation.x, swing * 0.35, 14.0, delta);
+              npc.toolArm.rotation.z = dampLimb(npc.toolArm.rotation.z, 0, 12.0, delta);
+              npc.toolArm.position.y = ARM_BASE_Y + bBob;
+            }
+            if (npc.torso) {
+              npc.torso.position.y = TORSO_BASE_Y + bBob;
+              npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.06, 12.0, delta);
+              npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, -swing * 0.12, 12.0, delta);
+            }
+            if (npc.head) npc.head.position.y = HEAD_BASE_Y + bBob * 0.85;
           }
           return;
         }
 
         if (npc.builderState === 'working') {
-          // Checa horário de obras: dia e pôr do sol trabalham, noite e alvorecer descansam em silêncio
           const timeInfo = this.arch && this.arch.env ? this.arch.env.getTimeOfDay() : 'day';
           const phase = (typeof timeInfo === 'string') ? timeInfo : (timeInfo.phase || 'day');
           const isWorkHours = (phase === 'day' || phase === 'sunset');
-
-          npc.leftLeg.rotation.x = 0;
-          npc.rightLeg.rotation.x = 0;
 
           if (!isWorkHours) {
             this.releaseWorker(npc);
             return;
           }
 
-          // Expediente diurno: atividade ativa de assentamento
+          if (npc.leftLeg) npc.leftLeg.rotation.x = dampLimb(npc.leftLeg.rotation.x, 0, 12.0, delta);
+          if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, 0, 12.0, delta);
+          if (npc.leftArm) {
+            npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -0.30, 10.0, delta);
+            npc.leftArm.position.y = ARM_BASE_Y;
+          }
+
           const swingCycle = Math.sin(time * 9 + npc.walkCycle);
-          npc.toolArm.rotation.x = swingCycle * 0.85;
-          npc.toolArm.rotation.z = Math.sin(time * 4.5) * 0.15;
-          npc.torso.rotation.x = Math.max(0, swingCycle * 0.15);
+          if (npc.toolArm) {
+            npc.toolArm.position.y = ARM_BASE_Y;
+            npc.toolArm.rotation.x = dampLimb(npc.toolArm.rotation.x, swingCycle * 0.85, 18.0, delta);
+            npc.toolArm.rotation.z = dampLimb(npc.toolArm.rotation.z, Math.sin(time * 4.5) * 0.15, 14.0, delta);
+          }
+          if (npc.torso) {
+            npc.torso.position.y = TORSO_BASE_Y;
+            npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, Math.max(0, swingCycle * 0.15), 14.0, delta);
+            npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, 0, 10.0, delta);
+          }
+          if (npc.head) {
+            npc.head.position.y = HEAD_BASE_Y;
+            npc.head.rotation.x = dampLimb(npc.head.rotation.x, 0.12, 10.0, delta);
+          }
           npc.currentAction = 'Modelando o terreno e assentando vigas e fiadas';
           return;
         }
 
         if (npc.builderState === 'celebrating') {
-          // Celebratory jumping and cheering with arms raised!
           npc.cheerTimer -= delta;
-          const baseGroundY = this.terrain ? this.terrain.getElevation(npc.group.position.x, npc.group.position.z) : 0;
-          npc.group.position.y = baseGroundY + Math.abs(Math.sin(time * 14 + npc.walkCycle)) * 0.45;
+          const baseGroundY = this.getFloorElevation(npc.group.position.x, npc.group.position.z);
+          npc.group.position.y = baseGroundY + Math.abs(Math.sin(time * 14 + npc.walkCycle)) * 0.38;
 
-          npc.toolArm.rotation.x = -Math.PI * 0.75 + Math.sin(time * 8) * 0.25;
-          npc.torso.rotation.x = -0.1;
+          if (npc.toolArm) npc.toolArm.rotation.x = dampLimb(npc.toolArm.rotation.x, -Math.PI * 0.75 + Math.sin(time * 8) * 0.25, 16.0, delta);
+          if (npc.leftArm) npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, -Math.PI * 0.72 - Math.sin(time * 8) * 0.25, 16.0, delta);
+          if (npc.torso) {
+            npc.torso.position.y = TORSO_BASE_Y;
+            npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, -0.1, 12.0, delta);
+          }
           if (!npc.currentAction || !npc.currentAction.startsWith('🎉')) {
             npc.currentAction = '🎉 Comemorando a entrega da nova casa com a comunidade!';
           }
@@ -1141,20 +1509,20 @@ export class NPCManager {
         if (npc.rightLeg) npc.rightLeg.rotation.x = dampLimb(npc.rightLeg.rotation.x, 0, 12.0, delta);
         if (npc.leftArm) {
           npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, carryingLeftIdle ? -0.50 : 0, 10.0, delta);
-          npc.leftArm.position.y = dampLimb(npc.leftArm.position.y, 1.04 + idleBreath, 12.0, delta);
+          npc.leftArm.position.y = dampLimb(npc.leftArm.position.y, ARM_BASE_Y + idleBreath, 12.0, delta);
         }
         if (npc.rightArm) {
           npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, 0, 10.0, delta);
-          npc.rightArm.position.y = dampLimb(npc.rightArm.position.y, 1.04 + idleBreath, 12.0, delta);
+          npc.rightArm.position.y = dampLimb(npc.rightArm.position.y, ARM_BASE_Y + idleBreath, 12.0, delta);
         }
         if (npc.torso) {
           npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0, 10.0, delta);
           npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, 0, 10.0, delta);
           npc.torso.rotation.z = dampLimb(npc.torso.rotation.z, 0, 10.0, delta);
-          npc.torso.position.y = dampLimb(npc.torso.position.y, 0.85 + idleBreath, 12.0, delta);
+          npc.torso.position.y = dampLimb(npc.torso.position.y, TORSO_BASE_Y + idleBreath, 12.0, delta);
         }
         if (npc.head) {
-          npc.head.position.y = dampLimb(npc.head.position.y, 1.35 + idleBreath, 12.0, delta);
+          npc.head.position.y = dampLimb(npc.head.position.y, HEAD_BASE_Y + idleBreath, 12.0, delta);
         }
         return;
       }
@@ -1227,7 +1595,8 @@ export class NPCManager {
       }
 
       // Navegação Ordinária Guiada por Grafo Viário (Arestas Estritas de Ruas)
-      if (dist < 1.2 && (!npc.beachTrip || npc.beachTrip.state === 'idle')) {
+      const arriveDist = (npc.targetNodeId === 'sol_plaza_center') ? 2.1 : 1.2;
+      if (dist < arriveDist && (!npc.beachTrip || npc.beachTrip.state === 'idle')) {
         // Se estiver em rota direta por fila de nós, não pausa a cada metro; pausas só ocorrem esporadicamente
         npc.waitTimer = (npc.pathQueue && npc.pathQueue.length > 0) ? 0 : (Math.random() < 0.20 ? (0.6 + Math.random() * 0.8) : 0);
 
@@ -1402,7 +1771,7 @@ export class NPCManager {
             npc.currentAction = 'Caminhando pelas ruas da comunidade';
           }
         }
-      } else if (dist >= 1.2) {
+      } else if (dist >= arriveDist) {
         const normX = dirX / dist;
         const normZ = dirZ / dist;
 
@@ -1432,7 +1801,7 @@ export class NPCManager {
 
         // Balanço orgânico de ombros/tronco + stride bob + inclinação natural em curvas
         if (npc.torso) {
-          npc.torso.position.y = dampLimb(npc.torso.position.y, 0.85 + strideBob, 18.0, delta);
+          npc.torso.position.y = dampLimb(npc.torso.position.y, TORSO_BASE_Y + strideBob, 18.0, delta);
           npc.torso.rotation.x = dampLimb(npc.torso.rotation.x, 0.045, 10.0, delta);
           npc.torso.rotation.y = dampLimb(npc.torso.rotation.y, -swing * 0.14, 14.0, delta);
           npc.torso.rotation.z = dampLimb(npc.torso.rotation.z, Math.cos(npc.walkCycle) * 0.04 + turnBank, 12.0, delta);
@@ -1444,96 +1813,32 @@ export class NPCManager {
           npc.greetingTimer -= delta;
           if (npc.rightArm) {
             npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, -1.15 * Math.sin(npc.greetingTimer * Math.PI / 1.2), 18.0, delta);
-            npc.rightArm.position.y = 1.04 + strideBob;
+            npc.rightArm.position.y = ARM_BASE_Y + strideBob;
           }
           if (npc.leftArm) {
             npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, carryingLeft ? -0.55 : -swing * 0.45, 16.0, delta);
-            npc.leftArm.position.y = 1.04 + strideBob;
+            npc.leftArm.position.y = ARM_BASE_Y + strideBob;
           }
         } else {
           if (npc.leftArm) {
             npc.leftArm.rotation.x = dampLimb(npc.leftArm.rotation.x, carryingLeft ? (-0.52 + Math.sin(npc.walkCycle) * 0.08) : -swing * 0.65, 16.0, delta);
-            npc.leftArm.position.y = 1.04 + strideBob;
+            npc.leftArm.position.y = ARM_BASE_Y + strideBob;
           }
           if (npc.rightArm) {
             npc.rightArm.rotation.x = dampLimb(npc.rightArm.rotation.x, swing * 0.65, 16.0, delta);
-            npc.rightArm.position.y = 1.04 + strideBob;
+            npc.rightArm.position.y = ARM_BASE_Y + strideBob;
           }
         }
 
         // Rotação orgânica do olhar e leve acompanhamento da cabeça
         if (npc.head) {
-          npc.head.position.y = dampLimb(npc.head.position.y, 1.35 + strideBob * 0.85, 18.0, delta);
+          npc.head.position.y = dampLimb(npc.head.position.y, HEAD_BASE_Y + strideBob * 0.85, 18.0, delta);
           npc.glanceTimer = (npc.glanceTimer || 3.0) - delta;
           if (npc.glanceTimer <= 0) {
             npc.glanceTimer = 2.5 + Math.random() * 4.5;
             npc.targetHeadRotY = (Math.random() - 0.5) * 0.45;
           }
           npc.head.rotation.y = dampLimb(npc.head.rotation.y, (npc.targetHeadRotY || 0) + THREE.MathUtils.clamp(rotDiff * 0.25, -0.22, 0.22), 5.0, delta);
-        }
-      }
-
-      // 4. REAL-TIME OBSTACLE AVOIDANCE & TANGENTIAL WALL SLIDING:
-      // Pushes NPC away from house envelopes and glides tangentially around corners
-      // Completely prevents NPCs from getting stuck against walls or walking through buildings!
-      if (this.arch && this.arch.houses) {
-        for (let h = 0; h < this.arch.houses.length; h++) {
-          const house = this.arch.houses[h];
-          const hx = house.position.x;
-          const hz = house.position.z;
-          const hy = house.position.y;
-          const dx = npc.group.position.x - hx;
-          if (Math.abs(dx) > 3.8) continue;
-          const dz = npc.group.position.z - hz;
-          if (Math.abs(dz) > 3.8) continue;
-          const dy = npc.group.position.y - hy;
-          // Cobre toda a altura da casa incluindo fundações e palafitas na encosta (-6.5m até +4.0m)
-          if (dy > 4.0 || dy < -6.5) continue;
-
-          const distSq = dx * dx + dz * dz;
-          const minSafeDist = 2.45; // Raio seguro: impede 100% de entrar na parede ou passar sob palafitas
-
-          if (distSq < minSafeDist * minSafeDist && distSq > 0.0001) {
-            const distH = Math.sqrt(distSq);
-            // 1. Radial push to perimeter
-            const nx = dx / distH;
-            const nz = dz / distH;
-            npc.group.position.x = hx + nx * minSafeDist;
-            npc.group.position.z = hz + nz * minSafeDist;
-
-            // 2. Tangential wall glide around corners
-            const tanX = -nz;
-            const tanZ = nx;
-            const targetDirX = npc.targetPos.x - npc.group.position.x;
-            const targetDirZ = npc.targetPos.z - npc.group.position.z;
-            const dot = targetDirX * tanX + targetDirZ * tanZ;
-            const slideSign = dot >= 0 ? 1 : -1;
-
-            const slideDist = (npc.speed || 1.8) * delta * 1.35;
-            npc.group.position.x += tanX * slideSign * slideDist;
-            npc.group.position.z += tanZ * slideSign * slideDist;
-          }
-        }
-      }
-
-      // 4b. DESVIO DE PEDRAS COSTEIRAS, FAROL, CANOAS, BARRACAS, QUIOSQUES, FOGUEIRAS E PILARES DO PÍER:
-      if (this.resolvePropObstacles) {
-        this.resolvePropObstacles(
-          npc,
-          npc.targetPos ? npc.targetPos.x : npc.group.position.x,
-          npc.targetPos ? npc.targetPos.z : npc.group.position.z,
-          delta
-        );
-      }
-
-      // 4c. ZONA DE SANTUÁRIO EXCLUSIVA DO SEU AGENOR (Mirante Sul: x = 1.4, z = 2.8)
-      // Impede estritamente qualquer NPC de andar, colidir ou fundir no banco exclusivo do Seu Agenor!
-      if (npc.citizenName !== 'Seu Agenor') {
-        const dAgenor = Math.hypot(npc.group.position.x - 1.4, npc.group.position.z - 2.8);
-        if (dAgenor < 1.75 && dAgenor > 0.001) {
-          const ang = Math.atan2(npc.group.position.z - 2.8, npc.group.position.x - 1.4);
-          npc.group.position.x = 1.4 + Math.cos(ang) * 1.75;
-          npc.group.position.z = 2.8 + Math.sin(ang) * 1.75;
         }
       }
 
@@ -1549,7 +1854,6 @@ export class NPCManager {
               npc.group.position.z - npc.stuckLastPos.z
             );
             if (distTraveled < 0.42) {
-              // Preso em obstáculo: seleciona outro vizinho conectado no grafo viário
               const curId = npc.currentNodeId || (this.getNearestRoadNode(npc.group.position.x, npc.group.position.z) ? this.getNearestRoadNode(npc.group.position.x, npc.group.position.z).id : 'alameda_crossroads');
               const cNode = (this.roadNodesMap && this.roadNodesMap.get(curId)) || null;
               if (cNode && cNode.neighbors && cNode.neighbors.length > 0) {
@@ -1560,7 +1864,6 @@ export class NPCManager {
                   npc.targetPos.y = this.getFloorElevation(nxt.position.x, nxt.position.z);
                 }
               }
-              // Impulso sutil de desvio lateral
               npc.group.position.x += (Math.random() - 0.5) * 0.6;
               npc.group.position.z += (Math.random() - 0.5) * 0.6;
             }
@@ -1578,40 +1881,15 @@ export class NPCManager {
               npc.group.position.z - npc.stuckLastPos.z
             );
             if (distTraveled < 0.35) {
-              // Construtor bloqueado: reposiciona suavemente no nó pavimentado mais próximo em vez de teletransporte aleatório
               const curY = npc.group.position.y || (this.terrain ? this.terrain.getElevation(npc.group.position.x, npc.group.position.z) : 0);
               const safeRoad = this.getNearestRoadNode(npc.group.position.x, npc.group.position.z, curY);
               if (safeRoad) {
-                npc.group.position.set(safeRoad.x, safeRoad.y + 0.1, safeRoad.z);
+                npc.group.position.set(safeRoad.x, this.getFloorElevation(safeRoad.x, safeRoad.z), safeRoad.z);
               }
             }
           }
           if (!npc.stuckLastPos) npc.stuckLastPos = new THREE.Vector3();
           npc.stuckLastPos.copy(npc.group.position);
-        }
-      }
-
-      // 6. SOCCER FIELD PERIMETER FENCE AVOIDANCE:
-      // Non-players stay strictly outside the soccer pitch bounding box
-      if (npc.role !== 'Jogador da Pelada') {
-        const minX = 43.2;
-        const maxX = 66.8;
-        const minZ = -3.6;
-        const maxZ = 11.6;
-        const px = npc.group.position.x;
-        const pz = npc.group.position.z;
-
-        if (px > minX && px < maxX && pz > minZ && pz < maxZ) {
-          const dLeft = px - minX;
-          const dRight = maxX - px;
-          const dTop = pz - minZ;
-          const dBottom = maxZ - pz;
-          const minD = Math.min(dLeft, dRight, dTop, dBottom);
-
-          if (minD === dLeft) npc.group.position.x = minX;
-          else if (minD === dRight) npc.group.position.x = maxX;
-          else if (minD === dTop) npc.group.position.z = minZ;
-          else npc.group.position.z = maxZ;
         }
       }
     });
@@ -1622,15 +1900,13 @@ export class NPCManager {
     for (let i = 0; i < this.npcs.length; i++) {
       const n1 = this.npcs[i];
       const p1 = n1.group.position;
-      const n1Static = n1.isSitting || n1.isScenicMirante || n1.isBeachSeated;
+      const n1Static = n1.isSitting || n1.isScenicMirante || n1.isBeachSeated || n1.isBarraqueiro || n1.isAthlete || n1.isCalistenia || n1.isCapoeira || n1.isHorta || n1.isMototaxi || n1.isSurfer || n1.isFisherman;
 
       for (let j = i + 1; j < this.npcs.length; j++) {
         const n2 = this.npcs[j];
         const p2 = n2.group.position;
-        const n2Static = n2.isSitting || n2.isScenicMirante || n2.isBeachSeated;
-        // Se ambos forem estáticos:
+        const n2Static = n2.isSitting || n2.isScenicMirante || n2.isBeachSeated || n2.isBarraqueiro || n2.isAthlete || n2.isCalistenia || n2.isCapoeira || n2.isHorta || n2.isMototaxi || n2.isSurfer || n2.isFisherman;
         if (n1Static && n2Static) {
-          // Se um deles for Seu Agenor no Mirante Sul (1.4, 2.8), o outro NPC NÃO PODE sentar ou ocupar o mesmo local!
           if (n1.citizenName === 'Seu Agenor' && Math.hypot(p2.x - 1.4, p2.z - 2.8) < 2.0) {
             n2.isSitting = false;
             if (n2.sittingSpot) n2.sittingSpot.isOccupied = false;
@@ -1659,22 +1935,18 @@ export class NPCManager {
           const nz = dz / d;
 
           if (n1Static) {
-            // n1 está sentado ou é cênico (ex: Seu Agenor no banco): n2 (caminhante) é 100% repelido!
             p2.x += nx * push;
             p2.z += nz * push;
           } else if (n2Static) {
-            // n2 está sentado/cênico: n1 (caminhante) é 100% repelido!
             p1.x -= nx * push;
             p1.z -= nz * push;
           } else {
-            // Ambos em movimento: empurrão mútuo equilibrado
             p1.x -= nx * push * 0.5;
             p1.z -= nz * push * 0.5;
             p2.x += nx * push * 0.5;
             p2.z += nz * push * 0.5;
           }
 
-          // Cumprimento afetuoso esporádico entre vizinhos cruzando ladeiras
           if ((!n1.greetingTimer || n1.greetingTimer <= 0) && (!n2.greetingTimer || n2.greetingTimer <= 0) && Math.random() < 0.20) {
             n1.greetingTimer = 1.2;
             n2.greetingTimer = 1.2;
@@ -1683,44 +1955,40 @@ export class NPCManager {
       }
     }
 
-    // PASSO FINAL DE ATERRAMENTO E BARREIRAS PÓS-SEPARAÇÃO FÍSICA:
-    // Garante que nenhum empurrão de colisão ou separação deixe um NPC flutuando fora da malha real do terreno!
+    // PASSO FINAL DE COLISÕES, BARREIRAS E ATERRAMENTO EXATO:
+    // Garante que caminhantes, carreteiros, construtores e sambistas em trânsito nunca atravessem paredes/estruturas nem flutuem!
     for (let i = 0; i < this.npcs.length; i++) {
       const npc = this.npcs[i];
       const pos = npc.group.position;
 
-      // Re-aplicar barreira frontal do Morro do Sol caso a separação tenha empurrado alguém
-      if (!npc.isScenicMirante && pos.x >= -12.5 && pos.x <= 12.5 && pos.z >= 3.0 && pos.z <= 16.8) {
-        pos.z = pos.z < 9.5 ? 2.4 : 17.6;
+      if (npc.isBarraqueiro && npc.assignedStall && npc.assignedStall.vendorSpot) {
+        pos.copy(npc.assignedStall.vendorSpot);
+        npc.group.rotation.y = 0;
+        continue;
       }
 
-      // Re-aplicar barreira do Campinho de Várzea
-      if (npc.role !== 'Jogador da Pelada' && pos.x >= 40.0 && pos.x <= 70.0 && pos.z >= -5.5 && pos.z <= 13.5) {
-        if (pos.z < 3.5) {
-          pos.x = pos.x < 55.0 ? 37.0 : 73.0;
-        } else {
-          pos.z = 14.5;
-        }
-      }
+      const isMovableLandNPC =
+        !npc.isSitting &&
+        !npc.isBeachSeated &&
+        !npc.isScenicMirante &&
+        !npc.isBarraqueiro &&
+        !npc.isFisherman &&
+        !npc.isAthlete &&
+        !npc.isCapoeira &&
+        !npc.isHorta &&
+        !npc.isMototaxi &&
+        !npc.isSurfer &&
+        !npc.isCalistenia &&
+        npc.role !== 'Jogador da Pelada' &&
+        !(npc.sambaState && npc.sambaState.isActive) &&
+        !(npc.beachState && (npc.beachState.mode === 'swimming_chest' || npc.beachState.mode === 'to_swimming' || npc.beachState.mode === 'exiting_water'));
 
-      // Barreira de proteção do Píer dos Pescadores:
-      // Quem está no píer elevado (z >= 60.5 && z <= 96.0 && Math.abs(pos.x - (-78.0)) < 3.2)
-      // fica rigidamente mantido entre os guarda-corpos do pranchão de madeira (x = -78.0 ± 0.45m max)!
-      if (pos.z >= 60.5 && pos.z <= 96.0 && Math.abs(pos.x - (-78.0)) < 3.2) {
-        pos.x = -78.0 + Math.max(-0.45, Math.min(0.45, pos.x - (-78.0)));
-      }
-      // Se um pedestre que NÃO é banhista nadador cair na água ao lado dos pilares do píer:
-      if (!npc.isDedicatedBeachgoer && Math.abs(pos.x - (-78.0)) <= 6.5 && pos.z >= 64.0 && pos.z <= 98.0) {
-        if (Math.abs(pos.x - (-78.0)) > 1.2 || pos.y < 1.0) {
-          // Reposiciona com segurança no calçadão seco antes da rampa
-          pos.x = -78.0;
-          pos.z = 54.0;
-          npc.targetPos = new THREE.Vector3(-78.0, this.getFloorElevation(-78.0, 54.0), 54.0);
-        }
+      if (isMovableLandNPC) {
+        this.resolveHouseAndWorldObstacles(npc, delta);
       }
 
       // Aterramento exato final no piso triangulado (exceto poses especiais que controlam o próprio Y)
-      if (npc.builderState !== 'celebrating' && !npc.isScenicMirante && !npc.isSitting && !npc.isBeachCustomY && !npc.isBeachSeated) {
+      if (npc.builderState !== 'celebrating' && !npc.isScenicMirante && !npc.isSitting && !npc.isBeachCustomY && !npc.isBeachSeated && !npc.isBarraqueiro && !npc.isAthlete && !npc.isCalistenia && !(npc.sambaState && npc.sambaState.isActive && npc.sambaState.slotIndex < 10)) {
         pos.y = this.getFloorElevation(pos.x, pos.z);
       }
     }

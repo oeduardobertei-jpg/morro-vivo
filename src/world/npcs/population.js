@@ -149,6 +149,7 @@ function _getFigCache() {
       at(RB(0.125, 0.055, 0.095, 0.028), 0, -0.455, -0.018)
     ),
     sole: at(RB(0.152, 0.028, 0.238, 0.01, 1), 0, -0.53, 0.03),
+    bareFoot: at(RB(0.138, 0.055, 0.215, 0.024, 1), 0, -0.517, 0.03),
     sunga: RB(0.39, 0.15, 0.245, 0.048)
   };
   return _figCache;
@@ -280,6 +281,8 @@ export function createStylizedFigure(opts = {}) {
         { geo: C.shoe, color: shoeColor },
         { geo: C.sole, color: soleHex }
       );
+    } else {
+      legParts.push({ geo: C.bareFoot, color: skinColor, skinWarm: true });
     }
     const legGeo = mergeColoredParts(legParts);
     leftLeg = new THREE.Mesh(legGeo, vMat);
@@ -340,11 +343,12 @@ export const PopulationMixin = {
         color: cfg.color,
         stallId: cfg.stallId
       };
-      const bPos = new THREE.Vector3(cfg.x, 0.6, cfg.z);
-      if (this.terrain) bPos.y = this.terrain.getElevation(bPos.x, bPos.z);
-
       const stallObj = this.arch && this.arch.beachStalls ? this.arch.beachStalls.find(s => s.id === cfg.stallId) : null;
+      const bPos = (stallObj && stallObj.vendorSpot)
+        ? stallObj.vendorSpot.clone()
+        : new THREE.Vector3(cfg.x, this.terrain ? this.terrain.getElevation(cfg.x, 42.8) + 0.40 : 0.6, 42.8);
       const bNPC = this.createNPCMesh(cfg.name, stallRole, bPos, [bPos], 100 + idx, null, stallObj);
+      bNPC.group.rotation.y = 0;
       this.npcs.push(bNPC);
     });
 
@@ -373,7 +377,8 @@ export const PopulationMixin = {
         z: -4.0,
         rot: 1.1,
         isScenicMirante: true,
-        isMusician: true
+        isMusician: true,
+        customOpts: { forcedShirtColor: 0xF8FAFC, forcedStripeColor: 0xDC2626, forceStripe: true, forcedHat: 'panama' }
       },
       {
         name: 'Seu Agenor',
@@ -391,16 +396,16 @@ export const PopulationMixin = {
 
     miranteConfigs.forEach((cfg, idx) => {
       const mPos = new THREE.Vector3(cfg.x, this.getFloorElevation(cfg.x, cfg.z), cfg.z);
-      const mNPC = this.createNPCMesh(cfg.name, cfg.role, mPos, [mPos], 200 + idx);
+      const mNPC = this.createNPCMesh(cfg.name, cfg.role, mPos, [mPos], 200 + idx, null, null, null, cfg.customOpts || {});
       mNPC.isScenicMirante = true;
       mNPC.isMusician = !!cfg.isMusician;
       mNPC.group.rotation.y = cfg.rot;
 
       if (cfg.isMusician) {
-        // Cavaquinho low-poly fixado ergonomicamente ao Tião
+        // Cavaquinho low-poly fixado ergonomicamente ao Tião (acompanha o tronco na ginga!)
         const cavacoGroup = new THREE.Group();
-        cavacoGroup.position.set(0.12, 0.72, 0.28);
-        cavacoGroup.rotation.set(-0.25, 0.45, -0.65);
+        cavacoGroup.position.set(0.05, 0.0, 0.24);
+        cavacoGroup.rotation.set(-0.22, 0.42, -0.65);
 
         const bodyGeo = new THREE.BoxGeometry(0.32, 0.42, 0.12);
         const bodyMat = new THREE.MeshLambertMaterial({ color: 0xB45309, flatShading: true });
@@ -418,7 +423,8 @@ export const PopulationMixin = {
         soundHole.position.set(0, 0, 0.07);
         cavacoGroup.add(soundHole);
 
-        mNPC.group.add(cavacoGroup);
+        if (mNPC.torso) mNPC.torso.add(cavacoGroup);
+        else mNPC.group.add(cavacoGroup);
         mNPC.cavacoGroup = cavacoGroup;
       } else if (cfg.name === 'Seu Agenor') {
         // Seu Agenor sentado ergonomicamente no banco do Mirante Sul
@@ -438,7 +444,7 @@ export const PopulationMixin = {
 
     // 3. Personagens Autênticos dos Extremos da Praia (Atualização 1.2)
     // 3a. Seu Zé do Covo - Pescador Artesanal no Píer Oeste
-    const pierFloorY = 1.58;
+    const pierFloorY = this.getFloorElevation(-77.8, 92.2);
     const zePos = new THREE.Vector3(-77.8, pierFloorY, 92.2);
     const zeRole = {
       title: 'Pescador Tradicional',
@@ -448,16 +454,21 @@ export const PopulationMixin = {
     const zeNPC = this.createNPCMesh('Seu Zé do Covo', zeRole, zePos, [zePos], 301);
     zeNPC.isFisherman = true;
     zeNPC.group.rotation.y = 0; // Olhando para o mar aberto ao sul
-    
-    // Vara de bambu na mão do Seu Zé
+
+    // Vara de bambu acoplada à mão direita do Seu Zé com linha de pesca
+    const zeRodGroup = new THREE.Group();
+    zeRodGroup.position.set(0.02, -0.44, 0.05);
+    zeRodGroup.rotation.set(Math.PI * 0.42, 0, 0);
+    const zeRodGeo = new THREE.CylinderGeometry(0.014, 0.026, 2.7, 5);
+    zeRodGeo.translate(0, 1.35, 0);
     const zeRod = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.015, 0.025, 2.8, 4),
+      zeRodGeo,
       new THREE.MeshLambertMaterial({ color: 0xD97706, flatShading: true })
     );
-    zeRod.position.set(0.35, 1.1, 0.8);
-    zeRod.rotation.set(Math.PI / 3.8, 0, 0);
-    zeNPC.group.add(zeRod);
-    zeNPC.fishingRod = zeRod;
+    zeRodGroup.add(zeRod);
+    if (zeNPC.rightArm) zeNPC.rightArm.add(zeRodGroup);
+    else zeNPC.group.add(zeRodGroup);
+    zeNPC.fishingRod = zeRodGroup;
     this.npcs.push(zeNPC);
 
     // 3b. Betinho & Pedrão - Dupla de Futevôlei Carioca (Quadra em x: 78, z: 42)
@@ -526,38 +537,45 @@ export const PopulationMixin = {
       action: 'Circulando pelas areias da praia com seus galões de Mate gelado e Biscoito Globo',
       color: 0xF97316
     };
-    const mateNPC = this.createNPCMesh('Beto do Mate', mateRole, matePos, [matePos], 306);
+    const mateNPC = this.createNPCMesh('Beto do Mate', mateRole, matePos, [matePos], 306, null, null, null, {
+      forcedShirtColor: 0xF8FAFC,
+      forcedPantsColor: 0xF97316,
+      forcedHat: 'visor_orange',
+      bareFoot: true,
+      forceFlipFlop: true
+    });
     mateNPC.isMateiro = true;
-    this.setNPCBeachOutfit(mateNPC, true);
 
     // Galões de mate nas costas e ombros
     const canisterGroup = new THREE.Group();
-    canisterGroup.position.set(0, 0.85, 0);
+    canisterGroup.position.set(0, 0.0, -0.15);
 
     const mateCanister = new THREE.Mesh(
       new THREE.CylinderGeometry(0.12, 0.12, 0.55, 6),
       new THREE.MeshLambertMaterial({ color: 0xEA580C, flatShading: true }) // Laranja Mate Leão
     );
-    mateCanister.position.set(-0.28, 0, -0.15);
+    mateCanister.position.set(-0.26, 0, -0.04);
     canisterGroup.add(mateCanister);
 
     const limaoCanister = new THREE.Mesh(
       new THREE.CylinderGeometry(0.12, 0.12, 0.55, 6),
       new THREE.MeshLambertMaterial({ color: 0xFACC15, flatShading: true }) // Amarelo Limão
     );
-    limaoCanister.position.set(0.28, 0, -0.15);
+    limaoCanister.position.set(0.26, 0, -0.04);
     canisterGroup.add(limaoCanister);
 
-    // Sacola de Biscoito Globo na mão
+    if (mateNPC.torso) mateNPC.torso.add(canisterGroup);
+    else mateNPC.group.add(canisterGroup);
+    mateNPC.canisterGroup = canisterGroup;
+
+    // Sacola de Biscoito Globo presa na mão direita do Beto
     const globoBag = new THREE.Mesh(
       new THREE.BoxGeometry(0.22, 0.28, 0.16),
       new THREE.MeshLambertMaterial({ color: 0xFEF08A, flatShading: true })
     );
-    globoBag.position.set(0.35, -0.2, 0.12);
-    canisterGroup.add(globoBag);
-
-    mateNPC.group.add(canisterGroup);
-    mateNPC.canisterGroup = canisterGroup;
+    globoBag.position.set(0.03, -0.46, 0.08);
+    if (mateNPC.rightArm) mateNPC.rightArm.add(globoBag);
+    else mateNPC.group.add(globoBag);
 
     mateNPC.beachPatrolSpots = [
       { x: -215, z: 46 },
@@ -585,33 +603,34 @@ export const PopulationMixin = {
       action: 'Gingando no terreiro e ensinando a tradição afro-brasileira ao som do berimbau',
       color: 0xF8FAFC
     };
-    const mestreNPC = this.createNPCMesh('Mestre Bimba', capoeiraRole, capoeiraPos, [capoeiraPos], 310);
+    const mestreNPC = this.createNPCMesh('Mestre Bimba', capoeiraRole, capoeiraPos, [capoeiraPos], 310, null, null, null, {
+      forcedShirtColor: 0xF8FAFC,
+      forcedPantsColor: 0xF8FAFC,
+      bareFoot: true,
+      hideCityDetails: true
+    });
     mestreNPC.isCapoeira = true;
     mestreNPC.group.rotation.y = 1.2;
-    const whiteAbadaMat = this._getSharedLambertMat(0xF8FAFC, true);
-    mestreNPC.cityLegMat = whiteAbadaMat;
-    mestreNPC.cityTorsoMat = whiteAbadaMat;
-    if (mestreNPC.leftLeg) mestreNPC.leftLeg.material = whiteAbadaMat;
-    if (mestreNPC.rightLeg) mestreNPC.rightLeg.material = whiteAbadaMat;
-    if (mestreNPC.torso) mestreNPC.torso.material = whiteAbadaMat;
-    const cordao = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.07, 0.34), this._getSharedLambertMat(0xDC2626, true));
-    cordao.position.set(0, 0.56, 0);
-    mestreNPC.group.add(cordao);
+    const cordao = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.065, 0.28), this._getSharedLambertMat(0xDC2626, true));
+    cordao.position.set(0, -0.28, 0);
+    if (mestreNPC.torso) mestreNPC.torso.add(cordao);
+    else mestreNPC.group.add(cordao);
     this.npcs.push(mestreNPC);
 
-    // 2. Dona Nair - Horta Comunitária da Encosta (-92, -25)
-    const hortaPos = new THREE.Vector3(-92.0, this.getFloorElevation(-92.0, -25.0), -25.0);
+    // 2. Dona Nair - Horta Comunitária da Encosta (-92, -23 -> portão livre fora do espantalho!)
+    const hortaPos = new THREE.Vector3(-92.0, this.getFloorElevation(-92.0, -23.0), -23.0);
     const hortaRole = {
       title: 'Agricultora Comunitária',
       action: 'Cultivando hortaliças frescas, couve e temperos na horta em socalcos',
       color: 0x15803D
     };
-    const donaNair = this.createNPCMesh('Dona Nair', hortaRole, hortaPos, [hortaPos], 311);
+    const donaNair = this.createNPCMesh('Dona Nair', hortaRole, hortaPos, [hortaPos], 311, null, null, null, {
+      forcedShirtColor: 0x16A34A,
+      forcedPantsColor: 0x78350F,
+      forcedHat: 'farm'
+    });
     donaNair.isHorta = true;
-    donaNair.group.rotation.y = -0.8;
-    const nairGreenMat = this._getSharedLambertMat(0x16A34A, true);
-    donaNair.cityTorsoMat = nairGreenMat;
-    if (donaNair.torso) donaNair.torso.material = nairGreenMat;
+    donaNair.group.rotation.y = Math.PI;
     this.npcs.push(donaNair);
 
     // 3. Tiago Mototáxi - Ponto de Mototáxi do Levante (92, 14)
@@ -621,12 +640,14 @@ export const PopulationMixin = {
       action: 'Aguardando passageiros no ponto oficial para transportes ágeis pelas ladeiras',
       color: 0xEAB308
     };
-    const tiagoMoto = this.createNPCMesh('Tiago Mototáxi', motoRole, motoPos, [motoPos], 312);
+    const tiagoMoto = this.createNPCMesh('Tiago Mototáxi', motoRole, motoPos, [motoPos], 312, null, null, null, {
+      forcedShirtColor: 0xFACC15,
+      forcedStripeColor: 0x1E293B,
+      forceStripe: true,
+      forcedHat: 'helmet_moto'
+    });
     tiagoMoto.isMototaxi = true;
     tiagoMoto.group.rotation.y = -1.6;
-    const motoYellowMat = this._getSharedLambertMat(0xFACC15, true);
-    tiagoMoto.cityTorsoMat = motoYellowMat;
-    if (tiagoMoto.torso) tiagoMoto.torso.material = motoYellowMat;
     this.npcs.push(tiagoMoto);
 
     // 4. Guga do Surfe - Escola de Surfe das Dunas (126, 58)
@@ -636,28 +657,34 @@ export const PopulationMixin = {
       action: 'Encerando pranchas e instruindo jovens nas ondas cristalinas do mar',
       color: 0x0EA5E9
     };
-    const gugaSurf = this.createNPCMesh('Guga do Surfe', surfRole, surfPos, [surfPos], 313);
+    const gugaSurf = this.createNPCMesh('Guga do Surfe', surfRole, surfPos, [surfPos], 313, null, null, null, {
+      forcedShirtColor: 0x0EA5E9,
+      sleeveless: true,
+      forcedPantsColor: 0x0284C7,
+      bareFoot: true
+    });
     gugaSurf.isSurfer = true;
-    this.setNPCBeachOutfit(gugaSurf, true);
-    gugaSurf.group.rotation.y = 0.4;
-    const waxBlock = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.1, 0.18), this._getSharedLambertMat(0xFEF08A, true));
-    waxBlock.position.set(0.35, 0.4, 0.15);
-    gugaSurf.group.add(waxBlock);
+    gugaSurf.group.rotation.y = Math.PI - 0.35;
+    const waxBlock = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.08, 0.14), this._getSharedLambertMat(0xFEF08A, true));
+    waxBlock.position.set(0.0, -0.46, 0.06);
+    if (gugaSurf.rightArm) gugaSurf.rightArm.add(waxBlock);
+    else gugaSurf.group.add(waxBlock);
     this.npcs.push(gugaSurf);
 
-    // 5. Jonas da Calistenia - Academia ao Ar Livre (112, -12)
-    const calPos = new THREE.Vector3(112.0, this.getFloorElevation(112.0, -12.0), -12.0);
+    // 5. Jonas da Calistenia - Academia ao Ar Livre (exatamente entre as barras paralelas em 114.4, -10.8)
+    const calPos = new THREE.Vector3(114.4, this.getFloorElevation(114.4, -10.8), -10.8);
     const calRole = {
       title: 'Atleta de Calistenia',
       action: 'Executando séries de barras paralelas e flexões na academia ao ar livre',
       color: 0x1E293B
     };
-    const jonasCal = this.createNPCMesh('Jonas da Calistenia', calRole, calPos, [calPos], 314);
+    const jonasCal = this.createNPCMesh('Jonas da Calistenia', calRole, calPos, [calPos], 314, null, null, null, {
+      forcedShirtColor: 0x0F172A,
+      sleeveless: true,
+      forcedPantsColor: 0x1E293B
+    });
     jonasCal.isCalistenia = true;
-    jonasCal.group.rotation.y = 0.2;
-    const calDarkMat = this._getSharedLambertMat(0x0F172A, true);
-    jonasCal.cityTorsoMat = calDarkMat;
-    if (jonasCal.torso) jonasCal.torso.material = calDarkMat;
+    jonasCal.group.rotation.y = Math.PI / 2;
     this.npcs.push(jonasCal);
 
     // 5b. Anfitriões dos Botecos e Vendas das Vilas Expandidas (Oeste, Leste e Norte)
@@ -796,6 +823,16 @@ export const PopulationMixin = {
       at(RB(0.13, 0.06, 0.10, 0.03), 0, -0.49, -0.02) // tornozelo/cano do tênis
     );
     const soleGeo = at(RB(0.158, 0.03, 0.255, 0.012, 1), 0, -0.567, 0.035);
+    const bareFootGeo = at(RB(0.138, 0.062, 0.225, 0.028, 1), 0, -0.549, 0.032);
+    const flipFlopSoleGeo = at(RB(0.148, 0.026, 0.238, 0.01, 1), 0, -0.569, 0.032);
+    const strapL = RB(0.022, 0.026, 0.115, 0.008, 1);
+    strapL.rotateY(-0.38);
+    const strapR = RB(0.022, 0.026, 0.115, 0.008, 1);
+    strapR.rotateY(0.38);
+    const flipFlopStrapGeo = merge(
+      at(strapL, -0.026, -0.514, 0.058),
+      at(strapR, 0.026, -0.514, 0.058)
+    );
 
     // Braço com ombro arredondado (deltoide) + manga; antebraço cilíndrico com MÃO esculpida
     const sleeveGeo = merge(
@@ -850,6 +887,8 @@ export const PopulationMixin = {
       shirt: shirtM,
       shirtF,
       chestStripe: at(RB(0.48, 0.11, 0.285, 0.05), 0, 0.0, 0),
+      chestBandUpper: at(RB(0.478, 0.075, 0.282, 0.03), 0, 0.13, 0),
+      chestBandLower: at(RB(0.415, 0.075, 0.252, 0.03), 0, -0.04, 0),
       collar: new THREE.CylinderGeometry(0.115, 0.135, 0.05, 10),
       jacketLapel: RB(0.12, 0.58, 0.285, 0.045),
       necklace: (() => { const g = new THREE.TorusGeometry(0.105, 0.014, 4, 10); g.rotateX(Math.PI / 2.4); return g; })(),
@@ -858,6 +897,7 @@ export const PopulationMixin = {
       belt: RB(0.40, 0.05, 0.25, 0.02),
       buckle: new THREE.BoxGeometry(0.05, 0.04, 0.01),
       skirt: new THREE.CylinderGeometry(0.20, 0.27, 0.30, 12, 1, false),
+      skirtHem: new THREE.CylinderGeometry(0.256, 0.276, 0.055, 12, 1, false),
       neck: new THREE.CylinderGeometry(0.072, 0.084, 0.13, 8),
       apron: RB(0.40, 0.52, 0.035, 0.015),
       armSleeve: sleeveGeo,
@@ -890,6 +930,9 @@ export const PopulationMixin = {
       calf: calfGeo,
       shoe: shoeGeo,
       sole: soleGeo,
+      bareFoot: bareFootGeo,
+      flipFlopSole: flipFlopSoleGeo,
+      flipFlopStrap: flipFlopStrapGeo,
       sunga: RB(0.40, 0.15, 0.255, 0.05),
       // Penteados & Chapéus Autênticos (formas arredondadas e volumosas)
       hairShortTop: RB(0.33, 0.10, 0.32, 0.045),
@@ -901,9 +944,18 @@ export const PopulationMixin = {
       hairBun: new THREE.SphereGeometry(0.105, 8, 6),
       hairPonytail: new THREE.CapsuleGeometry(0.048, 0.18, 2, 6),
       hairFringe: RB(0.30, 0.05, 0.05, 0.02, 1),
+      hairBraids: merge(
+        at(new THREE.CapsuleGeometry(0.03, 0.17, 2, 5), -0.14, 0.01, -0.03),
+        at(new THREE.CapsuleGeometry(0.03, 0.17, 2, 5), 0.14, 0.01, -0.03),
+        at(new THREE.CapsuleGeometry(0.03, 0.18, 2, 5), -0.09, -0.02, -0.13),
+        at(new THREE.CapsuleGeometry(0.03, 0.18, 2, 5), 0.0, -0.02, -0.14),
+        at(new THREE.CapsuleGeometry(0.03, 0.18, 2, 5), 0.09, -0.02, -0.13)
+      ),
       headband: RB(0.335, 0.05, 0.325, 0.02),
       turbanCrown: new THREE.SphereGeometry(0.195, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.62),
       turbanKnot: new THREE.IcosahedronGeometry(0.075, 0),
+      bucketBrim: new THREE.CylinderGeometry(0.185, 0.27, 0.055, 12),
+      bucketCrown: new THREE.CylinderGeometry(0.155, 0.18, 0.11, 10),
       panamaBrim: new THREE.CylinderGeometry(0.30, 0.32, 0.03, 12),
       panamaCrown: new THREE.CylinderGeometry(0.16, 0.19, 0.15, 10),
       panamaBand: new THREE.CylinderGeometry(0.185, 0.192, 0.04, 10),
@@ -924,7 +976,12 @@ export const PopulationMixin = {
       crate: new THREE.BoxGeometry(0.32, 0.22, 0.28),
       fruit: new THREE.SphereGeometry(0.09, 6, 5),
       cup: new THREE.CylinderGeometry(0.08, 0.06, 0.20, 8),
+      cocoBody: new THREE.DodecahedronGeometry(0.115, 0),
+      cocoTop: new THREE.CylinderGeometry(0.058, 0.058, 0.02, 7),
       straw: new THREE.CylinderGeometry(0.012, 0.012, 0.26, 4),
+      pandeiroFrame: (() => { const g = new THREE.TorusGeometry(0.155, 0.022, 4, 12); g.rotateX(Math.PI / 2); return g; })(),
+      pandeiroSkin: new THREE.CylinderGeometry(0.148, 0.148, 0.016, 12),
+      pandeiroJingle: new THREE.CylinderGeometry(0.028, 0.028, 0.024, 6),
       shades: merge(
         at(RB(0.115, 0.06, 0.02, 0.02, 1), -0.068, 0, 0),
         at(RB(0.115, 0.06, 0.02, 0.02, 1), 0.068, 0, 0),
@@ -961,8 +1018,17 @@ export const PopulationMixin = {
       { geo: G.fruit, color: 0xEA580C, pos: [0, 0.12, 0] }
     ]));
     this._npcMergedCache.set('hand_drink', mergeColoredParts([
-      { geo: G.cup, color: 0x10B981 },
-      { geo: G.straw, color: 0xFEF08A, pos: [0.02, 0.12, 0], rot: [0, 0, -0.2] }
+      { geo: G.cocoBody, color: 0x2D6A4F },
+      { geo: G.cocoTop, color: 0xFEF3C7, pos: [0, 0.092, 0] },
+      { geo: G.straw, color: 0xFACC15, pos: [0.02, 0.15, 0], rot: [0, 0, -0.22] }
+    ]));
+    this._npcMergedCache.set('hand_pandeiro', mergeColoredParts([
+      { geo: G.pandeiroFrame, color: 0x78350F },
+      { geo: G.pandeiroSkin, color: 0xFEF3C7 },
+      { geo: G.pandeiroJingle, color: 0xFACC15, pos: [0.155, 0, 0] },
+      { geo: G.pandeiroJingle, color: 0xFACC15, pos: [-0.155, 0, 0] },
+      { geo: G.pandeiroJingle, color: 0xFACC15, pos: [0, 0, 0.155] },
+      { geo: G.pandeiroJingle, color: 0xFACC15, pos: [0, 0, -0.155] }
     ]));
     this._npcMergedCache.set('builder_helmet', mergeColoredParts([
       { geo: G.helmetCrown, color: 0xFACC15, pos: [0, 1.60, 0] },
@@ -1014,7 +1080,7 @@ export const PopulationMixin = {
     return m;
   },
 
-  createNPCMesh(name, role, startPos, waypoints, index, team = null, stallObj = null, tacticalRole = null) {
+  createNPCMesh(name, role, startPos, waypoints, index, team = null, stallObj = null, tacticalRole = null, customOpts = {}) {
     this._ensureSharedNPCAssets();
     const G = this._sharedNPCGeos;
     const npcGroup = new THREE.Group();
@@ -1085,6 +1151,9 @@ export const PopulationMixin = {
     if (isSoccerPlayer && team) {
       shirtColor = (team === 'yellow') ? 0xFACC15 : 0x0284C7;
     }
+    if (customOpts.forcedShirtColor !== undefined) {
+      shirtColor = customOpts.forcedShirtColor;
+    }
 
     const cityTorsoMat = isBarraqueiro
       ? this._getSharedLambertMat(0xF8FAFC, true)
@@ -1102,26 +1171,42 @@ export const PopulationMixin = {
     npcGroup.add(torso);
 
     // Saia/vestido rodado para parte das moradoras (pernas à mostra em tom de pele)
-    const wearsSkirt = isFemale && !isBarraqueiro && !isBanhista && !isSoccerPlayer && (seedB % 3 === 0);
+    const wearsSkirt = isFemale && !isBarraqueiro && !isBanhista && !isSoccerPlayer && !customOpts.hideCityDetails && (seedB % 3 === 0);
     const darkenColor = (hex, k) => new THREE.Color(hex).multiplyScalar(k).getHex();
     const vMat = this._npcVertexMat;
 
     // Detalhes de vestuário urbano no tronco compactados em 1 único draw call (gola, listra, colete, cordão, cinto/saia, mochila, avental)
     const cityParts = [];
 
-    if (!isBarraqueiro && !isBanhista) {
-      const styleVariant = (index + seedA) % 5;
+    if (!isBarraqueiro && !isBanhista && !customOpts.hideCityDetails) {
+      const styleVariant = customOpts.forceStripe ? 0 : (index + seedA) % 6;
       if (styleVariant === 0 || isSoccerPlayer) {
         const stripeColors = [0xF8FAFC, 0x111827, 0xFACC15, 0xEF4444, 0x38BDF8];
-        const stripeCol = isSoccerPlayer
-          ? (team === 'yellow' ? 0x15803D : 0xF8FAFC)
-          : stripeColors[seedB % stripeColors.length];
+        const stripeCol = customOpts.forcedStripeColor !== undefined
+          ? customOpts.forcedStripeColor
+          : (isSoccerPlayer
+            ? (team === 'yellow' ? 0x15803D : 0xF8FAFC)
+            : stripeColors[seedB % stripeColors.length]);
         cityParts.push({
           geo: G.chestStripe,
           color: stripeCol,
           pos: [0, 0.06, 0],
           scale: isFemale ? [0.87, 1, 0.89] : null
         });
+      } else if (styleVariant === 5) {
+        // Camisa listrada estilo futebol/torcedor brasileiro (duas faixas horizontais!)
+        const teamPairs = [
+          [0x16A34A, 0xFACC15],
+          [0xDC2626, 0x111827],
+          [0x0284C7, 0xF8FAFC],
+          [0x7F1D1D, 0x15803D]
+        ];
+        const pair = teamPairs[(index + seedB) % teamPairs.length];
+        const fScale = isFemale ? [0.87, 1, 0.89] : null;
+        cityParts.push(
+          { geo: G.chestBandUpper, color: pair[0], scale: fScale },
+          { geo: G.chestBandLower, color: pair[1], scale: fScale }
+        );
       } else if (styleVariant === 1) {
         cityParts.push({ geo: G.collar, color: 0xF8FAFC, pos: [0, 0.30, 0.02] });
       } else if (styleVariant === 2) {
@@ -1147,7 +1232,11 @@ export const PopulationMixin = {
 
       if (wearsSkirt) {
         const skirtCols = [0x7C2D12, 0x1E3A8A, 0xBE185D, 0x0F766E, 0xF5F5F4, 0x6D28D9, 0xCA8A04];
-        cityParts.push({ geo: G.skirt, color: skirtCols[(index + seedA) % skirtCols.length], pos: [0, -0.40, 0] });
+        const hemCols = [0xF8FAFC, 0xFACC15, 0x10B981, 0xF43F5E];
+        cityParts.push(
+          { geo: G.skirt, color: skirtCols[(index + seedA) % skirtCols.length], pos: [0, -0.40, 0] },
+          { geo: G.skirtHem, color: hemCols[(index + seedB) % hemCols.length], pos: [0, -0.525, 0] }
+        );
       } else if (!isFemale && !isSoccerPlayer) {
         const beltCols = [0x3F2A1D, 0x111827, 0x57534E];
         cityParts.push(
@@ -1157,8 +1246,8 @@ export const PopulationMixin = {
       }
     }
 
-    // Mochila ou bolsa tiracolo (35% dos civis)
-    if (!isBarraqueiro && !isBanhista && !isSoccerPlayer && index % 3 === 1) {
+    // Mochila ou bolsa tiracolo (35% dos civis comuns)
+    if (!isBarraqueiro && !isBanhista && !isSoccerPlayer && !customOpts.hideCityDetails && customOpts.forcedShirtColor === undefined && index % 3 === 1) {
       const packColors = [0x334155, 0x991B1B, 0x1E40AF, 0x065F46, 0x92400E, 0x4C1D95];
       const packCol = packColors[(index + seedB) % packColors.length];
       const strapCol = darkenColor(packCol, 0.6);
@@ -1179,9 +1268,10 @@ export const PopulationMixin = {
     // Avental frontal para Barraqueiros
     if (isBarraqueiro) {
       let apronColor = 0x2D6A4F;
-      if (role.stallId === 'mate') apronColor = 0xEA580C;
+      if (role.stallId === 'mate' || role.stallId === 'milho') apronColor = 0xEA580C;
       else if (role.stallId === 'acai') apronColor = 0x7E22CE;
       else if (role.stallId === 'petiscos') apronColor = 0xDC2626;
+      else if (role.stallId === 'caipirinha' || role.stallId === 'sorvete') apronColor = 0x0284C7;
       cityParts.push({ geo: G.apron, color: apronColor, pos: [0, -0.02, 0.16] });
     }
 
@@ -1191,12 +1281,13 @@ export const PopulationMixin = {
     torso.add(cityClothesDetails);
 
     // 4. BRAÇOS ARTICULADOS NO OMBRO (1 único draw call por braço, geometrias em cache por cor de manga/pele!)
-    const citySleeveHex = isBarraqueiro ? 0xF8FAFC : shirtColor;
-    const citySleeveMat = isBarraqueiro ? this._getSharedLambertMat(0xF8FAFC, true) : cityTorsoMat;
+    const isSleeveless = Boolean(customOpts.sleeveless);
+    const citySleeveHex = isSleeveless ? skinColor : (isBarraqueiro ? 0xF8FAFC : shirtColor);
+    const citySleeveMat = isSleeveless ? skinMat : (isBarraqueiro ? this._getSharedLambertMat(0xF8FAFC, true) : cityTorsoMat);
     const beachSleeveMat = skinMat;
 
-    const cityArmGeo = this._getCachedMergedGeo(`arm_c_${citySleeveHex}_${skinColor}`, () => [
-      { geo: G.armSleeve, color: citySleeveHex },
+    const cityArmGeo = this._getCachedMergedGeo(`arm_c_${citySleeveHex}_${skinColor}_${isSleeveless ? 1 : 0}`, () => [
+      { geo: G.armSleeve, color: citySleeveHex, skinWarm: isSleeveless },
       { geo: G.armForearm, color: skinColor, skinWarm: true }
     ]);
     const beachArmGeo = this._getCachedMergedGeo(`arm_b_${skinColor}`, () => [
@@ -1211,6 +1302,15 @@ export const PopulationMixin = {
     const rightArm = new THREE.Mesh(cityArmGeo, vMat);
     rightArm.position.set(0.31, 1.06, 0);
     npcGroup.add(rightArm);
+
+    // Pandeiro pré-fundido na mão esquerda para sambistas nos bancos da Roda de Samba
+    let pandeiroItem = null;
+    if (index >= 0 && index < 24) {
+      pandeiroItem = new THREE.Mesh(this._npcMergedCache.get('hand_pandeiro'), vMat);
+      pandeiroItem.position.set(0.02, -0.46, 0.10);
+      pandeiroItem.visible = false;
+      leftArm.add(pandeiroItem);
+    }
 
     // 5. CABEÇA HUMANA + PESCOÇO + ROSTO EXPRESSIVO COMPACTADOS EM 1 ÚNICO DRAW CALL!
     const irisPalette = [0x3B2414, 0x4A2C17, 0x2B1A10, 0x5B3A1E, 0x1F1A17, 0x3F5F3A, 0x35556E];
@@ -1282,13 +1382,32 @@ export const PopulationMixin = {
       { geo: G.hairShortBack, color: hairColor, pos: [0, 0.02, -0.145] }
     ];
 
-    if (isBarraqueiro) {
-      if (role.stallId === 'coco') {
+    if (customOpts.forcedHat === 'panama') {
+      hatParts.push(
+        { geo: G.panamaBrim, color: 0xFEF3C7, pos: [0, 0.17, 0] },
+        { geo: G.panamaCrown, color: 0xFEF3C7, pos: [0, 0.25, 0] },
+        { geo: G.panamaBand, color: 0x111827, pos: [0, 0.20, 0] }
+      );
+    } else if (customOpts.forcedHat === 'farm') {
+      hatParts.push({ geo: G.farmHat, color: 0xCA8A04, pos: [0, 0.20, 0] });
+    } else if (customOpts.forcedHat === 'visor_orange') {
+      hatParts.push(
+        { geo: G.hairShortTop, color: hairColor, pos: [0, 0.17, 0] },
+        { geo: G.visorHat, color: 0xF97316, pos: [0, 0.14, 0.05] }
+      );
+    } else if (customOpts.forcedHat === 'helmet_moto') {
+      hatParts.push(
+        { geo: G.helmetCrown, color: 0xDC2626, pos: [0, 0.19, 0] },
+        { geo: G.capVisor, color: 0x0F172A, pos: [0, 0.10, 0.18] }
+      );
+    } else if (isBarraqueiro) {
+      if (role.stallId === 'coco' || role.stallId === 'caldo') {
         hatParts.push({ geo: G.strawHat, color: 0xD4A373, pos: [0, 0.21, 0] });
       } else {
         let visorColor = 0x15803D;
-        if (role.stallId === 'acai') visorColor = 0x06B6D4;
-        else if (role.stallId === 'petiscos') visorColor = 0xDC2626;
+        if (role.stallId === 'acai' || role.stallId === 'sorvete') visorColor = 0x06B6D4;
+        else if (role.stallId === 'petiscos' || role.stallId === 'milho') visorColor = 0xDC2626;
+        else if (role.stallId === 'mate') visorColor = 0xF97316;
         hatParts.push(
           { geo: G.hairShortTop, color: hairColor, pos: [0, 0.17, 0] },
           { geo: G.visorHat, color: visorColor, pos: [0, 0.14, 0.05] }
@@ -1313,7 +1432,7 @@ export const PopulationMixin = {
         { geo: G.panamaBand, color: bandCol, pos: [0, 0.20, 0] }
       );
     } else {
-      const hairStyle = isFemale ? (seedA % 5) : (seedA % 6);
+      const hairStyle = isFemale ? (seedA % 6) : (seedA % 8);
       if (isFemale && hairStyle === 0) {
         const bandCols = [0xF43F5E, 0xFACC15, 0x06B6D4, 0x10B981, 0xA855F7];
         hatParts.push(
@@ -1345,6 +1464,18 @@ export const PopulationMixin = {
         );
       } else if (hairStyle === 4) {
         hatParts.push({ geo: G.hairAfro, color: hairColor, pos: [0, 0.15, -0.02] });
+      } else if ((isFemale && hairStyle === 5) || (!isFemale && hairStyle === 6)) {
+        hatParts.push(
+          { geo: G.hairShortTop, color: hairColor, pos: [0, 0.16, 0] },
+          { geo: G.hairBraids, color: hairColor, pos: [0, 0.06, 0] }
+        );
+      } else if (!isFemale && hairStyle === 5) {
+        const bucketCols = [0x1D4ED8, 0xD97706, 0x15803D, 0xFACC15, 0xF8FAFC];
+        const bCol = bucketCols[(index + seedB) % bucketCols.length];
+        hatParts.push(
+          { geo: G.bucketBrim, color: bCol, pos: [0, 0.155, 0] },
+          { geo: G.bucketCrown, color: bCol, pos: [0, 0.215, 0] }
+        );
       } else if (!isFemale && hairStyle === 0) {
         hatParts.push({ geo: G.hairShortTop, color: hairColor, pos: [0, 0.165, 0] });
       } else if (!isFemale && hairStyle === 1) {
@@ -1422,10 +1553,13 @@ export const PopulationMixin = {
     if (isSoccerPlayer && team) {
       cityLegColor = (team === 'yellow') ? 0x1E3A8A : 0xF8FAFC;
     }
+    if (customOpts.forcedPantsColor !== undefined) {
+      cityLegColor = customOpts.forcedPantsColor;
+    }
     const cityLegMat = wearsSkirt ? skinMat : this._getSharedLambertMat(cityLegColor, true);
 
-    const wearsShortsInCity = wearsSkirt || isSoccerPlayer || (!isElder && (seedA % 2 === 0));
-    const cityCalfMat = wearsShortsInCity ? skinMat : cityLegMat;
+    const wearsShortsInCity = !customOpts.hideCityDetails && (wearsSkirt || isSoccerPlayer || (!isElder && (seedA % 2 === 0)));
+    const cityCalfMat = (wearsShortsInCity && !customOpts.forcedPantsColor) ? skinMat : cityLegMat;
 
     const isSunga = (index % 2 === 1);
     const boardshortColors = [0x0284C7, 0x10B981, 0xF97316, 0xEC4899, 0x8B5CF6, 0xEAB308];
@@ -1435,24 +1569,56 @@ export const PopulationMixin = {
     const shoeColors = [0xF8FAFC, 0x111827, 0x78350F, 0xDC2626, 0x1E40AF, 0x334155];
     const shoeHex = shoeColors[(index + seedA) % shoeColors.length];
     const soleHex = shoeHex === 0xF8FAFC ? 0x9CA3AF : (shoeHex === 0x78350F ? 0x292524 : 0xF1F5F9);
+    const havaianaPalette = [0xF8FAFC, 0x0284C7, 0xFACC15, 0x16A34A, 0xEF4444];
+    const flipFlopCol = havaianaPalette[(index + seedA) % havaianaPalette.length];
 
     const cityThighHex = wearsSkirt ? skinColor : cityLegColor;
-    const cityCalfHex = wearsShortsInCity ? skinColor : cityLegColor;
+    const cityCalfHex = (wearsShortsInCity && customOpts.forcedPantsColor === undefined) ? skinColor : cityLegColor;
+    const useCityBareFoot = Boolean(customOpts.bareFoot) && !customOpts.forceFlipFlop;
+    const useCityFlipFlop = Boolean(customOpts.forceFlipFlop) || (!customOpts.bareFoot && wearsShortsInCity && !isSoccerPlayer && ((index + seedB) % 5 < 2));
+
     const cityLegGeo = this._getCachedMergedGeo(
-      `leg_c_${cityThighHex}_${cityCalfHex}_${shoeHex}_${soleHex}_${wearsSkirt ? 1 : 0}_${wearsShortsInCity ? 1 : 0}`,
-      () => [
-        { geo: G.leg, color: cityThighHex, skinWarm: wearsSkirt },
-        { geo: G.calf, color: cityCalfHex, skinWarm: wearsShortsInCity },
-        { geo: G.shoe, color: shoeHex },
-        { geo: G.sole, color: soleHex }
-      ]
+      `leg_c_${cityThighHex}_${cityCalfHex}_${shoeHex}_${soleHex}_${wearsSkirt ? 1 : 0}_${wearsShortsInCity ? 1 : 0}_${useCityBareFoot ? 1 : 0}_${useCityFlipFlop ? flipFlopCol : 0}`,
+      () => {
+        const parts = [
+          { geo: G.leg, color: cityThighHex, skinWarm: wearsSkirt },
+          { geo: G.calf, color: cityCalfHex, skinWarm: wearsShortsInCity && customOpts.forcedPantsColor === undefined }
+        ];
+        if (useCityBareFoot) {
+          parts.push({ geo: G.bareFoot, color: skinColor, skinWarm: true });
+        } else if (useCityFlipFlop) {
+          parts.push(
+            { geo: G.bareFoot, color: skinColor, skinWarm: true },
+            { geo: G.flipFlopSole, color: flipFlopCol },
+            { geo: G.flipFlopStrap, color: flipFlopCol === 0xFACC15 ? 0x16A34A : 0xF8FAFC }
+          );
+        } else {
+          parts.push(
+            { geo: G.shoe, color: shoeHex },
+            { geo: G.sole, color: soleHex }
+          );
+        }
+        return parts;
+      }
     );
+
+    const useBeachFlipFlop = !customOpts.bareFoot && ((index + seedA) % 2 === 0);
     const beachLegGeo = this._getCachedMergedGeo(
-      `leg_b_${beachLegHex}_${skinColor}_${isSunga ? 1 : 0}`,
-      () => [
-        { geo: G.leg, color: beachLegHex, skinWarm: isSunga },
-        { geo: G.calf, color: skinColor, skinWarm: true }
-      ]
+      `leg_b_${beachLegHex}_${skinColor}_${isSunga ? 1 : 0}_${useBeachFlipFlop ? flipFlopCol : 0}`,
+      () => {
+        const parts = [
+          { geo: G.leg, color: beachLegHex, skinWarm: isSunga },
+          { geo: G.calf, color: skinColor, skinWarm: true },
+          { geo: G.bareFoot, color: skinColor, skinWarm: true }
+        ];
+        if (useBeachFlipFlop) {
+          parts.push(
+            { geo: G.flipFlopSole, color: flipFlopCol },
+            { geo: G.flipFlopStrap, color: flipFlopCol === 0xFACC15 ? 0x16A34A : 0xF8FAFC }
+          );
+        }
+        return parts;
+      }
     );
 
     const leftLeg = new THREE.Mesh(cityLegGeo, vMat);
@@ -1498,6 +1664,7 @@ export const PopulationMixin = {
       cityClothesDetails,
       hat,
       handItem,
+      pandeiroItem,
       isFishermanRole,
       isFarmerRole,
       isMerchantRole,
@@ -1584,7 +1751,7 @@ export const PopulationMixin = {
   // Automatically transforms citizens into swimwear upon reaching the sand (Z >= 24)
   // and back into street clothes when returning to the morro (Z < 21)!
   setNPCBeachOutfit(npc, isBeach) {
-    if (npc.isBarraqueiro || npc.role === 'Jogador da Pelada' || npc.isScenicMirante || npc.isFisherman || npc.isCapoeira || npc.isHorta || npc.isMototaxi || npc.isCalistenia) return;
+    if (npc.isBarraqueiro || npc.role === 'Jogador da Pelada' || npc.isScenicMirante || npc.isFisherman || npc.isCapoeira || npc.isHorta || npc.isMototaxi || npc.isSurfer || npc.isCalistenia) return;
     if (npc.isBuilder || npc.isCourier) return;
 
     if (isBeach && !npc.isWearingBeachwear) {

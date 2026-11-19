@@ -279,6 +279,17 @@ export const HillsidesMixin = {
       }
     });
 
+    this.propObstacles = this.propObstacles || [];
+    this.propObstacles.push(
+      { x: -110.0, z: -18.3, r: 1.15 },
+      { x: -92.0, z: -25.0, r: 0.95 },
+      { x: -94.3, z: -26.6, hw: 2.05, hd: 1.15, rotY: 0 },
+      { x: -89.7, z: -26.6, hw: 2.05, hd: 1.15, rotY: 0 },
+      { x: -94.3, z: -23.4, hw: 2.05, hd: 1.15, rotY: 0 },
+      { x: -89.7, z: -23.4, hw: 2.05, hd: 1.15, rotY: 0 },
+      { x: -128.0, z: 46.0, hw: 2.8, hd: 2.2, rotY: 0 }
+    );
+
     this.group.add(westExpGroup);
   },
 
@@ -524,6 +535,18 @@ export const HillsidesMixin = {
         child.updateMatrix();
       }
     });
+
+    this.propObstacles = this.propObstacles || [];
+    this.propObstacles.push(
+      { x: 110.4, z: -13.8, hw: 2.5, hd: 0.65, rotY: 0 },
+      { x: 114.4, z: -10.8, hw: 1.15, hd: 0.75, rotY: 0, ignoreRoles: ['Atleta de Calistenia'] },
+      { x: 110.6, z: -10.2, hw: 1.65, hd: 0.85, rotY: 0 },
+      { x: 92.0, z: 13.4, hw: 1.6, hd: 0.55, rotY: 0 },
+      { x: 90.4, z: 16.2, r: 1.05 },
+      { x: 92.8, z: 16.4, r: 1.05 },
+      { x: 126.0, z: 56.9, hw: 2.05, hd: 0.55, rotY: 0 },
+      { x: 127.4, z: 58.8, r: 0.75 }
+    );
 
     this.group.add(eastExpGroup);
   },
@@ -881,6 +904,13 @@ export const HillsidesMixin = {
     }
 
     this.group.add(olariaGroup);
+    this.propObstacles = this.propObstacles || [];
+    this.propObstacles.push(
+      { x: pos.x - 2.8, z: pos.z - 2.5, r: 2.15 },
+      { x: pos.x + 1.8, z: pos.z - 2.5, r: 2.15 },
+      { x: pos.x, z: pos.z + 3.0, hw: 2.8, hd: 1.9, rotY: 0 },
+      { x: pos.x + 4.5, z: pos.z + 0.5, hw: 1.0, hd: 2.2, rotY: 0 }
+    );
   },
 
   createBrickOlaria(pos) {
@@ -944,6 +974,11 @@ export const HillsidesMixin = {
 
     this.group.add(olariaGroup);
     this.olaria = olariaGroup;
+    this.propObstacles = this.propObstacles || [];
+    this.propObstacles.push(
+      { x: pos.x - 3.5, z: pos.z, r: 3.15 },
+      { x: pos.x + 3.2, z: pos.z - 0.9, hw: 2.75, hd: 2.15, rotY: 0 }
+    );
   },
 
   createHillsideCommunityDetails() {

@@ -154,6 +154,15 @@ export const BeachLifeMixin = {
     const stallGroup = new THREE.Group();
     const woodMat = new THREE.MeshLambertMaterial({ color: 0x6B4F35, flatShading: true });
     const counterMat = new THREE.MeshLambertMaterial({ color: 0x8C7456, flatShading: true });
+    const signBoardMat = new THREE.MeshLambertMaterial({ color: 0xFEF08A });
+    const flagGeo = new THREE.ConeGeometry(0.11, 0.24, 3);
+    flagGeo.rotateX(Math.PI);
+    const flagMats = [
+      new THREE.MeshLambertMaterial({ color: 0x16A34A, flatShading: true }),
+      new THREE.MeshLambertMaterial({ color: 0xFACC15, flatShading: true }),
+      new THREE.MeshLambertMaterial({ color: 0x0284C7, flatShading: true }),
+      new THREE.MeshLambertMaterial({ color: 0xEF4444, flatShading: true })
+    ];
 
     this.beachStalls.forEach(st => {
       // Robust multi-point terrain sampling under the stall footprint (prevents sloping sand from swallowing the deck)
@@ -231,10 +240,17 @@ export const BeachLifeMixin = {
       // Wooden front sign
       const signBoard = new THREE.Mesh(
         new THREE.BoxGeometry(2.4, 0.45, 0.08),
-        new THREE.MeshLambertMaterial({ color: 0xFEF08A })
+        signBoardMat
       );
       signBoard.position.set(0, 2.3, 1.85);
       singleStall.add(signBoard);
+
+      // 4 Bandeirinhas tropicais coloridas sob a viga frontal da placa
+      for (let b = 0; b < 4; b++) {
+        const flag = new THREE.Mesh(flagGeo, flagMats[b]);
+        flag.position.set(-0.9 + b * 0.6, 1.98, 1.86);
+        singleStall.add(flag);
+      }
 
       // Specialized Props per Stall:
       if (st.id === 'coco' || st.id === 'caldo') {
@@ -1449,11 +1465,13 @@ export const BeachLifeMixin = {
       includeShoes: false
     });
     const p1 = fb1.group;
+    p1.userData.dynamic = true;
     p1.position.set(0, 0, -3.5);
     const p1Paddle = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.04, 12), paddleMat);
-    p1Paddle.position.set(0.32, 0.95, 0.35);
-    p1Paddle.rotation.x = Math.PI / 2;
-    p1.add(p1Paddle);
+    p1Paddle.position.set(0.02, -0.48, 0.16);
+    p1Paddle.rotation.set(0.35, 0, 0);
+    if (fb1.rightArm) fb1.rightArm.add(p1Paddle);
+    else p1.add(p1Paddle);
     frescobolGroup.add(p1);
 
     // Player 2 (x: 0, z: 3.5)
@@ -1468,16 +1486,19 @@ export const BeachLifeMixin = {
       includeShoes: false
     });
     const p2 = fb2.group;
+    p2.userData.dynamic = true;
     p2.position.set(0, 0, 3.5);
     p2.rotation.y = Math.PI;
     const p2Paddle = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.04, 12), paddleMat);
-    p2Paddle.position.set(0.32, 0.95, 0.35);
-    p2Paddle.rotation.x = Math.PI / 2;
-    p2.add(p2Paddle);
+    p2Paddle.position.set(0.02, -0.48, 0.16);
+    p2Paddle.rotation.set(0.35, 0, 0);
+    if (fb2.rightArm) fb2.rightArm.add(p2Paddle);
+    else p2.add(p2Paddle);
     frescobolGroup.add(p2);
 
     // Bolinha de Frescobol laranja
     const frescoball = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 8), ballMat);
+    frescoball.userData.dynamic = true;
     frescoball.position.set(0, 1.1, 0);
     frescobolGroup.add(frescoball);
 
@@ -1491,9 +1512,24 @@ export const BeachLifeMixin = {
     this.frescobolMatch = {
       p1,
       p2,
+      p1BaseX: 0,
+      p2BaseX: 0,
+      p1Torso: fb1.torso,
+      p2Torso: fb2.torso,
+      p1Head: fb1.head,
+      p2Head: fb2.head,
+      p1ArmR: fb1.rightArm,
+      p1ArmL: fb1.leftArm,
+      p2ArmR: fb2.rightArm,
+      p2ArmL: fb2.leftArm,
+      p1LegL: fb1.leftLeg,
+      p1LegR: fb1.rightLeg,
+      p2LegL: fb2.leftLeg,
+      p2LegR: fb2.rightLeg,
       ball: frescoball,
       progress: 0.0,
-      direction: 1
+      direction: 1,
+      shotSide: 1
     };
 
     // 3. QUEBRA-MAR DE PEDRA & FAROLETE SOLAR (x: 108, z: 66)

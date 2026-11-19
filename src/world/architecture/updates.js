@@ -416,36 +416,36 @@ export const UpdatesMixin = {
 
         // Sender recovery: smoothly returns limbs to ready athletic stance
         if (t > 0.22) {
-          senderLegR.rotation.x = Math.max(0, senderLegR.rotation.x - delta * 4.5);
-          senderLegL.rotation.x = Math.max(0, senderLegL.rotation.x - delta * 4.5);
-          senderTorso.rotation.x = Math.max(0, senderTorso.rotation.x - delta * 3.5);
-          senderHead.rotation.x = Math.max(0, senderHead.rotation.x - delta * 3.5);
+          senderLegR.rotation.x = THREE.MathUtils.damp(senderLegR.rotation.x, 0, 12.0, delta);
+          senderLegL.rotation.x = THREE.MathUtils.damp(senderLegL.rotation.x, 0, 12.0, delta);
+          senderTorso.rotation.x = THREE.MathUtils.damp(senderTorso.rotation.x, 0, 10.0, delta);
+          senderHead.rotation.x = THREE.MathUtils.damp(senderHead.rotation.x, 0, 10.0, delta);
         }
 
         // Receiver active anticipation as ball approaches (t > 0.60)
         if (t > 0.60) {
           const prepT = (t - 0.60) / 0.40;
           // Open arms for balance
-          receiverArmL.rotation.z = -0.35 - prepT * 0.45;
-          receiverArmR.rotation.z = 0.35 + prepT * 0.45;
+          receiverArmL.rotation.z = THREE.MathUtils.damp(receiverArmL.rotation.z, -0.35 - prepT * 0.45, 14.0, delta);
+          receiverArmR.rotation.z = THREE.MathUtils.damp(receiverArmR.rotation.z, 0.35 + prepT * 0.45, 14.0, delta);
 
           if (alt.touchType === 'head') {
             // Jump off the sand into the air for athletic header!
             receiver.position.y += Math.sin(prepT * Math.PI) * 0.38;
-            receiverHead.rotation.x = -prepT * 0.50;
-            receiverTorso.rotation.x = -prepT * 0.15;
+            receiverHead.rotation.x = THREE.MathUtils.damp(receiverHead.rotation.x, -prepT * 0.50, 16.0, delta);
+            receiverTorso.rotation.x = THREE.MathUtils.damp(receiverTorso.rotation.x, -prepT * 0.15, 14.0, delta);
           } else if (alt.touchType === 'knee') {
             // Thigh lift to cushion or pop the ball up
-            receiverLegR.rotation.x = -prepT * 1.25;
-            receiverTorso.rotation.x = -prepT * 0.12;
+            receiverLegR.rotation.x = THREE.MathUtils.damp(receiverLegR.rotation.x, -prepT * 1.25, 16.0, delta);
+            receiverTorso.rotation.x = THREE.MathUtils.damp(receiverTorso.rotation.x, -prepT * 0.12, 14.0, delta);
           } else if (alt.touchType === 'foot_l') {
             // Left foot volley with torso lean
-            receiverLegL.rotation.x = -prepT * 1.18;
-            receiverTorso.rotation.x = prepT * 0.25;
+            receiverLegL.rotation.x = THREE.MathUtils.damp(receiverLegL.rotation.x, -prepT * 1.18, 16.0, delta);
+            receiverTorso.rotation.x = THREE.MathUtils.damp(receiverTorso.rotation.x, prepT * 0.25, 14.0, delta);
           } else {
             // Right foot volley with torso lean
-            receiverLegR.rotation.x = -prepT * 1.22;
-            receiverTorso.rotation.x = prepT * 0.26;
+            receiverLegR.rotation.x = THREE.MathUtils.damp(receiverLegR.rotation.x, -prepT * 1.22, 16.0, delta);
+            receiverTorso.rotation.x = THREE.MathUtils.damp(receiverTorso.rotation.x, prepT * 0.26, 14.0, delta);
           }
         }
       } else {
@@ -475,22 +475,67 @@ export const UpdatesMixin = {
       }
     }
 
-    // Frescobol Rally in Southeast Dunes Court
+    // Frescobol Rally in Southeast Dunes Court (jogadores animados acompanhando a bolinha!)
     if (this.frescobolMatch) {
       const f = this.frescobolMatch;
-      f.progress += delta * 1.8;
-      const p1Z = -3.5, p2Z = 3.5;
+      f.progress += delta * 1.65;
+      const p1Z = -3.5;
+      const p2Z = 3.5;
       const startZ = f.direction === 1 ? p1Z : p2Z;
       const endZ = f.direction === 1 ? p2Z : p1Z;
+      const latDrift = Math.sin(time * 0.9) * 0.75;
+
       if (f.progress < 1.0) {
         const t = f.progress;
         f.ball.position.z = startZ + (endZ - startZ) * t;
-        f.ball.position.x = Math.sin(t * Math.PI) * 0.4;
-        f.ball.position.y = 1.0 + Math.sin(t * Math.PI) * 1.1;
+        f.ball.position.x = Math.sin(t * Math.PI) * latDrift;
+        f.ball.position.y = 1.05 + Math.sin(t * Math.PI) * 1.15;
         f.ball.rotation.x += delta * 15 * f.direction;
+
+        // Jogadores acompanham sutilmente a trajetória lateral da bola e gingam nas pernas
+        const p1TargetX = f.direction === -1 ? latDrift * 0.65 : latDrift * 0.25;
+        const p2TargetX = f.direction === 1 ? latDrift * 0.65 : latDrift * 0.25;
+        f.p1.position.x = THREE.MathUtils.damp(f.p1.position.x, (f.p1BaseX || 0) + p1TargetX, 6.0, delta);
+        f.p2.position.x = THREE.MathUtils.damp(f.p2.position.x, (f.p2BaseX || 0) + p2TargetX, 6.0, delta);
+        f.p1.position.y = Math.abs(Math.sin(time * 5.0)) * 0.05;
+        f.p2.position.y = Math.abs(Math.sin(time * 5.0 + 1.2)) * 0.05;
+
+        const hitter = f.direction === 1 ? 'p2' : 'p1';
+        const passer = f.direction === 1 ? 'p1' : 'p2';
+
+        // Rebatida de forehand/backhand no braço com raquete sincronizada com a chegada da bolinha
+        const prepSwing = t > 0.65 ? ((t - 0.65) / 0.35) : 0;
+        const followThrough = t < 0.30 ? (1.0 - t / 0.30) : 0;
+        const hitArmX = prepSwing > 0 ? (-0.95 - prepSwing * 0.85) : (-0.35 + Math.sin(time * 3.5) * 0.08);
+        const passArmX = followThrough > 0 ? (-1.55 + (1.0 - followThrough) * 1.15) : (-0.35 - Math.sin(time * 3.5) * 0.08);
+
+        if (f[`${hitter}ArmR`]) {
+          f[`${hitter}ArmR`].rotation.x = THREE.MathUtils.damp(f[`${hitter}ArmR`].rotation.x, hitArmX, 16.0, delta);
+          f[`${hitter}ArmR`].rotation.z = THREE.MathUtils.damp(f[`${hitter}ArmR`].rotation.z, 0.32 * (f.shotSide || 1) * prepSwing, 14.0, delta);
+        }
+        if (f[`${hitter}Torso`]) {
+          f[`${hitter}Torso`].rotation.y = THREE.MathUtils.damp(f[`${hitter}Torso`].rotation.y, -0.35 * (f.shotSide || 1) * prepSwing, 12.0, delta);
+          f[`${hitter}Torso`].rotation.x = THREE.MathUtils.damp(f[`${hitter}Torso`].rotation.x, 0.12 * prepSwing, 12.0, delta);
+        }
+        if (f[`${passer}ArmR`]) {
+          f[`${passer}ArmR`].rotation.x = THREE.MathUtils.damp(f[`${passer}ArmR`].rotation.x, passArmX, 14.0, delta);
+          f[`${passer}ArmR`].rotation.z = THREE.MathUtils.damp(f[`${passer}ArmR`].rotation.z, -0.25 * followThrough, 12.0, delta);
+        }
+        if (f[`${passer}Torso`]) {
+          f[`${passer}Torso`].rotation.y = THREE.MathUtils.damp(f[`${passer}Torso`].rotation.y, 0.25 * followThrough, 10.0, delta);
+          f[`${passer}Torso`].rotation.x = THREE.MathUtils.damp(f[`${passer}Torso`].rotation.x, 0.04, 10.0, delta);
+        }
+        ['p1', 'p2'].forEach((pk, idx) => {
+          const step = Math.sin(time * 5.2 + idx * 1.4) * 0.22;
+          if (f[`${pk}LegL`]) f[`${pk}LegL`].rotation.x = THREE.MathUtils.damp(f[`${pk}LegL`].rotation.x, step, 12.0, delta);
+          if (f[`${pk}LegR`]) f[`${pk}LegR`].rotation.x = THREE.MathUtils.damp(f[`${pk}LegR`].rotation.x, -step, 12.0, delta);
+          if (f[`${pk}ArmL`]) f[`${pk}ArmL`].rotation.z = THREE.MathUtils.damp(f[`${pk}ArmL`].rotation.z, -0.24 - Math.abs(step) * 0.35, 12.0, delta);
+          if (f[`${pk}Head`]) f[`${pk}Head`].rotation.x = THREE.MathUtils.damp(f[`${pk}Head`].rotation.x, -0.14, 10.0, delta);
+        });
       } else {
         f.progress = 0.0;
         f.direction = -f.direction;
+        f.shotSide = Math.random() < 0.5 ? 1 : -1;
       }
     }
 

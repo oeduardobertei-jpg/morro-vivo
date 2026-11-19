@@ -44,6 +44,11 @@ export const CommunityMixin = {
 
     this.group.add(farmGroup);
     this.agroFarm = farmGroup;
+    this.propObstacles = this.propObstacles || [];
+    this.propObstacles.push(
+      { x: pos.x - 6.5, z: pos.z, hw: 2.15, hd: 1.85, rotY: 0 },
+      { x: pos.x + 6.0, z: pos.z, hw: 2.4, hd: 0.75, rotY: 0 }
+    );
   },
 
   createCulturalMarket(pos) {
@@ -52,6 +57,7 @@ export const CommunityMixin = {
     const y = this.terrain ? this.terrain.getElevation(pos.x, pos.z) + 0.1 : 4.1;
     marketGroup.position.set(pos.x, y, pos.z);
 
+    this.propObstacles = this.propObstacles || [];
     const stallColors = [0xE63946, 0xFFB703, 0x2A9D8F, 0x9B5DE5];
     for (let s = 0; s < 4; s++) {
       const stallGeo = new THREE.BoxGeometry(2.8, 2.2, 2.2);
@@ -60,6 +66,7 @@ export const CommunityMixin = {
       stall.position.set(-6 + s * 4, 1.1, 0);
       stall.castShadow = true;
       marketGroup.add(stall);
+      this.propObstacles.push({ x: pos.x - 6 + s * 4, z: pos.z, hw: 1.75, hd: 1.45, rotY: 0 });
     }
 
     this.group.add(marketGroup);
@@ -721,6 +728,8 @@ export const CommunityMixin = {
 
     this.group.add(plazaGroup);
     this.sambaPlaza = plazaGroup;
+    this.propObstacles = this.propObstacles || [];
+    this.propObstacles.push({ x: pos.x, z: pos.z, r: 1.75 });
   },
 
   createSolarPark(pos = { x: -18, z: -72 }) {
@@ -869,5 +878,7 @@ export const CommunityMixin = {
 
     this.group.add(parkGroup);
     this.solarPark = parkGroup;
+    this.propObstacles = this.propObstacles || [];
+    this.propObstacles.push({ x: pos.x, z: pos.z, hw: 9.2, hd: 6.6, rotY: 0 });
   }
 };

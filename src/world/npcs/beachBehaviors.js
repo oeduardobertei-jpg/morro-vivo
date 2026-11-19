@@ -89,18 +89,22 @@ export const BeachBehaviorsMixin = {
       npc.torso.rotation.x += (0 - npc.torso.rotation.x) * lerpSpeed;
       npc.torso.rotation.y += (0 - npc.torso.rotation.y) * lerpSpeed;
       npc.torso.rotation.z += (0 - npc.torso.rotation.z) * lerpSpeed;
+      npc.torso.position.y += (0.85 - npc.torso.position.y) * lerpSpeed;
     }
     if (npc.head) {
       npc.head.rotation.x += (0 - npc.head.rotation.x) * lerpSpeed;
       npc.head.rotation.y += (0 - npc.head.rotation.y) * lerpSpeed;
+      npc.head.position.y += (1.37 - npc.head.position.y) * lerpSpeed;
     }
     if (npc.leftArm) {
       npc.leftArm.rotation.x += (0 - npc.leftArm.rotation.x) * lerpSpeed;
       npc.leftArm.rotation.z += (0 - npc.leftArm.rotation.z) * lerpSpeed;
+      npc.leftArm.position.y += (1.06 - npc.leftArm.position.y) * lerpSpeed;
     }
     if (npc.rightArm) {
       npc.rightArm.rotation.x += (0 - npc.rightArm.rotation.x) * lerpSpeed;
       npc.rightArm.rotation.z += (0 - npc.rightArm.rotation.z) * lerpSpeed;
+      npc.rightArm.position.y += (1.06 - npc.rightArm.position.y) * lerpSpeed;
     }
     if (npc.leftLeg) {
       npc.leftLeg.rotation.x += (0 - npc.leftLeg.rotation.x) * lerpSpeed;
@@ -189,14 +193,53 @@ export const BeachBehaviorsMixin = {
       }
     }
 
-    // 2. Evita pedras costeiras, farol, canoas, barracas, quiosques, fogueiras e castelos de areia
-    if (this.arch && this.arch.propObstacles) {
+    // 2. Evita pedras costeiras, farol, canoas, barracas, quiosques, fogueiras e estruturas OBB/circulares
+    if (this.arch && this.arch.propObstacles && !npc.isBarraqueiro) {
       const obstacles = this.arch.propObstacles;
       for (let i = 0; i < obstacles.length; i++) {
         const ob = obstacles[i];
+        if (ob.ignoreRoles && ob.ignoreRoles.includes(npc.role)) continue;
         const dx = pos.x - ob.x;
-        if (Math.abs(dx) > ob.r + 0.5) continue;
         const dz = pos.z - ob.z;
+
+        if (ob.hw !== undefined && ob.hd !== undefined) {
+          const maxR = ob.hw + ob.hd + 0.5;
+          if (Math.abs(dx) > maxR || Math.abs(dz) > maxR) continue;
+          const c = ob.rotY ? Math.cos(ob.rotY) : 1.0;
+          const s = ob.rotY ? Math.sin(ob.rotY) : 0.0;
+          const lx = dx * c - dz * s;
+          const lz = dx * s + dz * c;
+          const penX = ob.hw - Math.abs(lx);
+          const penZ = ob.hd - Math.abs(lz);
+          if (penX > 0 && penZ > 0) {
+            let nlx = lx;
+            let nlz = lz;
+            let lnx = 0;
+            let lnz = 0;
+            if (penX < penZ) {
+              lnx = lx >= 0 ? 1 : -1;
+              nlx = lnx * ob.hw;
+            } else {
+              lnz = lz >= 0 ? 1 : -1;
+              nlz = lnz * ob.hd;
+            }
+            pos.x = ob.x + nlx * c + nlz * s;
+            pos.z = ob.z - nlx * s + nlz * c;
+            const wnx = lnx * c + lnz * s;
+            const wnz = -lnx * s + lnz * c;
+            const tanX = -wnz;
+            const tanZ = wnx;
+            const toTargetX = (targetX ?? pos.x) - pos.x;
+            const toTargetZ = (targetZ ?? pos.z) - pos.z;
+            const slideSign = (toTargetX * tanX + toTargetZ * tanZ) >= 0 ? 1 : -1;
+            const slideStep = (npc.speed || 1.8) * (delta || 0.016) * 1.15;
+            pos.x += tanX * slideSign * slideStep;
+            pos.z += tanZ * slideSign * slideStep;
+          }
+          continue;
+        }
+
+        if (Math.abs(dx) > ob.r + 0.5) continue;
         if (Math.abs(dz) > ob.r + 0.5) continue;
 
         const distSq = dx * dx + dz * dz;
@@ -213,7 +256,7 @@ export const BeachBehaviorsMixin = {
           const toTargetX = (targetX ?? pos.x) - pos.x;
           const toTargetZ = (targetZ ?? pos.z) - pos.z;
           const slideSign = (toTargetX * tanX + toTargetZ * tanZ) >= 0 ? 1 : -1;
-          const slideStep = (npc.speed || 1.8) * delta * 1.15;
+          const slideStep = (npc.speed || 1.8) * (delta || 0.016) * 1.15;
           pos.x += tanX * slideSign * slideStep;
           pos.z += tanZ * slideSign * slideStep;
         }
@@ -540,38 +583,49 @@ export const BeachBehaviorsMixin = {
     while (diff < -Math.PI) diff += Math.PI * 2;
     npc.group.rotation.y += diff * Math.min(1.0, delta * 8.0);
 
-    // Passo natural (na água levanta mais os joelhos e abre os braços para equilíbrio)
+    // Passo natural com amortecimento (na água levanta mais os joelhos e abre os braços para equilíbrio)
     npc.walkCycle += delta * (isWater ? 6.5 : 8.2);
     const legAmp = isWater ? 0.65 : 0.52;
     const swing = Math.sin(npc.walkCycle) * legAmp;
-    if (npc.leftLeg) npc.leftLeg.rotation.x = swing;
-    if (npc.rightLeg) npc.rightLeg.rotation.x = -swing;
+    const strideBob = isWater ? 0 : Math.abs(Math.sin(npc.walkCycle)) * 0.035;
+    const armBaseY = 1.06 + strideBob;
+    if (npc.leftLeg) npc.leftLeg.rotation.x = THREE.MathUtils.damp(npc.leftLeg.rotation.x, swing, 16.0, delta);
+    if (npc.rightLeg) npc.rightLeg.rotation.x = THREE.MathUtils.damp(npc.rightLeg.rotation.x, -swing, 16.0, delta);
+    if (npc.head) npc.head.position.y = THREE.MathUtils.damp(npc.head.position.y, 1.37 + strideBob * 0.8, 16.0, delta);
 
     if (isWater) {
       if (npc.leftArm) {
-        npc.leftArm.rotation.x = -swing * 0.45;
-        npc.leftArm.rotation.z = -0.24 - Math.abs(swing) * 0.15;
+        npc.leftArm.rotation.x = THREE.MathUtils.damp(npc.leftArm.rotation.x, -swing * 0.45, 14.0, delta);
+        npc.leftArm.rotation.z = THREE.MathUtils.damp(npc.leftArm.rotation.z, -0.24 - Math.abs(swing) * 0.15, 14.0, delta);
+        npc.leftArm.position.y = THREE.MathUtils.damp(npc.leftArm.position.y, 1.06, 14.0, delta);
       }
       if (npc.rightArm) {
-        npc.rightArm.rotation.x = swing * 0.45;
-        npc.rightArm.rotation.z = 0.24 + Math.abs(swing) * 0.15;
+        npc.rightArm.rotation.x = THREE.MathUtils.damp(npc.rightArm.rotation.x, swing * 0.45, 14.0, delta);
+        npc.rightArm.rotation.z = THREE.MathUtils.damp(npc.rightArm.rotation.z, 0.24 + Math.abs(swing) * 0.15, 14.0, delta);
+        npc.rightArm.position.y = THREE.MathUtils.damp(npc.rightArm.position.y, 1.06, 14.0, delta);
       }
       if (npc.torso) {
-        npc.torso.rotation.x = 0.08;
-        npc.torso.rotation.z = Math.sin(npc.walkCycle) * 0.06;
+        npc.torso.rotation.x = THREE.MathUtils.damp(npc.torso.rotation.x, 0.08, 12.0, delta);
+        npc.torso.rotation.z = THREE.MathUtils.damp(npc.torso.rotation.z, Math.sin(npc.walkCycle) * 0.06, 12.0, delta);
+        npc.torso.position.y = THREE.MathUtils.damp(npc.torso.position.y, 0.85, 12.0, delta);
       }
     } else {
       if (npc.leftArm) {
-        npc.leftArm.rotation.x = -swing * 0.6;
-        npc.leftArm.rotation.z = 0;
+        const carryLeft = Boolean(npc.handItem && npc.handItem.visible);
+        npc.leftArm.rotation.x = THREE.MathUtils.damp(npc.leftArm.rotation.x, carryLeft ? (-0.52 + Math.sin(npc.walkCycle) * 0.06) : -swing * 0.6, 15.0, delta);
+        npc.leftArm.rotation.z = THREE.MathUtils.damp(npc.leftArm.rotation.z, 0, 14.0, delta);
+        npc.leftArm.position.y = THREE.MathUtils.damp(npc.leftArm.position.y, armBaseY, 16.0, delta);
       }
       if (npc.rightArm) {
-        npc.rightArm.rotation.x = (npc.handItem && npc.handItem.visible) ? -0.55 : swing * 0.6;
-        npc.rightArm.rotation.z = 0;
+        npc.rightArm.rotation.x = THREE.MathUtils.damp(npc.rightArm.rotation.x, swing * 0.6, 15.0, delta);
+        npc.rightArm.rotation.z = THREE.MathUtils.damp(npc.rightArm.rotation.z, 0, 14.0, delta);
+        npc.rightArm.position.y = THREE.MathUtils.damp(npc.rightArm.position.y, armBaseY, 16.0, delta);
       }
       if (npc.torso) {
-        npc.torso.rotation.x = 0;
-        npc.torso.rotation.z = 0;
+        npc.torso.rotation.x = THREE.MathUtils.damp(npc.torso.rotation.x, 0.04, 12.0, delta);
+        npc.torso.rotation.y = THREE.MathUtils.damp(npc.torso.rotation.y, -swing * 0.12, 12.0, delta);
+        npc.torso.rotation.z = THREE.MathUtils.damp(npc.torso.rotation.z, Math.cos(npc.walkCycle) * 0.03, 12.0, delta);
+        npc.torso.position.y = THREE.MathUtils.damp(npc.torso.position.y, 0.85 + strideBob, 16.0, delta);
       }
     }
     return false;

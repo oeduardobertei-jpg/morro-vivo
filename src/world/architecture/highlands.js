@@ -295,6 +295,13 @@ export const HighlandsMixin = {
 
     this.group.add(miranteGroup);
     this.miranteImperial = miranteGroup;
+    this.propObstacles = this.propObstacles || [];
+    this.propObstacles.push(
+      { x: pos.x - 3.6, z: pos.z - 2.5, r: 0.72 },
+      { x: pos.x + 3.6, z: pos.z - 2.5, r: 0.72 },
+      { x: pos.x - 2.8, z: pos.z + 7.8, r: 0.55 },
+      { x: pos.x + 2.8, z: pos.z + 7.8, r: 0.55 }
+    );
   },
 
   // 2. PARQUE EÓLICO DA CHAPADA (3 Turbinas Eólicas Elegantes na Crista Norte, 100% fora das estradas!)
@@ -308,11 +315,13 @@ export const HighlandsMixin = {
     const mastMat = new THREE.MeshLambertMaterial({ color: 0xE2E8F0, flatShading: true });
     const bladeMat = new THREE.MeshLambertMaterial({ color: 0xF8FAFC, flatShading: true });
     const tipMat = new THREE.MeshBasicMaterial({ color: 0xEF4444 }); // Ponta vermelha de aviação
+    this.propObstacles = this.propObstacles || [];
 
     turbinePositions.forEach((pos, idx) => {
       if (this.infrastructureNodes) {
         this.infrastructureNodes.push({ x: pos.x, z: pos.z, r: 8.5 });
       }
+      this.propObstacles.push({ x: pos.x, z: pos.z, r: 1.75 });
       const tGroup = new THREE.Group();
       const gy = this.terrain ? this.terrain.getElevation(pos.x, pos.z) : 12.0;
       tGroup.position.set(pos.x, gy, pos.z);

@@ -173,7 +173,7 @@ export const MobilityMixin = {
           isFemale: bIdx === 1
         });
         waitFig.group.scale.setScalar(0.88);
-        waitFig.group.position.set(bx * 0.82, 0.44, 1.2);
+        waitFig.group.position.set(bx * 0.82, 0.675, 1.2);
         waitFig.group.rotation.y = bIdx === 0 ? 0.35 : -0.35;
         st.add(waitFig.group);
       });
@@ -212,6 +212,8 @@ export const MobilityMixin = {
       if (this.infrastructureNodes) {
         this.infrastructureNodes.push({ x, z });
       }
+      this.propObstacles = this.propObstacles || [];
+      this.propObstacles.push({ x, z, hw: 3.9, hd: 3.7, rotY: 0 });
 
       return st;
     };
@@ -265,6 +267,8 @@ export const MobilityMixin = {
       if (this.infrastructureNodes) {
         this.infrastructureNodes.push({ x, z });
       }
+      this.propObstacles = this.propObstacles || [];
+      this.propObstacles.push({ x, z, hw: 3.5, hd: 3.0, rotY: 0 });
       return st;
     };
 

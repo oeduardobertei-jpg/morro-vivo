@@ -10,7 +10,7 @@ export const WorkersMixin = {
       return null;
     }
 
-    const olariaPos = { x: -20, z: -14 };
+    const olariaPos = { x: -20.0, z: -10.5 };
     candidates.sort((a, b) => {
       const da = Math.hypot(a.group.position.x - olariaPos.x, a.group.position.z - olariaPos.z);
       const db = Math.hypot(b.group.position.x - olariaPos.x, b.group.position.z - olariaPos.z);
@@ -71,24 +71,29 @@ export const WorkersMixin = {
     npc.courierSite = null;
     npc.onDelivered = null;
     npc.cartGroup.visible = false;
+    if (npc.leftArm) npc.leftArm.rotation.set(0, 0, 0);
+    if (npc.rightArm) npc.rightArm.rotation.set(0, 0, 0);
+    if (npc.torso) npc.torso.rotation.set(0, 0, 0);
     npc.speed = 1.8 + Math.random() * 0.6;
     npc.currentAction = 'Retornando da entrega de tijolos';
 
-    let nearestWpIdx = 0;
-    let minDist = 9999;
-    for (let i = 0; i < npc.waypoints.length; i++) {
-      const wp = npc.waypoints[i];
-      const d = Math.hypot(npc.group.position.x - wp.x, npc.group.position.z - wp.z);
-      if (d < minDist) {
-        minDist = d;
-        nearestWpIdx = i;
+    const curY = (this.terrain ? this.terrain.getElevation(npc.group.position.x, npc.group.position.z) : npc.group.position.y) || 0;
+    const nearestNode = this.getNearestRoadNode ? this.getNearestRoadNode(npc.group.position.x, npc.group.position.z, curY) : null;
+    if (nearestNode) {
+      npc.currentNodeId = nearestNode.id;
+      if (nearestNode.neighbors && nearestNode.neighbors.length > 0) {
+        npc.targetNodeId = nearestNode.neighbors[Math.floor(Math.random() * nearestNode.neighbors.length)];
+      } else {
+        npc.targetNodeId = nearestNode.id;
       }
+      const targetNode = this.roadNodesMap ? this.roadNodesMap.get(npc.targetNodeId) : null;
+      npc.targetPos = targetNode ? targetNode.position.clone() : nearestNode.position.clone();
+      npc.targetPos.y = this.getFloorElevation(npc.targetPos.x, npc.targetPos.z);
+    } else if (npc.waypoints && npc.waypoints.length > 0) {
+      npc.targetPos = npc.waypoints[0].clone();
+      npc.targetPos.y = this.getFloorElevation(npc.targetPos.x, npc.targetPos.z);
     }
-    npc.currentWpIndex = nearestWpIdx;
-    npc.targetPos = npc.waypoints[nearestWpIdx].clone();
-    if (this.terrain) {
-      npc.targetPos.y = this.terrain.getElevation(npc.targetPos.x, npc.targetPos.z);
-    }
+    npc.pathQueue = [];
   },
 
   // RECRUIT REAL CITIZENS FROM THE WORKING POPULATION AS BUILDERS

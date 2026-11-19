@@ -167,6 +167,22 @@ try {
   await setCam(45, 58, -88, -140, 8, -175);
   await snap('11_northwest_ridge_night.png');
 
+  // 6E. Close-up Praia: Barraca do Mate, Beto do Mate, Frescobol e banhistas descalços/Havaianas (Dia)
+  await setModeAndPhase('bloom', 'day');
+  await setCam(-4.2, 4.0, 49.5, -9.8, 2.0, 42.8);
+  await snap('12_beach_stall_barraqueiro_closeup.png');
+
+  // 6F. Close-up Expansão Oeste: Horta Agroecológica (Dona Nair + Espantalho) & Capoeira (Mestre Bimba) (Dia)
+  await setCam(-84.5, 8.2, -32.5, -100.5, 3.2, -19.5);
+  await snap('13_capoeira_horta_closeup.png');
+
+  // 6G. Close-up Noturno: Roda de Samba, Tião do Cavaco, pandeiro e foliões na Praça Central (Noite)
+  await setModeAndPhase('bloom', 'night');
+  await new Promise((r) => setTimeout(r, 2500));
+  const plazaY = await page.evaluate(() => window.__morro?.npcs?.getFloorElevation(-2, -4) ?? 26.0);
+  await setCam(-12.5, plazaY + 9.5, 6.5, -1.5, plazaY + 1.0, -4.0);
+  await snap('14_samba_night_npcs_closeup.png');
+
   // 7. Teste funcional rápido: WASD move câmera + FastPicker clica casa agrupada
   await setCam(-45, 42, 108, 0, 8, -10);
   const beforePos = await page.evaluate(() => window.__morro.controls.target.toArray());
@@ -289,11 +305,117 @@ try {
     let pointLightCount = 0;
     m.scene.traverse((o) => { if (o.isPointLight) pointLightCount++; });
 
+    // Auditoria automática de colisão, flutuação e posicionamento especial dos NPCs
+    const houses = (m.arch && m.arch.houses) || [];
+    const props = (m.arch && m.arch.propObstacles) || [];
+    const npcs = (m.npcs && m.npcs.npcs) || [];
+    const insideHouse = [];
+    const insideProp = [];
+    const floating = [];
+    let maxGroundErr = 0;
+    let donaNairDistToScarecrow = null;
+    let jonasDistToBars = null;
+
+    for (let i = 0; i < npcs.length; i++) {
+      const npc = npcs[i];
+      if (!npc || !npc.group) continue;
+      const p = npc.group.position;
+      const label = npc.citizenName || npc.role || `npc_${i}`;
+
+      if (npc.isHorta) {
+        donaNairDistToScarecrow = Number(Math.hypot(p.x - (-92.0), p.z - (-25.0)).toFixed(3));
+      }
+      if (npc.isCalistenia) {
+        jonasDistToBars = Number(Math.hypot(p.x - 114.4, p.z - (-10.8)).toFixed(3));
+      }
+
+      const skipObstacleAudit =
+        npc.isSitting || npc.isBeachSeated || npc.isScenicMirante || npc.isBarraqueiro ||
+        npc.isFisherman || npc.isAthlete || npc.isCapoeira || npc.isHorta ||
+        npc.isMototaxi || npc.isSurfer || npc.isCalistenia || npc.role === 'Jogador da Pelada' ||
+        (npc.sambaState && npc.sambaState.isActive) ||
+        (npc.beachState && (npc.beachState.mode === 'swimming_chest' || npc.beachState.mode === 'to_swimming' || npc.beachState.mode === 'exiting_water'));
+
+      if (!skipObstacleAudit) {
+        for (let h = 0; h < houses.length; h++) {
+          const hs = houses[h];
+          const dy = Math.abs(p.y - hs.position.y);
+          const distH = Math.hypot(p.x - hs.position.x, p.z - hs.position.z);
+          if (dy < 3.2 && distH < 1.80) {
+            insideHouse.push({ label, distH: Number(distH.toFixed(2)), x: Number(p.x.toFixed(1)), z: Number(p.z.toFixed(1)) });
+            break;
+          }
+        }
+
+        for (let k = 0; k < props.length; k++) {
+          const ob = props[k];
+          if (ob.ignoreRoles && ob.ignoreRoles.includes(npc.role)) continue;
+          if (ob.r !== undefined) {
+            const dProp = Math.hypot(p.x - ob.x, p.z - ob.z);
+            if (dProp < ob.r - 0.14) {
+              insideProp.push({ label, dProp: Number(dProp.toFixed(2)), r: ob.r });
+              break;
+            }
+          } else if (ob.hw !== undefined && ob.hd !== undefined) {
+            const dx = p.x - ob.x;
+            const dz = p.z - ob.z;
+            const cos = Math.cos(ob.rotY || 0);
+            const sin = Math.sin(ob.rotY || 0);
+            const lx = dx * cos - dz * sin;
+            const lz = dx * sin + dz * cos;
+            if (Math.abs(lx) < ob.hw - 0.14 && Math.abs(lz) < ob.hd - 0.14) {
+              insideProp.push({ label, lx: Number(lx.toFixed(2)), lz: Number(lz.toFixed(2)), hw: ob.hw, hd: ob.hd });
+              break;
+            }
+          }
+        }
+      }
+
+      const skipGroundAudit =
+        npc.builderState === 'celebrating' || npc.isScenicMirante || npc.isSitting ||
+        npc.isBeachCustomY || npc.isBeachSeated || npc.isBarraqueiro || npc.isAthlete ||
+        npc.isCalistenia || npc.role === 'Jogador da Pelada' ||
+        (npc.sambaState && npc.sambaState.isActive && npc.sambaState.slotIndex < 10) ||
+        (npc.beachState && (npc.beachState.mode === 'swimming_chest' || npc.beachState.mode === 'to_swimming' || npc.beachState.mode === 'exiting_water'));
+
+      if (!skipGroundAudit && m.npcs && m.npcs.getFloorElevation) {
+        const expectedY = m.npcs.getFloorElevation(p.x, p.z);
+        const err = Math.abs(p.y - expectedY);
+        if (err > maxGroundErr) maxGroundErr = err;
+        if (err > 0.12) {
+          floating.push({ label, y: Number(p.y.toFixed(2)), expectedY: Number(expectedY.toFixed(2)), err: Number(err.toFixed(2)) });
+        }
+      }
+    }
+
+    const npcAudit = {
+      totalNPCs: npcs.length,
+      insideHouseCount: insideHouse.length,
+      insidePropCount: insideProp.length,
+      floatingCount: floating.length,
+      maxGroundErr: Number(maxGroundErr.toFixed(3)),
+      donaNairDistToScarecrow,
+      jonasDistToBars,
+      samples: {
+        insideHouse: insideHouse.slice(0, 5),
+        insideProp: insideProp.slice(0, 5),
+        floating: floating.slice(0, 5)
+      },
+      ok: (
+        insideHouse.length === 0 &&
+        insideProp.length === 0 &&
+        floating.length === 0 &&
+        (donaNairDistToScarecrow === null || donaNairDistToScarecrow >= 1.4) &&
+        (jonasDistToBars === null || jonasDistToBars <= 0.5)
+      )
+    };
+
     return {
       fpsMaquete: Number(fpsMaquete.toFixed(1)),
       fpsStudioFX: Number(fpsStudioFX.toFixed(1)),
       maqueteRenderInfo,
       pointLightCount,
+      npcAudit,
       perf: m.perf.snapshot(),
       cull: m.culler.stats,
       batch: m.batcher.stats,
@@ -305,7 +427,7 @@ try {
   });
 
   console.log(JSON.stringify({ outDir, wasdMovedDist, pickCheck, audioCheck, metrics, errors, warningCount: warnings.length }, null, 2));
-  if (errors.length > 0) process.exitCode = 1;
+  if (errors.length > 0 || !metrics.npcAudit?.ok) process.exitCode = 1;
 } finally {
   await browser.close();
 }

@@ -21,11 +21,11 @@ export const RoadGraphMixin = {
 
     // 3. Píer dos Pescadores & Rampa de Acesso em Madeira no Extremo Oeste (x ~ -78)
     if (Math.abs(x - (-78.0)) <= 2.2) {
-      if (z >= 73.0 && z <= 96.5) {
+      if (z >= 73.2 && z <= 96.5) {
         return 1.78; // Superfície firme do pranchão de madeira sobre as águas
       }
-      if (z >= 60.8 && z < 73.0) {
-        const rampT = Math.max(0, Math.min(1, (z - 61.2) / 12.0));
+      if (z >= 60.8 && z < 73.2) {
+        const rampT = Math.max(0, Math.min(1, (z - 60.8) / 12.4));
         return 0.40 + rampT * 1.38; // Sobe suavemente pela rampa de madeira até o deck do píer
       }
     }
@@ -36,7 +36,22 @@ export const RoadGraphMixin = {
       return yTerr + 0.25;
     }
 
-    // 5. Decks Panorâmicos de Madeira nas Encostas & Cume (evita que NPCs afundem ou flutuem no tablado circular)
+    // 5. Decks Panorâmicos de Madeira nas Encostas, Terreiros & Cume (evita que NPCs afundem ou flutuem)
+    if (Math.hypot(x - (-110.0), z - (-15.0)) <= 5.0) {
+      return (this.terrain ? this.terrain.getElevation(-110.0, -15.0) : 5.4) + 0.44; // Terreiro de Capoeira
+    }
+    if (Math.abs(x - (-92.0)) <= 4.6 && Math.abs(z - (-25.0)) <= 3.3) {
+      return (this.terrain ? this.terrain.getElevation(-92.0, -25.0) : 8.2) + 0.09; // Horta Comunitária
+    }
+    if (Math.abs(x - 112.0) <= 5.6 && Math.abs(z - (-12.0)) <= 3.8) {
+      return (this.terrain ? this.terrain.getElevation(112.0, -12.0) : 6.2) + 0.25; // Academia ao Ar Livre
+    }
+    if (Math.hypot(x - (-95.0), z) <= 6.2) {
+      return (this.terrain ? this.terrain.getElevation(-95.0, 0.0) : 3.6) + 0.18; // Vila dos Pescadores
+    }
+    if (Math.hypot(x - 95.0, z - (-18.0)) <= 8.2) {
+      return (this.terrain ? this.terrain.getElevation(95.0, -18.0) : 5.2) + 0.20; // Grande Olaria Leste
+    }
     if (Math.hypot(x - (-78.0), z - (-50.0)) <= 7.0) {
       return (this.terrain ? this.terrain.getElevation(-78.0, -50.0) : 10.4) + 0.20; // Mirante das Pipas
     }
@@ -82,7 +97,7 @@ export const RoadGraphMixin = {
       { id: 'sol_ladeira_4', x: 14.0, z: -18.0, type: 'street', desc: 'Ladeira do Morro do Sol 4' },
 
       // 3. Eixo Central da Serra & Olaria (Alinhamento Real com a Ladeira de Asfalto)
-      { id: 'olaria_dock', x: -22.0, z: -14.0, type: 'industry', desc: 'Cais de Carga da Olaria' },
+      { id: 'olaria_dock', x: -20.0, z: -10.5, type: 'industry', desc: 'Cais de Carga da Olaria' },
       { id: 'spine_1', x: -15.0, z: -18.0, type: 'highway', desc: 'Entroncamento Central da Serra' },
       { id: 'spine_2', x: -18.0, z: -28.0, type: 'highway', desc: 'Curva Oeste da Serra' },
       { id: 'spine_mid', x: -16.0, z: -40.0, type: 'highway', desc: 'Subida da Serra Média' },
@@ -150,7 +165,7 @@ export const RoadGraphMixin = {
       { id: 'coast_exp_e_4', x: 278.0, z: 18.0, type: 'coast', desc: 'Calçadão Extremo Leste' },
 
       // 8. Várzea & Mercado Cultural (Perímetro 100% plano contornando o campinho por fora)
-      { id: 'varzea_market', x: 75.0, z: 4.0, type: 'market', desc: 'Deck Cultural da Várzea' },
+      { id: 'varzea_market', x: 75.0, z: 7.6, type: 'market', desc: 'Deck Cultural da Várzea' },
       { id: 'varzea_promenade', x: 55.0, z: 14.5, type: 'street', desc: 'Calçadão do Campinho' },
       { id: 'varzea_west', x: 36.0, z: 14.0, type: 'street', desc: 'Acesso Oeste do Campinho' },
 
@@ -191,7 +206,7 @@ export const RoadGraphMixin = {
 
       // 12. Expansão 1.2.2: Encostas e Pontos Vivos
       { id: 'west_capoeira', x: -110.0, z: -15.0, type: 'capoeira', desc: 'Mirante do Poente & Terreiro de Capoeira' },
-      { id: 'west_horta', x: -92.0, z: -25.0, type: 'horta', desc: 'Horta Comunitária em Socalcos' },
+      { id: 'west_horta', x: -92.0, z: -20.8, type: 'horta', desc: 'Horta Comunitária em Socalcos' },
       { id: 'west_trail_foot', x: -105.0, z: 12.0, type: 'trail', desc: 'Trilha de Dormentes da Encosta Oeste' },
       { id: 'east_mototaxi', x: 92.0, z: 14.0, type: 'mototaxi', desc: 'Ponto Central de Mototáxi' },
       { id: 'east_academia', x: 112.0, z: -12.0, type: 'academia', desc: 'Academia ao Ar Livre da Colina' },

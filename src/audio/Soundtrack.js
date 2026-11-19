@@ -287,6 +287,34 @@ export class AmbientSoundtrack {
     }
   }
 
+  getNowPlaying() {
+    if (this.musicEngine && typeof this.musicEngine.getNowPlaying === 'function') {
+      return this.musicEngine.getNowPlaying();
+    }
+    return {
+      isPlaying: this.isPlaying,
+      section: 'A',
+      title: 'Toque para ouvir Bossa & Mar',
+      chord: 'Cmaj9',
+      bpm: 83,
+      phase: this._getCurrentPhase(),
+      barIndex: 0
+    };
+  }
+
+  skipSection() {
+    this.init();
+    if (this.ctx && this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(() => {});
+    }
+    if (!this.isPlaying) {
+      this.userPausedMusic = false;
+      this.play();
+      if (this.onPlayStateChange) this.onPlayStateChange(true);
+    }
+    return this.musicEngine ? this.musicEngine.nextSection() : this.getNowPlaying();
+  }
+
   update(delta) {
     if (!this.ctx || this.ctx.state !== 'running') return;
 

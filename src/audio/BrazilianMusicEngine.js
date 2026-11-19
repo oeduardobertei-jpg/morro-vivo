@@ -11,6 +11,13 @@
 // - rhodes: abertura suave no teclado elétrico
 // - melodyPool: notas-alvo cantáveis (3ª, 6ª, 7ª, 9ª) na região da flauta (MIDI 67..81)
 // - section: 'A' | 'B' | 'C' | 'breath'
+const SECTION_TITLES = {
+  A: 'Sol na Varanda',
+  B: 'Brisa da Baía',
+  C: 'Ponte do Mirante',
+  breath: 'Respiro & Mar'
+};
+
 const SONG_FORM = [
   // === SEÇÃO A: "Sol na Varanda" (8 compassos — alegria leve, luminosa e acolhedora) ===
   { name: 'Cmaj9',   section: 'A', bass: [48, 43], voicing: [55, 59, 62, 64], rhodes: [64, 67, 71, 74], melodyPool: [71, 74, 76, 79, 72] },
@@ -104,6 +111,27 @@ export class BrazilianMusicEngine {
     if (phase && phase !== this.phase) {
       this.phase = phase;
     }
+  }
+
+  getNowPlaying() {
+    const chord = SONG_FORM[this.barIndex] || SONG_FORM[0];
+    return {
+      isPlaying: this.isPlaying,
+      section: chord.section,
+      title: SECTION_TITLES[chord.section] || 'Sol na Varanda',
+      chord: chord.name,
+      bpm: this._getBpm(),
+      phase: this.phase,
+      barIndex: this.barIndex
+    };
+  }
+
+  nextSection() {
+    const nextIdx = (Math.floor(this.barIndex / 8) + 1) * 8 % SONG_FORM.length;
+    this.barIndex = nextIdx;
+    this.stepInBar = 0;
+    if (this.ctx) this.nextStepTime = this.ctx.currentTime + 0.05;
+    return this.getNowPlaying();
   }
 
   _getBpm() {

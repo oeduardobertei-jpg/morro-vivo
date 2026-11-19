@@ -44,6 +44,7 @@ export class PostEffects {
     this.bcEffect = null;
     this.gui = null;
     this._ssaoEnabled = true;
+    this.onModeChange = options.onModeChange || null;
 
     this.params = {
       mode: this.mode,
@@ -196,6 +197,7 @@ export class PostEffects {
     this.mode = newMode;
     this.params.mode = newMode;
     this._syncVisualState();
+    if (typeof this.onModeChange === 'function') this.onModeChange(this.mode);
     return this.mode;
   }
 

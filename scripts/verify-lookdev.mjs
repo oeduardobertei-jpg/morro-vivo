@@ -265,6 +265,67 @@ try {
     await snap('20_pets_cat_rooftop_closeup.png');
   }
 
+  // 6M. Showcase Lofi Rio HUD (Dia em repouso, Pôr do Sol + Mixer ancorado, Noite + Mirantes)
+  await page.evaluate(() => {
+    const m = window.__morro;
+    if (m.perf) {
+      m.perf.visible = false;
+      m.perf.render();
+    }
+    document.querySelectorAll('.lil-gui').forEach((g) => {
+      g.dataset.prevDisplay = g.style.display;
+      g.style.display = 'none';
+    });
+    document.getElementById('hud-whisper')?.classList.remove('visible');
+    document.getElementById('inspector-card')?.classList.remove('visible');
+  });
+
+  await setModeAndPhase('bloom', 'day');
+  await page.evaluate(() => {
+    document.getElementById('hud-whisper')?.classList.remove('visible');
+  });
+  await setCam(-58, 62, 138, 0, 14, -22);
+  await snap('21_hud_lofi_day_resting.png');
+
+  await setModeAndPhase('bloom', 'sunset');
+  await setCam(-55, 22, 112, -78, 1.5, 62);
+  await page.evaluate(async () => {
+    const m = window.__morro;
+    if (m.soundtrack) {
+      m.soundtrack.init();
+      if (m.soundtrack.ctx?.state === 'suspended') await m.soundtrack.ctx.resume().catch(() => {});
+      m.soundtrack.play();
+    }
+    document.getElementById('pop-mixer')?.showPopover?.();
+  });
+  await new Promise((r) => setTimeout(r, 550));
+  await snap('22_hud_lofi_sunset_mixer.png');
+
+  await page.evaluate(() => {
+    const pmx = document.getElementById('pop-mixer');
+    try { if (pmx?.matches(':popover-open')) pmx.hidePopover(); } catch {}
+  });
+  await setModeAndPhase('bloom', 'night');
+  await setCam(-45, 42, 108, 0, 8, -10);
+  await page.evaluate(() => {
+    document.getElementById('pop-cameras')?.showPopover?.();
+  });
+  await new Promise((r) => setTimeout(r, 450));
+  await snap('23_hud_lofi_night_cameras.png');
+
+  await page.evaluate(() => {
+    const m = window.__morro;
+    const pcam = document.getElementById('pop-cameras');
+    try { if (pcam?.matches(':popover-open')) pcam.hidePopover(); } catch {}
+    if (m.perf) {
+      m.perf.visible = true;
+      m.perf.render();
+    }
+    document.querySelectorAll('.lil-gui').forEach((g) => {
+      g.style.display = g.dataset.prevDisplay ?? '';
+    });
+  });
+
   // 7. Teste funcional rápido: WASD move câmera + FastPicker clica casa agrupada
   await setCam(-45, 42, 108, 0, 8, -10);
   const beforePos = await page.evaluate(() => window.__morro.controls.target.toArray());
@@ -379,7 +440,10 @@ try {
     m.postFX.setMode('maquete');
     await new Promise((r) => setTimeout(r, 1500));
     const fpsMaquete = await countFrames(2000);
-    const maqueteRenderInfo = { ...m.renderer.info.render };
+    const rA = { ...m.renderer.info.render };
+    await new Promise((r) => requestAnimationFrame(r));
+    const rB = { ...m.renderer.info.render };
+    const maqueteRenderInfo = rB.calls < rA.calls ? rB : rA;
 
     m.postFX.setMode('bloom');
     await new Promise((r) => setTimeout(r, 1500));
@@ -618,6 +682,86 @@ try {
       )
     };
 
+    // Auditoria do novo HUD Lofi Rio
+    const hasLegacyBars = Boolean(document.querySelector('.top-bar, .bottom-bar, .news-ticker'));
+    const dockEl = document.querySelector('.hud-dock');
+    const dockRect = dockEl ? dockEl.getBoundingClientRect() : null;
+    const dockFitsViewport = Boolean(
+      dockRect &&
+      dockRect.width > 420 &&
+      dockRect.width < 940 &&
+      dockRect.bottom <= 720
+    );
+    const dayTxt = document.getElementById('day-counter')?.innerText?.trim() || '';
+    const clockTxt = document.getElementById('hud-clock')?.innerText?.trim() || '';
+    const popTxt = document.getElementById('val-pop')?.innerText?.trim() || '';
+    const wealthTxt = document.getElementById('val-wealth')?.innerText?.trim() || '';
+    const topLeftClean = Boolean(dayTxt && clockTxt.includes(':') && popTxt && wealthTxt.includes('R$'));
+
+    let popoversOk = false;
+    try {
+      const pMix = document.getElementById('pop-mixer');
+      const pCam = document.getElementById('pop-cameras');
+      if (pMix && pCam && typeof pMix.showPopover === 'function') {
+        pMix.showPopover();
+        const mixOpen = pMix.matches(':popover-open');
+        pMix.hidePopover();
+        pCam.showPopover();
+        const camOpen = pCam.matches(':popover-open');
+        pCam.hidePopover();
+        popoversOk = Boolean(mixOpen && camOpen && !pCam.matches(':popover-open'));
+      }
+    } catch {
+      popoversOk = false;
+    }
+
+    let dialogOk = false;
+    try {
+      const dlg = document.getElementById('modal-politics');
+      if (dlg && typeof dlg.showModal === 'function') {
+        dlg.showModal();
+        const opened = dlg.open === true;
+        dlg.close();
+        dialogOk = Boolean(opened && dlg.open === false);
+      }
+    } catch {
+      dialogOk = false;
+    }
+
+    let zenModeOk = false;
+    try {
+      const restoreBtn = document.getElementById('btn-zen-restore');
+      document.body.classList.add('ui-off');
+      const visibleWhenZen = restoreBtn ? getComputedStyle(restoreBtn).display !== 'none' : false;
+      document.body.classList.remove('ui-off');
+      const hiddenAfterRestore = restoreBtn ? getComputedStyle(restoreBtn).display === 'none' : false;
+      zenModeOk = Boolean(visibleWhenZen && hiddenAfterRestore);
+    } catch {
+      zenModeOk = false;
+    }
+
+    const phaseSyncOk = document.body.dataset.phase === m.env.currentPhase;
+
+    const hudAudit = {
+      hasLegacyBars,
+      dockWidth: dockRect ? Math.round(dockRect.width) : 0,
+      dockFitsViewport,
+      topLeftClean,
+      popoversOk,
+      dialogOk,
+      zenModeOk,
+      phaseSyncOk,
+      ok: (
+        !hasLegacyBars &&
+        dockFitsViewport &&
+        topLeftClean &&
+        popoversOk &&
+        dialogOk &&
+        zenModeOk &&
+        phaseSyncOk
+      )
+    };
+
     return {
       fpsMaquete: Number(fpsMaquete.toFixed(1)),
       fpsStudioFX: Number(fpsStudioFX.toFixed(1)),
@@ -626,6 +770,7 @@ try {
       npcAudit,
       spatialAudit,
       petAudit,
+      hudAudit,
       perf: m.perf.snapshot(),
       cull: m.culler.stats,
       batch: m.batcher.stats,
@@ -637,7 +782,7 @@ try {
   });
 
   console.log(JSON.stringify({ outDir, wasdMovedDist, pickCheck, audioCheck, metrics, errors, warningCount: warnings.length }, null, 2));
-  if (errors.length > 0 || !metrics.npcAudit?.ok || !metrics.spatialAudit?.ok || !metrics.petAudit?.ok) process.exitCode = 1;
+  if (errors.length > 0 || !metrics.npcAudit?.ok || !metrics.spatialAudit?.ok || !metrics.petAudit?.ok || !metrics.hudAudit?.ok) process.exitCode = 1;
 } finally {
   await browser.close();
 }

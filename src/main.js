@@ -243,13 +243,102 @@ function updateKeyboardCamera(dt) {
   }
 }
 
+// Top-layer dialog/popover animation & light-dismiss helpers (modern-web-guidance)
+let _supportsDisplayTransition;
+function canTransitionDisplay() {
+  if (_supportsDisplayTransition !== undefined) return _supportsDisplayTransition;
+  if (!window.CSS?.supports?.('transition-behavior', 'allow-discrete') || !document.body) {
+    return false;
+  }
+  const probe = document.createElement('div');
+  probe.style.cssText = 'transition: display 1s allow-discrete !important; display: block;';
+  document.body.appendChild(probe);
+  getComputedStyle(probe).display;
+  probe.style.display = 'none';
+  _supportsDisplayTransition = getComputedStyle(probe).display === 'block';
+  probe.remove();
+  return _supportsDisplayTransition;
+}
+
+function supportsTopLayerExit() {
+  return Boolean(window.CSS?.supports?.('overlay', 'auto') && canTransitionDisplay());
+}
+
+async function closeTopLayer(dialogEl) {
+  if (!dialogEl || !dialogEl.open) return;
+  if (!supportsTopLayerExit()) {
+    dialogEl.setAttribute('data-closing', '');
+    const animations = dialogEl.getAnimations ? dialogEl.getAnimations({ subtree: true }) : [];
+    if (animations.length > 0) {
+      await Promise.race([
+        Promise.allSettled(animations.map((a) => a.finished)),
+        new Promise((r) => setTimeout(r, 400))
+      ]);
+    }
+    if (!dialogEl.hasAttribute('data-closing')) return;
+    dialogEl.removeAttribute('data-closing');
+  }
+  if (dialogEl.open) dialogEl.close();
+}
+
+function isPopoverOpen(popEl) {
+  if (!popEl) return false;
+  try {
+    return popEl.matches(':popover-open') || popEl.classList.contains(':popover-open');
+  } catch {
+    return popEl.classList.contains(':popover-open');
+  }
+}
+
+function hidePopoverSafe(popEl) {
+  if (!popEl) return;
+  if (typeof popEl.hidePopover === 'function') {
+    if (isPopoverOpen(popEl)) popEl.hidePopover();
+  } else {
+    popEl.classList.remove(':popover-open');
+  }
+}
+
+function togglePopoverSafe(popEl) {
+  if (!popEl) return;
+  if (typeof popEl.togglePopover === 'function') {
+    popEl.togglePopover();
+  } else {
+    popEl.classList.toggle(':popover-open');
+  }
+}
+
+function syncSliderVisual(slider) {
+  if (!slider) return;
+  slider.style.setProperty('--attr-min', slider.min || '0');
+  slider.style.setProperty('--attr-max', slider.max || '100');
+  slider.style.setProperty('--control-value', slider.value);
+  slider.setAttribute('aria-valuetext', `${slider.value}%`);
+}
+
+if (!('closedBy' in HTMLDialogElement.prototype)) {
+  const outsideDialog = (e, dialog) => {
+    const r = dialog.getBoundingClientRect();
+    return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+  };
+  for (const dialog of document.querySelectorAll('dialog[closedby="any"]')) {
+    let pressedOutside = false;
+    dialog.addEventListener('pointerdown', (e) => {
+      pressedOutside = outsideDialog(e, dialog);
+    });
+    dialog.addEventListener('pointerup', (e) => {
+      if (pressedOutside && outsideDialog(e, dialog)) closeTopLayer(dialog);
+    });
+  }
+}
+
 // Fast BVH + Sphere Pre-filtered Raycaster for instant object picking (< 0.1ms)
 const fastPicker = new FastPicker(camera, architecture, npcs, pets);
 const mouse = new THREE.Vector2();
 
 window.addEventListener('click', (event) => {
-  // Ignore clicks on UI elements
-  if (event.target.closest('#ui-overlay') && !event.target.closest('#canvas-container')) {
+  // Ignore clicks on UI elements, popovers, dialogs or debug controls
+  if (event.target.closest('#ui-overlay, [popover], dialog, .lil-gui')) {
     return;
   }
 
@@ -297,24 +386,20 @@ function showInspector(house) {
   const cost = ACTION_COSTS.houseUpgrade;
 
   inspectorContent.innerHTML = `
-    <h3 style="font-family: var(--font-title); font-size: 1.15rem; color: #FFF; margin-bottom: 0.4rem;">
-      🏠 Casa na Encosta (${house.colorName})
-    </h3>
-    <div style="font-size: 0.8rem; color: var(--color-gold); margin-bottom: 0.6rem; font-weight: 700;">
-      Bairro: ${factionNames[house.faction] || 'Comunidade'}
-    </div>
-    <div style="font-size: 0.82rem; line-height: 1.6; color: var(--color-text-dim);">
+    <h3 class="insp-title">🏠 Casa na Encosta (${house.colorName})</h3>
+    <div class="insp-sub">Bairro: ${factionNames[house.faction] || 'Comunidade'}</div>
+    <div class="insp-meta">
       <div>• <strong>Estrutura:</strong> ${levelLabels[house.level] || 'Laje'}</div>
       <div>• <strong>Moradores:</strong> ${house.residents} pessoas</div>
       <div>• <strong>Economia da Casa:</strong> R$ ${house.wealth}</div>
       <div>• <strong>Água na Caixa:</strong> ${house.waterLevel}%</div>
     </div>
-    <div style="margin-top: 0.8rem; display: flex; flex-direction: column; gap: 0.42rem;">
-      <button id="btn-focus-house" class="btn-icon" style="width: 100%; justify-content: center; background: rgba(42, 157, 143, 0.35); border-color: rgba(72, 202, 228, 0.45);">
+    <div class="insp-actions">
+      <button id="btn-focus-house" type="button" class="insp-btn">
         🎥 Enquadrar esta Moradia
       </button>
-      <button id="btn-upgrade-this" class="btn-icon" style="width: 100%; justify-content: center; background: ${canUpgrade ? 'var(--color-primary)' : 'rgba(255,255,255,0.1)'};">
-        ${canUpgrade ? `🏗️ Financiar Novo Andar (Custo: R$ ${cost})` : '✅ Altura Máxima Atingida (3 Andares)'}
+      <button id="btn-upgrade-this" type="button" class="insp-btn ${canUpgrade ? 'insp-btn-accent' : ''}">
+        ${canUpgrade ? `🏗️ Financiar Novo Andar (R$ ${cost})` : '✅ Altura Máxima Atingida (3 Andares)'}
       </button>
     </div>
   `;
@@ -347,7 +432,7 @@ function showInspector(house) {
         simulation.performAutoSave();
         showInspector(house);
       } else {
-        simulation.globalMetrics.wealth += cost; // Reembolsa caso já em obra
+        simulation.globalMetrics.wealth += cost;
         simulation.addEvent(`A casa já está em obras ou atingiu a altura máxima permitida!`, 'info');
       }
     };
@@ -365,21 +450,17 @@ function showCitizenInspector(npc) {
   const votedName = pol ? pol.votedCandidateName : 'Conselho Popular';
 
   inspectorContent.innerHTML = `
-    <h3 style="font-family: var(--font-title); font-size: 1.15rem; color: #FFF; margin-bottom: 0.4rem;">
-      👤 ${npc.citizenName}
-    </h3>
-    <div style="font-size: 0.8rem; color: var(--color-gold); margin-bottom: 0.6rem; font-weight: 700;">
-      Função: ${npc.role} ${teamLabel}
-    </div>
-    <div style="font-size: 0.82rem; line-height: 1.6; color: var(--color-text-dim);">
-      <div>• <strong>Ocupação Atual:</strong> ${npc.currentAction}</div>
+    <h3 class="insp-title">👤 ${npc.citizenName}</h3>
+    <div class="insp-sub">Função: ${npc.role} ${teamLabel}</div>
+    <div class="insp-meta">
+      <div>• <strong>Ocupação:</strong> ${npc.currentAction}</div>
       <div>• <strong>Rotina:</strong> ${statusLabel}</div>
-      <div>• <strong>Corrente Ideológica:</strong> <span style="color: ${ideoInfo.color}; font-weight: 700;">${ideoInfo.icon} ${ideoInfo.shortName}</span></div>
-      <div>• <strong>Voto para Gestor(a):</strong> <strong style="color: #FDE047;">🗳️ ${votedName}</strong></div>
+      <div>• <strong>Ideologia:</strong> <span style="color: ${ideoInfo.color}; font-weight: 700;">${ideoInfo.icon} ${ideoInfo.shortName}</span></div>
+      <div>• <strong>Voto para Gestor(a):</strong> <strong style="color: var(--hud-gold);">🗳️ ${votedName}</strong></div>
       <div>• <strong>Disposição & Alegria:</strong> 98%</div>
     </div>
-    <div style="margin-top: 0.8rem; display: flex; gap: 0.45rem;">
-      <button id="btn-focus-citizen" class="btn-icon" style="flex: 1; justify-content: center; background: var(--color-primary);">
+    <div class="insp-actions">
+      <button id="btn-focus-citizen" type="button" class="insp-btn insp-btn-accent">
         🎥 Seguir Cidadão
       </button>
     </div>
@@ -408,24 +489,22 @@ function showPetInspector(pet) {
     : (pet.isRooftop ? 'Lagarteando tranquilo no sol da laje' : 'Curioso e amigo da comunidade');
 
   inspectorContent.innerHTML = `
-    <h3 style="font-family: var(--font-title); font-size: 1.15rem; color: #FFF; margin-bottom: 0.4rem;">
-      ${icon} ${pet.name}
-    </h3>
-    <div style="font-size: 0.8rem; color: var(--color-gold); margin-bottom: 0.6rem; font-weight: 700;">
-      ${pet.role} • ${pet.coatName}
-    </div>
-    <div style="font-size: 0.82rem; line-height: 1.6; color: var(--color-text-dim);">
+    <h3 class="insp-title">${icon} ${pet.name}</h3>
+    <div class="insp-sub">${pet.role} · ${pet.coatName}</div>
+    <div class="insp-meta">
       <div>• <strong>Atividade:</strong> <span id="pet-action-val">${pet.currentAction}</span></div>
       <div>• <strong>Humor:</strong> <span id="pet-mood-val">${moodText}</span></div>
-      <div>• <strong>Carinhos Recebidos:</strong> <strong id="pet-cuddle-count" style="color: #FDE047;">❤️ ${pet.cuddles || 0}</strong></div>
+      <div>• <strong>Carinhos Recebidos:</strong> <strong id="pet-cuddle-count" style="color: var(--hud-gold);">❤️ ${pet.cuddles || 0}</strong></div>
     </div>
-    <div style="margin-top: 0.8rem; display: flex; gap: 0.45rem;">
-      <button id="btn-pet-cuddle" class="btn-icon" style="flex: 1; justify-content: center; background: #D97706;">
-        💛 Fazer Carinho
-      </button>
-      <button id="btn-focus-pet" class="btn-icon" style="flex: 1; justify-content: center; background: var(--color-primary);">
-        🎥 Seguir Pet
-      </button>
+    <div class="insp-actions">
+      <div class="insp-actions-row">
+        <button id="btn-pet-cuddle" type="button" class="insp-btn insp-btn-warm">
+          💛 Fazer Carinho
+        </button>
+        <button id="btn-focus-pet" type="button" class="insp-btn insp-btn-accent">
+          🎥 Seguir Pet
+        </button>
+      </div>
     </div>
   `;
 
@@ -470,13 +549,13 @@ function showMobilityInspector(mob) {
   const isBoat = mob.type === 'fishingBoat';
   const icon = isBonde ? '🚡' : isBoat ? '⛵' : '🛵';
   const subtitle = isBonde
-    ? 'Teleférico Carioca (3 Estações • Cabo Duplo)'
+    ? 'Teleférico Carioca (3 Estações · Cabo Duplo)'
     : isBoat
     ? `Colônia de Pescadores (${mob.captainName || 'Mestre Caiçara'})`
     : `Cooperativa de Mototáxi (${mob.driverName})`;
 
   const boatStatusMap = {
-    DOCKED: 'Atacado no Cais — Descarregando Pescado & Preparando Redes',
+    DOCKED: 'Atracado no Cais — Descarregando Pescado & Preparando Redes',
     SAILING_OUT: 'Navegando rumo ao Cardume Avistado em Alto-Mar',
     CASTING_NETS: 'Lançando Rede de Cerco sobre o Cardume',
     FISHING_WAIT: 'Cerco Fechado — Cardume na Rede de Cortiça',
@@ -502,27 +581,23 @@ function showMobilityInspector(mob) {
        <div>• <strong>Velocidade & Inclinação:</strong> Pilotagem Orgânica nas Curvas</div>`;
 
   inspectorContent.innerHTML = `
-    <h3 style="font-family: var(--font-title); font-size: 1.12rem; color: #FFF; margin-bottom: 0.35rem;">
-      ${icon} ${mob.name}
-    </h3>
-    <div style="font-size: 0.78rem; color: var(--color-gold); margin-bottom: 0.55rem; font-weight: 700;">
-      ${subtitle}
-    </div>
-    <div style="font-size: 0.8rem; line-height: 1.55; color: var(--color-text-dim);">
+    <h3 class="insp-title">${icon} ${mob.name}</h3>
+    <div class="insp-sub">${subtitle}</div>
+    <div class="insp-meta">
       <div>• <strong>Linha / Trajeto:</strong> ${mob.routeDesc}</div>
       ${detailLine}
-      <div>• <strong>Status:</strong> <span style="color: #4ADE80; font-weight: 700;">${statusText}</span></div>
+      <div>• <strong>Status:</strong> <strong style="color: var(--hud-live);">${statusText}</strong></div>
     </div>
-    <div style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.4rem;">
-      <button id="btn-focus-mobility" class="btn-icon" style="width: 100%; justify-content: center; background: var(--color-primary);">
+    <div class="insp-actions">
+      <button id="btn-focus-mobility" type="button" class="insp-btn insp-btn-accent">
         🎥 Acompanhar ${isBonde ? 'Cabine (Drone)' : isBoat ? 'Barco Pesqueiro' : 'Mototáxi'}
       </button>
       ${isBonde ? `
-      <div style="display: flex; gap: 0.4rem;">
-        <button id="btn-bonde-window" class="btn-icon" style="flex: 1; justify-content: center; background: rgba(42, 157, 143, 0.35); border-color: rgba(72, 202, 228, 0.45);">
+      <div class="insp-actions-row">
+        <button id="btn-bonde-window" type="button" class="insp-btn">
           🪟 Vista Panorâmica
         </button>
-        <button id="btn-bonde-next" class="btn-icon" style="flex: 1; justify-content: center;">
+        <button id="btn-bonde-next" type="button" class="insp-btn">
           ⏭️ Outra Cabine
         </button>
       </div>
@@ -574,6 +649,27 @@ const valEnergy = document.getElementById('val-energy');
 const valCulture = document.getElementById('val-culture');
 const dayCounter = document.getElementById('day-counter');
 const tickerText = document.getElementById('ticker-text');
+const hudWhisper = document.getElementById('hud-whisper');
+const hudFeedList = document.getElementById('hud-feed-list');
+const feedUnreadDot = document.getElementById('feed-unread-dot');
+const popFeed = document.getElementById('pop-feed');
+const popDistricts = document.getElementById('pop-districts');
+const popBuild = document.getElementById('pop-build');
+const buildTreasuryHint = document.getElementById('build-treasury-hint');
+
+let whisperTimerId = null;
+let lastFeedSignature = '';
+let isInitialFeedSync = true;
+
+function showWhisper(customText = null) {
+  if (!hudWhisper) return;
+  if (customText && tickerText) tickerText.innerText = customText;
+  hudWhisper.classList.add('visible');
+  if (whisperTimerId) clearTimeout(whisperTimerId);
+  whisperTimerId = setTimeout(() => {
+    hudWhisper.classList.remove('visible');
+  }, 6500);
+}
 
 const prainhaHarmony = document.getElementById('prainha-harmony');
 const solHarmony = document.getElementById('sol-harmony');
@@ -611,7 +707,7 @@ let lastRenderedElectionCount = -1;
 let politicsCardsBuiltForFilter = null;
 
 function renderPoliticsModal(summary, forceFullRebuild = false) {
-  if (!summary || !summary.politics || !modalPolitics || modalPolitics.style.display === 'none') return;
+  if (!summary || !summary.politics || !modalPolitics || !modalPolitics.open) return;
   const pol = summary.politics;
   const inc = summary.lastIncomeBreakdown || { comercioPraia: 12, feiraVarzea: 10, mobilidade: 9, contribuicaoCasas: 10, total: 41 };
 
@@ -776,13 +872,16 @@ function renderPoliticsModal(summary, forceFullRebuild = false) {
 
 function openPoliticsModal() {
   if (!modalPolitics) return;
-  modalPolitics.style.display = 'flex';
+  hidePopoverSafe(popDistricts);
+  if (!modalPolitics.open) {
+    modalPolitics.showModal();
+  }
   renderPoliticsModal(simulation.getSummary(), true);
 }
 
 function closePoliticsModal() {
-  if (!modalPolitics) return;
-  modalPolitics.style.display = 'none';
+  if (!modalPolitics || !modalPolitics.open) return;
+  closeTopLayer(modalPolitics);
 }
 
 if (btnPolitics) btnPolitics.onclick = openPoliticsModal;
@@ -790,9 +889,10 @@ if (btnOpenPoliticsPanel) btnOpenPoliticsPanel.onclick = openPoliticsModal;
 if (btnPoliticsClose) btnPoliticsClose.onclick = closePoliticsModal;
 
 if (modalPolitics) {
-  modalPolitics.onclick = (e) => {
-    if (e.target === modalPolitics) closePoliticsModal();
-  };
+  modalPolitics.addEventListener('cancel', (e) => {
+    e.preventDefault();
+    closeTopLayer(modalPolitics);
+  });
 }
 
 document.querySelectorAll('.pol-tab-btn').forEach(tab => {
@@ -813,6 +913,14 @@ if (btnRunElectionNow) {
   };
 }
 
+if (popFeed) {
+  popFeed.addEventListener('toggle', (e) => {
+    if (e.newState === 'open' && feedUnreadDot) {
+      feedUnreadDot.classList.remove('has-unread');
+    }
+  });
+}
+
 // Hook simulation updates
 simulation.onUpdate((summary) => {
   valPop.innerText = summary.metrics.population;
@@ -821,6 +929,7 @@ simulation.onUpdate((summary) => {
   valEnergy.innerText = `${summary.metrics.energy}%`;
   valCulture.innerText = `${summary.metrics.culture}%`;
   dayCounter.innerText = `DIA ${summary.day}`;
+  if (buildTreasuryHint) buildTreasuryHint.innerText = `Caixa R$ ${summary.metrics.wealth}`;
 
   if (prainhaHarmony && summary.factions.prainha) prainhaHarmony.innerText = `${summary.factions.prainha.harmony}%`;
   if (solHarmony && summary.factions.sol) solHarmony.innerText = `${summary.factions.sol.harmony}%`;
@@ -841,7 +950,27 @@ simulation.onUpdate((summary) => {
   });
 
   if (summary.feed.length > 0) {
-    tickerText.innerText = summary.feed[0].text;
+    const newest = summary.feed[0];
+    if (newest.text !== lastFeedSignature) {
+      lastFeedSignature = newest.text;
+      if (tickerText) tickerText.innerText = newest.text;
+      if (isInitialFeedSync) {
+        isInitialFeedSync = false;
+      } else {
+        showWhisper();
+        if (feedUnreadDot && !isPopoverOpen(popFeed)) {
+          feedUnreadDot.classList.add('has-unread');
+        }
+      }
+      if (hudFeedList) {
+        hudFeedList.innerHTML = summary.feed.slice(0, 14).map((ev) => `
+          <div class="hud-feed-item">
+            <span class="hud-feed-time">${ev.time || 'Hoje'}</span>
+            <div>${ev.text}</div>
+          </div>
+        `).join('');
+      }
+    }
   }
 
   renderPoliticsModal(summary);
@@ -921,18 +1050,23 @@ const modalCancelReset = document.getElementById('modal-cancel-reset');
 
 if (btnNewWorld && modalNewWorld) {
   btnNewWorld.onclick = () => {
-    modalNewWorld.style.display = 'flex';
+    if (!modalNewWorld.open) modalNewWorld.showModal();
   };
 
+  modalNewWorld.addEventListener('cancel', (e) => {
+    e.preventDefault();
+    closeTopLayer(modalNewWorld);
+  });
+
   modalCancelReset.onclick = () => {
-    modalNewWorld.style.display = 'none';
+    closeTopLayer(modalNewWorld);
   };
 
   modalConfirmReset.onclick = () => {
     simulation.resetToNewWorld();
     pets.resetForNewWorld();
     setGameSpeed(1);
-    modalNewWorld.style.display = 'none';
+    closeTopLayer(modalNewWorld);
   };
 }
 
@@ -1055,6 +1189,21 @@ function animateCameraTo(targetPos, lookAtPos, durationMs = 950) {
   requestAnimationFrame(step);
 }
 
+const activeCamLabel = document.getElementById('active-cam-label');
+const activeCamAngle = document.getElementById('active-cam-angle');
+const hudRegionSubtitle = document.getElementById('hud-region-subtitle');
+const popCameras = document.getElementById('pop-cameras');
+
+const camShortNames = {
+  pan: 'Panorâmica',
+  prainha: 'Prainha',
+  morro: 'Morro do Sol',
+  bonde: 'Bondinho',
+  serra: 'Serra',
+  cume: 'Cume',
+  varzea: 'Várzea'
+};
+
 function selectCameraPreset(key) {
   followTargetGroup = null;
   const config = cameraPresets[key];
@@ -1074,6 +1223,10 @@ function selectCameraPreset(key) {
   const angleObj = config.angles[presetAngleIndex[key]] || config.angles[0];
   const angleNum = presetAngleIndex[key] + 1;
   const totalAngles = config.angles.length;
+
+  if (activeCamLabel) activeCamLabel.innerText = camShortNames[key] || config.name;
+  if (activeCamAngle) activeCamAngle.innerText = `${angleNum}/${totalAngles}`;
+  if (hudRegionSubtitle) hudRegionSubtitle.innerText = angleObj.label || config.name;
 
   // Special angle: live cabin tracking on Bondinho angle #2
   if (angleObj.followCabin && architecture.cableCars && architecture.cableCars.length > 0) {
@@ -1103,6 +1256,58 @@ Object.keys(camButtons).forEach(key => {
   }
 });
 
+// Clickable district items inside Bairros & Gestores popover
+if (popDistricts) {
+  popDistricts.querySelectorAll('.faction-item[data-cam]').forEach((card) => {
+    card.addEventListener('click', () => {
+      const camKey = card.getAttribute('data-cam');
+      if (camKey) selectCameraPreset(camKey);
+      hidePopoverSafe(popDistricts);
+    });
+  });
+}
+
+// Pet quick-visit shortcuts inside Mirantes popover
+const btnVisitCaramelo = document.getElementById('btn-visit-caramelo');
+if (btnVisitCaramelo) {
+  btnVisitCaramelo.onclick = () => {
+    const caramelo = pets.pets.find((p) => p.id === 'pet_caramelo') || pets.pets[0];
+    if (!caramelo) return;
+    if (cinematicCam.enabled) toggleCinematicMode();
+    followTargetGroup = caramelo.group;
+    followOffset.set(-3.8, 3.2, 5.8);
+    const p = caramelo.group.position;
+    animateCameraTo(
+      new THREE.Vector3(p.x - 3.8, p.y + 3.2, p.z + 5.8),
+      new THREE.Vector3(p.x, p.y + 0.45, p.z)
+    );
+    pets.greetOnSelect(caramelo);
+    showPetInspector(caramelo);
+    hidePopoverSafe(popCameras);
+  };
+}
+
+const btnVisitMingau = document.getElementById('btn-visit-mingau');
+if (btnVisitMingau) {
+  btnVisitMingau.onclick = () => {
+    const roofCat = pets.pets.find((p) => p.isRooftop) || pets.pets.find((p) => p.species === 'cat');
+    if (!roofCat) return;
+    if (cinematicCam.enabled) toggleCinematicMode();
+    followTargetGroup = null;
+    const p = roofCat.group.position;
+    const rotY = roofCat.rooftopHouse?.meshGroup?.rotation?.y || 0;
+    const fx = Math.sin(rotY);
+    const fz = Math.cos(rotY);
+    animateCameraTo(
+      new THREE.Vector3(p.x + fx * 4.2 + fz * 1.4, p.y + 2.1, p.z + fz * 4.2 - fx * 1.4),
+      new THREE.Vector3(p.x, p.y + 0.3, p.z)
+    );
+    pets.greetOnSelect(roofCat);
+    showPetInspector(roofCat);
+    hidePopoverSafe(popCameras);
+  };
+}
+
 // Cinematic Drone Mode Toggle Button
 const btnCinema = document.getElementById('cam-cinema-toggle');
 const cinemaStatus = document.getElementById('cinema-status');
@@ -1114,8 +1319,7 @@ function toggleCinematicMode() {
     btnCinema.classList.toggle('active', isEnabled);
   }
   if (cinemaStatus) {
-    cinemaStatus.innerText = isEnabled ? 'Ligada' : 'Desligada';
-    cinemaStatus.style.color = isEnabled ? '#4ADE80' : 'inherit';
+    cinemaStatus.innerText = isEnabled ? 'on' : 'off';
   }
 
   const presetName = cameraPresets[activePresetKey]?.name || 'Região';
@@ -1130,30 +1334,68 @@ if (btnCinema) {
   btnCinema.onclick = toggleCinematicMode;
 }
 
-// Soundtrack Audio Toggle
+// Soundtrack Audio Dock, Next Section, Inline Volumes & Mixer Popover
 const btnAudio = document.getElementById('btn-audio');
 const audioLabel = document.getElementById('audio-label');
-const syncAudioBtnUI = (isPlaying) => {
-  if (!btnAudio || !audioLabel) return;
-  if (isPlaying) {
-    btnAudio.classList.add('active');
-    audioLabel.innerText = 'Boom-Bap: ON';
-  } else {
-    btnAudio.classList.remove('active');
-    audioLabel.innerText = 'Boom-Bap: OFF';
+const btnAudioNext = document.getElementById('btn-audio-next');
+const dockTrackTitle = document.getElementById('dock-track-title');
+const dockTrackMeta = document.getElementById('dock-track-meta');
+const dockVolMusic = document.getElementById('dock-vol-music');
+const dockVolSea = document.getElementById('dock-vol-sea');
+
+let _lastPlayingState = null;
+let _lastTrackTitle = '';
+let _lastTrackMeta = '';
+
+function syncNowPlayingUI() {
+  const playing = Boolean(soundtrack && soundtrack.isPlaying);
+  if (_lastPlayingState !== playing) {
+    _lastPlayingState = playing;
+    if (btnAudio) {
+      btnAudio.classList.toggle('is-playing', playing);
+      btnAudio.setAttribute('aria-pressed', String(playing));
+    }
+    if (audioLabel) {
+      audioLabel.textContent = playing ? 'Bossa: ON' : 'Bossa: OFF';
+    }
   }
+  const info = soundtrack && soundtrack.getNowPlaying ? soundtrack.getNowPlaying() : null;
+  if (dockTrackTitle && dockTrackMeta) {
+    const nextTitle = (playing && info) ? (info.title || 'Sol na Varanda') : 'Toque para ouvir Bossa & Mar';
+    const nextMeta = (playing && info) ? `Bossa Carioca · ${info.chord} · ${info.bpm} bpm` : 'trilha generativa carioca ao vivo';
+    if (nextTitle !== _lastTrackTitle) {
+      _lastTrackTitle = nextTitle;
+      dockTrackTitle.textContent = nextTitle;
+    }
+    if (nextMeta !== _lastTrackMeta) {
+      _lastTrackMeta = nextMeta;
+      dockTrackMeta.textContent = nextMeta;
+    }
+  }
+}
+
+const syncAudioBtnUI = () => {
+  syncNowPlayingUI();
 };
 soundtrack.onPlayStateChange = syncAudioBtnUI;
-btnAudio.onclick = () => {
-  const isPlaying = soundtrack.toggle();
-  syncAudioBtnUI(isPlaying);
-};
+if (btnAudio) {
+  btnAudio.onclick = () => {
+    soundtrack.toggle();
+    syncNowPlayingUI();
+  };
+}
+if (btnAudioNext) {
+  btnAudioNext.onclick = () => {
+    if (soundtrack && soundtrack.skipSection) {
+      soundtrack.skipSection();
+      syncNowPlayingUI();
+    }
+  };
+}
+syncNowPlayingUI();
 
-// Audio Mixer Modal & Per-Channel Volume Sliders
-const btnAudioMixer = document.getElementById('btn-audio-mixer');
-const modalAudioMixer = document.getElementById('modal-audio-mixer');
-const btnAudioMixerClose = document.getElementById('audio-mixer-close');
-const btnMixerClose = document.getElementById('btn-mixer-close');
+// Audio Mixer Popover & Inline Dock Sliders
+const popMixer = document.getElementById('pop-mixer');
 const btnMixerReset = document.getElementById('btn-mixer-reset');
 
 const mixerSliders = {
@@ -1174,8 +1416,17 @@ function syncMixerUI() {
       const val = vols[ch] ?? 50;
       item.input.value = val;
       item.label.innerText = `${val}%`;
+      syncSliderVisual(item.input);
     }
   });
+  if (dockVolMusic) {
+    dockVolMusic.value = vols.music ?? 70;
+    syncSliderVisual(dockVolMusic);
+  }
+  if (dockVolSea) {
+    dockVolSea.value = vols.sea ?? 68;
+    syncSliderVisual(dockVolSea);
+  }
 }
 
 Object.keys(mixerSliders).forEach(ch => {
@@ -1184,12 +1435,52 @@ Object.keys(mixerSliders).forEach(ch => {
     item.input.oninput = (e) => {
       const val = Number(e.target.value);
       soundtrack.setVolume(ch, val);
-      if (item.label) {
-        item.label.innerText = `${val}%`;
+      if (item.label) item.label.innerText = `${val}%`;
+      syncSliderVisual(item.input);
+      if (ch === 'music' && dockVolMusic) {
+        dockVolMusic.value = val;
+        syncSliderVisual(dockVolMusic);
+      } else if (ch === 'sea' && dockVolSea) {
+        dockVolSea.value = val;
+        syncSliderVisual(dockVolSea);
       }
     };
   }
 });
+
+if (dockVolMusic) {
+  dockVolMusic.oninput = (e) => {
+    const val = Number(e.target.value);
+    soundtrack.setVolume('music', val);
+    syncSliderVisual(dockVolMusic);
+    const mItem = mixerSliders.music;
+    if (mItem?.input && mItem?.label) {
+      mItem.input.value = val;
+      mItem.label.innerText = `${val}%`;
+      syncSliderVisual(mItem.input);
+    }
+  };
+}
+
+if (dockVolSea) {
+  dockVolSea.oninput = (e) => {
+    const val = Number(e.target.value);
+    soundtrack.setVolume('sea', val);
+    syncSliderVisual(dockVolSea);
+    const sItem = mixerSliders.sea;
+    if (sItem?.input && sItem?.label) {
+      sItem.input.value = val;
+      sItem.label.innerText = `${val}%`;
+      syncSliderVisual(sItem.input);
+    }
+  };
+}
+
+if (popMixer) {
+  popMixer.addEventListener('toggle', (e) => {
+    if (e.newState === 'open') syncMixerUI();
+  });
+}
 
 if (btnMixerReset) {
   btnMixerReset.onclick = () => {
@@ -1199,26 +1490,6 @@ if (btnMixerReset) {
     });
     syncMixerUI();
     simulation.addEvent('🎚️ Volumes da Trilha Bossa Nova, Roda de Samba, Natureza e Efeitos restaurados para o padrão.', 'culture');
-  };
-}
-
-if (btnAudioMixer && modalAudioMixer) {
-  btnAudioMixer.onclick = () => {
-    syncMixerUI();
-    modalAudioMixer.style.display = 'flex';
-  };
-}
-
-const closeMixer = () => {
-  if (modalAudioMixer) modalAudioMixer.style.display = 'none';
-};
-
-if (btnAudioMixerClose) btnAudioMixerClose.onclick = closeMixer;
-if (btnMixerClose) btnMixerClose.onclick = closeMixer;
-
-if (modalAudioMixer) {
-  modalAudioMixer.onclick = (e) => {
-    if (e.target === modalAudioMixer) closeMixer();
   };
 }
 
@@ -1255,46 +1526,102 @@ if (btnSpeed) {
 // Sincronização inicial: garante 1x estrito na inicialização e sincronia perfeita do HUD
 setGameSpeed(1);
 
-// Dynamic Day/Night Cycle Button & Automatic Phase Updates
-const btnTimeCycle = document.getElementById('btn-time-cycle');
+// Dynamic Day/Night Phase Sync, Solar Clock & Lighting Popover
 const timeIcon = document.getElementById('time-icon');
 const timeLabel = document.getElementById('time-label');
+const hudClock = document.getElementById('hud-clock');
+const popTime = document.getElementById('pop-time');
 
-const phaseLabels = {
-  day: { name: 'Dia Tropical', icon: '☀️' },
-  sunset: { name: 'Pôr do Sol', icon: '🌅' },
-  night: { name: 'Noite Carioca', icon: '🌙' },
-  dawn: { name: 'Alvorecer', icon: '🌄' }
+const PHASE_META = {
+  day: {
+    name: 'Dia Tropical',
+    svg: '<svg class="hud-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>'
+  },
+  sunset: {
+    name: 'Pôr do Sol',
+    svg: '<svg class="hud-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 10V2"/><path d="m4.93 10.93 1.41 1.41"/><path d="M2 18h2"/><path d="M20 18h2"/><path d="m19.07 10.93-1.41 1.41"/><path d="M22 22H2"/><path d="m16 6-4 4-4-4"/><path d="M16 18a4 4 0 0 0-8 0"/></svg>'
+  },
+  night: {
+    name: 'Noite Carioca',
+    svg: '<svg class="hud-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>'
+  },
+  dawn: {
+    name: 'Alvorecer',
+    svg: '<svg class="hud-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v8"/><path d="m4.93 10.93 1.41 1.41"/><path d="M2 18h2"/><path d="M20 18h2"/><path d="m19.07 10.93-1.41 1.41"/><path d="M22 22H2"/><path d="m8 6 4-4 4 4"/><path d="M16 18a4 4 0 0 0-8 0"/></svg>'
+  }
 };
 
-if (btnTimeCycle) {
-  btnTimeCycle.onclick = () => {
-    env.toggleTimeOfDay();
-    const cur = env.getTimeOfDay();
-    const phaseKey = (typeof cur === 'string') ? cur : (cur.phase || 'day');
-    const info = phaseLabels[phaseKey] || phaseLabels.day;
-    if (timeIcon) timeIcon.innerText = info.icon;
-    if (timeLabel) timeLabel.innerText = info.name;
-    if (soundtrack && soundtrack.playUiTimeShift) soundtrack.playUiTimeShift(phaseKey);
-    simulation.addEvent(`${info.icon} Horário avançado para: ${info.name}!`, 'culture');
-  };
+function formatSolarClock(progress) {
+  let hours = 9.5;
+  const p = ((progress % 1) + 1) % 1;
+  if (p < 0.42) {
+    hours = 8.0 + (p / 0.42) * 8.5;
+  } else if (p < 0.58) {
+    hours = 16.5 + ((p - 0.42) / 0.16) * 2.5;
+  } else if (p < 0.88) {
+    hours = 19.0 + ((p - 0.58) / 0.30) * 10.0;
+  } else {
+    hours = 5.0 + ((p - 0.88) / 0.12) * 3.0;
+  }
+  const h24 = Math.floor(hours) % 24;
+  const mins = Math.floor((hours - Math.floor(hours)) * 60) % 60;
+  return `${String(h24).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+}
+
+let _lastClockStr = '';
+function syncSolarClock(phaseKey = null) {
+  const cur = phaseKey || env.currentPhase || 'day';
+  const info = PHASE_META[cur] || PHASE_META.day;
+  const clock = formatSolarClock(env.getCycleProgress ? env.getCycleProgress() : 0.11);
+  const str = `${clock} · ${info.name}`;
+  if (hudClock && str !== _lastClockStr) {
+    _lastClockStr = str;
+    hudClock.textContent = str;
+  }
+}
+
+function syncPhaseHUD(phaseKey) {
+  const key = PHASE_META[phaseKey] ? phaseKey : 'day';
+  const info = PHASE_META[key];
+  document.body.dataset.phase = key;
+  if (timeIcon) timeIcon.innerHTML = info.svg;
+  if (timeLabel) timeLabel.innerText = info.name;
+  syncSolarClock(key);
+  if (popTime) {
+    popTime.querySelectorAll('[data-phase]').forEach((btn) => {
+      btn.classList.toggle('is-selected', btn.getAttribute('data-phase') === key);
+    });
+  }
+}
+
+syncPhaseHUD(env.currentPhase || 'day');
+
+if (popTime) {
+  popTime.querySelectorAll('[data-phase]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetPhase = btn.getAttribute('data-phase');
+      if (!targetPhase) return;
+      env.setTimeOfDay(targetPhase);
+      if (soundtrack && soundtrack.playUiTimeShift) soundtrack.playUiTimeShift(targetPhase);
+      hidePopoverSafe(popTime);
+    });
+  });
 }
 
 env.onPhaseChange((cur) => {
   const phaseKey = (typeof cur === 'string') ? cur : (cur.phase || 'day');
-  const info = phaseLabels[phaseKey] || phaseLabels.day;
-  if (timeIcon) timeIcon.innerText = info.icon;
-  if (timeLabel) timeLabel.innerText = info.name;
+  const info = PHASE_META[phaseKey] || PHASE_META.day;
+  syncPhaseHUD(phaseKey);
   if (phaseKey === 'night') {
-    simulation.addEvent('🌙 A Noite Carioca começou! Postes, bondinhos e a fogueira do samba brilham na encosta!', 'culture');
+    simulation.addEvent(`🌙 ${info.name}: postes, bondinhos e a fogueira do samba brilham na encosta.`, 'culture');
   } else if (phaseKey === 'sunset') {
-    simulation.addEvent('🌅 Pôr do sol dourado sobre a baía! Pescadores retornam com suas redes.', 'diplomacy');
+    simulation.addEvent(`🌅 ${info.name} sobre a baía! Pescadores retornam com suas redes.`, 'diplomacy');
   } else if (phaseKey === 'dawn') {
-    simulation.addEvent('🌄 O alvorecer desponta na colina com céu radiante e ar fresco.', 'info');
+    simulation.addEvent(`🌄 ${info.name} desponta na colina com céu radiante e ar fresco.`, 'info');
   }
 });
 
-// Post-Processing Effects (Tilt-Shift Miniature + Night Bloom + lil-gui)
+// Post-Processing Effects (Tilt-Shift Miniature + Night Bloom + Settings Popover)
 const urlParams = new URLSearchParams(location.search);
 const postFX = new PostEffects(renderer, scene, camera, env, {
   initialMode: urlParams.has('nofx') ? 'off' : 'maquete',
@@ -1303,13 +1630,19 @@ const postFX = new PostEffects(renderer, scene, camera, env, {
 
 const btnFxToggle = document.getElementById('btn-fx-toggle');
 const fxLabel = document.getElementById('fx-label');
+const popSettings = document.getElementById('pop-settings');
 
 function updateFxButtonUI() {
-  if (!btnFxToggle || !fxLabel) return;
-  fxLabel.innerText = postFX.getModeLabel();
-  btnFxToggle.classList.toggle('active', postFX.mode !== 'off');
+  if (fxLabel) fxLabel.textContent = postFX.getModeLabel();
+  if (btnFxToggle) btnFxToggle.classList.toggle('active', postFX.mode !== 'off');
+  if (popSettings) {
+    popSettings.querySelectorAll('[data-fx-mode]').forEach((btn) => {
+      btn.classList.toggle('active', btn.getAttribute('data-fx-mode') === postFX.mode);
+    });
+  }
 }
 updateFxButtonUI();
+postFX.onModeChange = updateFxButtonUI;
 
 if (btnFxToggle) {
   btnFxToggle.onclick = () => {
@@ -1319,45 +1652,168 @@ if (btnFxToggle) {
   };
 }
 
-// Collapsible Side Drawers (Left: Bairros & Gestores, Right: Obras & Intervenções)
-const drawerLeft = document.getElementById('drawer-left');
-const toggleDrawerLeft = document.getElementById('toggle-drawer-left');
-const drawerRight = document.getElementById('drawer-right');
-const toggleDrawerRight = document.getElementById('toggle-drawer-right');
+if (popSettings) {
+  popSettings.querySelectorAll('[data-fx-mode]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = btn.getAttribute('data-fx-mode');
+      if (mode && postFX.setMode) {
+        postFX.setMode(mode);
+        updateFxButtonUI();
+        simulation.addEvent(`✨ Modo Visual alterado para: ${postFX.getModeLabel()}!`, 'culture');
+      }
+    });
+  });
+}
 
-if (toggleDrawerLeft && drawerLeft) {
-  toggleDrawerLeft.onclick = () => {
-    drawerLeft.classList.toggle('collapsed');
+// Highlight dock/chip buttons whenever their target popover is open
+document.querySelectorAll('[popovertarget]').forEach((trigger) => {
+  const targetId = trigger.getAttribute('popovertarget');
+  const pop = targetId ? document.getElementById(targetId) : null;
+  if (!pop) return;
+  if (!Object.hasOwn(HTMLElement.prototype, 'popover')) {
+    trigger.addEventListener('click', () => togglePopoverSafe(pop));
+  }
+  pop.addEventListener('toggle', (e) => {
+    trigger.classList.toggle('is-open', e.newState === 'open');
+  });
+});
+
+// Zen Mode (H), Auto-Idle Zen, Fullscreen (F) & Postal PNG Screenshot
+const btnZen = document.getElementById('btn-zen');
+const btnZenRestore = document.getElementById('btn-zen-restore');
+const btnFullscreen = document.getElementById('btn-fullscreen');
+const btnScreenshot = document.getElementById('btn-screenshot');
+const toggleAutoZen = document.getElementById('toggle-auto-zen');
+
+function closeAllOpenPopovers() {
+  document.querySelectorAll('.hud-popover').forEach((pop) => hidePopoverSafe(pop));
+}
+
+function toggleZenMode(forceState = null) {
+  const next = forceState !== null ? Boolean(forceState) : !document.body.classList.contains('ui-off');
+  document.body.classList.toggle('ui-off', next);
+  if (next) {
+    closeAllOpenPopovers();
+    document.body.classList.remove('idle');
+  }
+}
+
+if (btnZen) btnZen.onclick = () => toggleZenMode(true);
+if (btnZenRestore) btnZenRestore.onclick = () => toggleZenMode(false);
+
+let autoZenEnabled = false;
+try {
+  autoZenEnabled = localStorage.getItem('morro_vivo_auto_zen') === '1';
+} catch {}
+if (toggleAutoZen) {
+  toggleAutoZen.checked = autoZenEnabled;
+  toggleAutoZen.addEventListener('change', () => {
+    autoZenEnabled = toggleAutoZen.checked;
+    try {
+      localStorage.setItem('morro_vivo_auto_zen', autoZenEnabled ? '1' : '0');
+    } catch {}
+    if (!autoZenEnabled) document.body.classList.remove('idle');
+    resetIdleZenTimer();
+  });
+}
+
+let idleZenTimer = null;
+function hasActiveOverlayOpen() {
+  if (document.querySelector('dialog[open]')) return true;
+  for (const pop of document.querySelectorAll('.hud-popover')) {
+    if (isPopoverOpen(pop)) return true;
+  }
+  return false;
+}
+
+function resetIdleZenTimer() {
+  document.body.classList.remove('idle');
+  if (idleZenTimer) clearTimeout(idleZenTimer);
+  if (!autoZenEnabled) return;
+  idleZenTimer = setTimeout(() => {
+    if (autoZenEnabled && !hasActiveOverlayOpen()) {
+      document.body.classList.add('idle');
+    }
+  }, 22000);
+}
+window.addEventListener('pointermove', resetIdleZenTimer, { passive: true });
+window.addEventListener('keydown', resetIdleZenTimer, { passive: true });
+resetIdleZenTimer();
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.().catch(() => {});
+  } else {
+    document.exitFullscreen?.().catch(() => {});
+  }
+}
+if (btnFullscreen) {
+  btnFullscreen.onclick = toggleFullscreen;
+  document.addEventListener('fullscreenchange', () => {
+    btnFullscreen.classList.toggle('is-active', Boolean(document.fullscreenElement));
+  });
+}
+
+if (btnScreenshot) {
+  btnScreenshot.onclick = () => {
+    try {
+      postFX.render(0);
+      const dataUrl = renderer.domElement.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.download = `morro-vivo-dia-${simulation.day || 1}.png`;
+      link.href = dataUrl;
+      link.click();
+      showWhisper('Postal PNG salvo da vista atual!');
+    } catch (err) {
+      console.warn('Screenshot capture failed:', err);
+    }
   };
 }
 
-if (toggleDrawerRight && drawerRight) {
-  toggleDrawerRight.onclick = () => {
-    drawerRight.classList.toggle('collapsed');
-  };
-}
-
-// Global Keyboard Shortcuts (C = Cinema, P = Politics, B = Tilt-Shift/Bloom, D = Bairros Menu, I = Obras Menu, G = lil-gui Debug, Esc = Close Modals)
+// Global Keyboard Shortcuts (WASD free! C=Tour, P=Conselho, I=Obras, M=Bairros, T=Horário, B=Lente, H=Zen, F=Fullscreen, N=Next Track, Space=Play/Pause, G=lil-gui, Esc=Close)
 window.addEventListener('keydown', (e) => {
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (isTypingInUI(document.activeElement)) return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-  if (e.key === 'c' || e.key === 'C') {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    soundtrack.toggle();
+    syncNowPlayingUI();
+  } else if (e.key === 'n' || e.key === 'N') {
+    if (soundtrack && soundtrack.skipSection) {
+      soundtrack.skipSection();
+      syncNowPlayingUI();
+    }
+  } else if (e.key === 'c' || e.key === 'C') {
     toggleCinematicMode();
   } else if (e.key === 'p' || e.key === 'P') {
-    if (modalPolitics && modalPolitics.style.display === 'flex') closePoliticsModal();
+    if (modalPolitics && modalPolitics.open) closePoliticsModal();
     else openPoliticsModal();
-  } else if (e.key === 'd' || e.key === 'D') {
-    if (drawerLeft) drawerLeft.classList.toggle('collapsed');
+  } else if (e.key === 'm' || e.key === 'M') {
+    togglePopoverSafe(popDistricts);
   } else if (e.key === 'i' || e.key === 'I') {
-    if (drawerRight) drawerRight.classList.toggle('collapsed');
+    togglePopoverSafe(popBuild);
+  } else if (e.key === 't' || e.key === 'T') {
+    const nextPhase = env.toggleTimeOfDay();
+    if (soundtrack && soundtrack.playUiTimeShift) soundtrack.playUiTimeShift(nextPhase);
   } else if (e.key === 'b' || e.key === 'B') {
     postFX.cycleMode();
     updateFxButtonUI();
+  } else if (e.key === 'h' || e.key === 'H') {
+    toggleZenMode();
+  } else if (e.key === 'f' || e.key === 'F') {
+    toggleFullscreen();
   } else if (e.key === 'g' || e.key === 'G') {
     postFX.initDebugGUI();
   } else if (e.key === 'Escape') {
-    closeMixer();
+    if (inspectorCard.classList.contains('visible')) {
+      inspectorCard.classList.remove('visible');
+      followTargetGroup = null;
+    }
+    if (document.body.classList.contains('ui-off')) toggleZenMode(false);
+    closeAllOpenPopovers();
     closePoliticsModal();
+    if (modalNewWorld && modalNewWorld.open) closeTopLayer(modalNewWorld);
   }
 });
 
@@ -1403,6 +1859,7 @@ architecture.batcher = batcher;
 perf.extra = () => `Lotes ${batcher.stats.merged} meshes em ${batcher.stats.chunks} (${batcher.stats.state})\nDinâmicas ${batcher.stats.dynamic} | Pick ${fastPicker.lastPickMs.toFixed(2)}ms\nCulling ${culler.stats.culledMeshes}/${culler.stats.totalMeshes} meshes\nResolução x${quality.ratio} | FX: ${postFX.mode}`;
 
 let shadowRefreshAcc = 0;
+let hudRefreshAcc = 0;
 env.onPhaseChange(() => {
   renderer.shadowMap.needsUpdate = true;
 });
@@ -1420,6 +1877,14 @@ function animate() {
   if (shadowRefreshAcc >= 0.05) {
     shadowRefreshAcc = 0;
     renderer.shadowMap.needsUpdate = true;
+  }
+
+  // Atualiza relógio solar e agora-tocando no dock a ~2 Hz com cache (zero layout thrash)
+  hudRefreshAcc += rawDelta;
+  if (hudRefreshAcc >= 0.48) {
+    hudRefreshAcc = 0;
+    syncSolarClock();
+    syncNowPlayingUI();
   }
 
   // Update subsystems with synchronized simulation speed!

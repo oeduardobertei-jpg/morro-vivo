@@ -334,6 +334,15 @@ try {
   await setCam(94, 42, 26, 76, 8, -22);
   await snap('27_economy_hubs_3d_day.png');
 
+  // 6M3. Água rasa e rebentação até a linha das bóias (valida remoção de manchas acinzentadas)
+  await setModeAndPhase('bloom', 'day');
+  await page.evaluate(() => {
+    document.getElementById('hud-whisper')?.classList.remove('visible');
+    document.getElementById('inspector-card')?.classList.remove('visible');
+  });
+  await setCam(-18, 18, 42, -6, 0, 88);
+  await snap('28_shallow_water_clean_day.png');
+
   // 6N. Menuzinho Inicial Carioca (Dia + Escolher Save)
   await setModeAndPhase('bloom', 'day');
   await page.evaluate(() => {

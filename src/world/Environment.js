@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SHARED_SHADER_UNIFORMS, createStylizedMaterial } from '../render/StylizedMaterials.js';
 
 export class Environment {
@@ -423,10 +424,10 @@ export class Environment {
     this.group.add(this.stars);
   }
 
-  _applyOceanShader(mat, { isBay = false } = {}) {
+  _applyOceanShader(mat, { isBay = false, noWaves = false } = {}) {
     mat.userData = mat.userData || {};
     mat.userData.isOceanShader = true;
-    mat.customProgramCacheKey = () => (isBay ? 'morro_ocean_bay_v2' : 'morro_ocean_deep_v2');
+    mat.customProgramCacheKey = () => (isBay ? 'morro_ocean_bay_v2' : (noWaves ? 'morro_ocean_horizon_v2' : 'morro_ocean_deep_v2'));
 
     mat.onBeforeCompile = (shader) => {
       shader.uniforms.uTime = SHARED_SHADER_UNIFORMS.uTime;
@@ -472,22 +473,27 @@ vec2 ocWaveGrad(vec2 p, float t) {
           '#include <beginnormal_vertex>',
           `#include <beginnormal_vertex>
 vec4 ocBaseW = modelMatrix * vec4( position, 1.0 );
-float ocSD = ocBaseW.z - ocShoreZ( ocBaseW.x );
+${noWaves ? `float ocSD = 100.0;
+objectNormal = vec3( 0.0, 1.0, 0.0 );` : `float ocSD = ocBaseW.z - ocShoreZ( ocBaseW.x );
 float ocDamp = smoothstep( 0.0, 14.0, max( 0.0, ocSD ) );
 vec2 ocGrad = ocWaveGrad( ocBaseW.xz, uTime ) * ocDamp;
-objectNormal = normalize( vec3( -ocGrad.x, 1.0, -ocGrad.y ) );`
-        )
-        .replace(
+objectNormal = normalize( vec3( -ocGrad.x, 1.0, -ocGrad.y ) );`}`
+        );
+
+      if (!noWaves) {
+        shader.vertexShader = shader.vertexShader.replace(
           '#include <begin_vertex>',
           `#include <begin_vertex>
 transformed.y += ocWaveH( ocBaseW.xz, uTime ) * ocDamp;`
-        )
-        .replace(
-          '#include <project_vertex>',
-          `#include <project_vertex>
+        );
+      }
+
+      shader.vertexShader = shader.vertexShader.replace(
+        '#include <project_vertex>',
+        `#include <project_vertex>
 vOcWorldPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
 vShoreDist = ocSD;`
-        );
+      );
 
       shader.fragmentShader = shader.fragmentShader
         .replace(
@@ -610,12 +616,35 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
     this.waterMesh.receiveShadow = true;
     this.group.add(this.waterMesh);
 
-    // 1B. Saia Oceânica Circular 360° (r = 2100m em y = -0.18): veda 100% qualquer fresta lateral/noroeste contra o limbo!
-    const horizonSeaGeo = new THREE.CircleGeometry(2100, 64);
-    horizonSeaGeo.rotateX(-Math.PI / 2);
-    const horizonSeaMesh = new THREE.Mesh(horizonSeaGeo, this.waterMat);
-    horizonSeaMesh.position.set(0, -0.18, 0);
-    horizonSeaMesh.receiveShadow = true;
+    // 1B. Saia Oceânica Externa (em y = -0.38): veda o horizonte Oeste/Leste/Norte sem passar sob a baía rasa ou praia!
+    const westSkirtGeo = new THREE.PlaneGeometry(1740, 2335, 1, 1);
+    westSkirtGeo.rotateX(-Math.PI / 2);
+    westSkirtGeo.translate(-1330, 0, -1032.5);
+    const eastSkirtGeo = new THREE.PlaneGeometry(1740, 2335, 1, 1);
+    eastSkirtGeo.rotateX(-Math.PI / 2);
+    eastSkirtGeo.translate(1330, 0, -1032.5);
+    const northSkirtGeo = new THREE.PlaneGeometry(920, 1720, 1, 1);
+    northSkirtGeo.rotateX(-Math.PI / 2);
+    northSkirtGeo.translate(0, 0, -1340);
+
+    const horizonSeaGeo = mergeGeometries([westSkirtGeo, eastSkirtGeo, northSkirtGeo], false);
+    westSkirtGeo.dispose();
+    eastSkirtGeo.dispose();
+    northSkirtGeo.dispose();
+
+    this.horizonSeaMat = new THREE.MeshStandardMaterial({
+      color: 0x06649B,
+      roughness: 0.30,
+      metalness: 0.06,
+      flatShading: false,
+      transparent: false
+    });
+    this._applyOceanShader(this.horizonSeaMat, { isBay: false, noWaves: true });
+
+    const horizonSeaMesh = new THREE.Mesh(horizonSeaGeo, this.horizonSeaMat);
+    horizonSeaMesh.position.set(0, -0.38, 0);
+    horizonSeaMesh.receiveShadow = false;
+    horizonSeaMesh.castShadow = false;
     horizonSeaMesh.matrixAutoUpdate = false;
     horizonSeaMesh.updateMatrix();
     this.group.add(horizonSeaMesh);
@@ -629,7 +658,7 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
     const xMax = 645.0;
     const xStep = 3.0;
     const numCols = Math.round((xMax - xMin) / xStep) + 1;
-    const numRows = 12; // 12 anéis do raso (shoreZ) até z = 126.0m (encaixe perfeito com alto-mar)
+    const numRows = 18; // 18 anéis do raso (shoreZ) até z = 126.5m para ondulação e curvatura suaves
     const positions = [];
     const indices = [];
 
@@ -1256,6 +1285,7 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
       if (this.starMat) this.starMat.opacity = instant ? 0.0 : Math.max(0, this.starMat.opacity - 0.08);
       if (this.distantBayLightsMat) this.distantBayLightsMat.opacity += (0.0 - this.distantBayLightsMat.opacity) * rate;
       if (this.waterMat) lerpTo(this.waterMat.color, 0x06649B, rate);
+      if (this.horizonSeaMat && this.waterMat) this.horizonSeaMat.color.copy(this.waterMat.color);
       if (this.bayWaterMat) lerpTo(this.bayWaterMat.color, 0x0B86C4, rate);
       if (this.skyUniforms) {
         lerpTo(this.skyUniforms.uTopColor.value, '#2B82D4', rate);
@@ -1300,6 +1330,7 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
       if (this.starMat) this.starMat.opacity = instant ? (sunsetT * 0.38) : Math.min(0.38, sunsetT * 0.38);
       if (this.distantBayLightsMat) this.distantBayLightsMat.opacity += (0.30 - this.distantBayLightsMat.opacity) * rate;
       if (this.waterMat) lerpTo(this.waterMat.color, 0x0A4B78, rate);
+      if (this.horizonSeaMat && this.waterMat) this.horizonSeaMat.color.copy(this.waterMat.color);
       if (this.bayWaterMat) lerpTo(this.bayWaterMat.color, 0x0875A8, rate);
       if (this.skyUniforms) {
         lerpBlend(this.skyUniforms.uTopColor.value, '#2B2F68', '#1D1A4C', sunsetT, rate);
@@ -1344,6 +1375,7 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
       if (this.starMat) this.starMat.opacity = instant ? 0.85 : Math.min(0.85, this.starMat.opacity + 0.08);
       if (this.distantBayLightsMat) this.distantBayLightsMat.opacity += (0.74 - this.distantBayLightsMat.opacity) * rate;
       if (this.waterMat) lerpTo(this.waterMat.color, 0x0A3654, rate);
+      if (this.horizonSeaMat && this.waterMat) this.horizonSeaMat.color.copy(this.waterMat.color);
       if (this.bayWaterMat) lerpTo(this.bayWaterMat.color, 0x0369A1, rate);
       if (this.skyUniforms) {
         lerpTo(this.skyUniforms.uTopColor.value, '#081226', rate);
@@ -1388,6 +1420,7 @@ normal = normalize(normal + (viewMatrix * vec4(ocRx, 0.0, ocRz, 0.0)).xyz);`
       if (this.starMat) this.starMat.opacity = instant ? 0.0 : Math.max(0, this.starMat.opacity - 0.06);
       if (this.distantBayLightsMat) this.distantBayLightsMat.opacity += (0.18 - this.distantBayLightsMat.opacity) * rate;
       if (this.waterMat) lerpTo(this.waterMat.color, 0x0284C7, rate);
+      if (this.horizonSeaMat && this.waterMat) this.horizonSeaMat.color.copy(this.waterMat.color);
       if (this.bayWaterMat) lerpTo(this.bayWaterMat.color, 0x0EA5E9, rate);
       if (this.skyUniforms) {
         lerpBlend(this.skyUniforms.uTopColor.value, '#3E5294', '#2B82D4', dawnT, rate);

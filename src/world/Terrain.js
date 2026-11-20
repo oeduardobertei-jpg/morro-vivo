@@ -567,6 +567,7 @@ export class Terrain {
     const colorRichGreen = new THREE.Color('#2E663D');   // Deep Atlantic Forest canopy green
     const colorSand = new THREE.Color('#ECD196');        // Warm golden Rio beach sand
     const colorWetSand = new THREE.Color('#C3A369');     // Wet sand near surf
+    const colorShallowSand = new THREE.Color('#78B7AF'); // Transition sand-turquoise shallow floor
     const colorSeabedTurquoise = new THREE.Color('#19647E'); // Shallow clear coastal water floor
     const colorDeepAbyss = new THREE.Color('#021226');   // Deep dark ocean floor
     const colorGraniteRock = new THREE.Color('#68707A');  // Morro granite rock
@@ -596,9 +597,16 @@ export class Terrain {
       const beachStartZ = 16.0 + Math.max(0.0, Math.min(1.0, (Math.abs(x) - 335.0) / 60.0)) * 18.0;
 
       if (z > shoreZ) {
-        // Leito marinho subaquático (estritamente além da linha da maré no mar aberto)
-        const depthT = Math.min(1.0, (z - shoreZ) / 45.0);
-        vertexColor.copy(colorSeabedTurquoise).lerp(colorDeepAbyss, depthT);
+        // Leito marinho subaquático com degradê contínuo areia molhada -> raso turquesa -> abismo
+        const dz = z - shoreZ;
+        if (dz <= 6.0) {
+          vertexColor.copy(colorWetSand).lerp(colorShallowSand, dz / 6.0);
+        } else if (dz <= 16.0) {
+          vertexColor.copy(colorShallowSand).lerp(colorSeabedTurquoise, (dz - 6.0) / 10.0);
+        } else {
+          const depthT = Math.min(1.0, (dz - 16.0) / 42.0);
+          vertexColor.copy(colorSeabedTurquoise).lerp(colorDeepAbyss, depthT);
+        }
       } else if (Math.abs(x) > 455 && z > -140) {
         // Costões rochosos nos cabos extremos poente/levante descendo ao mar
         vertexColor.copy(colorGraniteRock).lerp(colorWetSand, Math.max(0, 1.0 - h / 3.5));

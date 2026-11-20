@@ -719,6 +719,42 @@ export const PopulationMixin = {
     }
     
     // Os civis agora serão chamados de forma equilibrada pela simulação!
+    this.assignNPCHomes();
+  },
+
+  assignNPCHomes(subset = null) {
+    const houses = this.arch && Array.isArray(this.arch.houses) ? this.arch.houses : [];
+    if (houses.length === 0) return;
+
+    const list = Array.isArray(subset) ? subset : this.npcs;
+    const byFaction = { prainha: [], sol: [], serra: [], varzea: [] };
+    for (const h of houses) {
+      if (h && h.faction && byFaction[h.faction]) {
+        byFaction[h.faction].push(h);
+      }
+    }
+
+    for (let i = 0; i < list.length; i++) {
+      const npc = list[i];
+      if (!npc || npc.homeHouseId) continue;
+
+      let dist = npc.district || 'sol';
+      if (!byFaction[dist] && npc.group) {
+        const px = npc.group.position.x;
+        const pz = npc.group.position.z;
+        if (px < -35) dist = 'prainha';
+        else if (px > 35) dist = 'varzea';
+        else if (pz < -35) dist = 'serra';
+        else dist = 'sol';
+      }
+
+      const pool = (byFaction[dist] && byFaction[dist].length > 0) ? byFaction[dist] : houses;
+      const picked = pool[(this._homeAssignCursor = ((this._homeAssignCursor || 0) + 1)) % pool.length];
+      if (picked) {
+        npc.homeHouseId = picked.id;
+        npc.familySurname = picked.family?.surname || null;
+      }
+    }
   },
 
   spawnNewCivilian() {
@@ -807,6 +843,7 @@ export const PopulationMixin = {
       }
     }
     this.npcs.push(npc);
+    this.assignNPCHomes([npc]);
     return npc;
   },
 

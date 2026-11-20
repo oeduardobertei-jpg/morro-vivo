@@ -66,6 +66,10 @@ export const WorkersMixin = {
 
   // RELEASE COURIER UPON SUPPLY DELIVERY
   releaseCourier(npc) {
+    if (npc.materialProp) {
+      npc.materialProp.visible = false;
+    }
+    const prevWasSupply = Boolean(npc.courierSite && npc.courierSite.isSupplyTransfer);
     npc.isCourier = false;
     npc.courierState = 'idle';
     npc.courierSite = null;
@@ -75,7 +79,10 @@ export const WorkersMixin = {
     if (npc.rightArm) npc.rightArm.rotation.set(0, 0, 0);
     if (npc.torso) npc.torso.rotation.set(0, 0, 0);
     npc.speed = 1.8 + Math.random() * 0.6;
-    npc.currentAction = 'Retornando da entrega de tijolos';
+    if (npc.role === 'Entregador de Obras' || npc.role === 'Carregador de Insumos') {
+      npc.role = 'Morador';
+    }
+    npc.currentAction = prevWasSupply ? 'Retornando do carreto entre polos' : 'Retornando da entrega de tijolos';
 
     const curY = (this.terrain ? this.terrain.getElevation(npc.group.position.x, npc.group.position.z) : npc.group.position.y) || 0;
     const nearestNode = this.getNearestRoadNode ? this.getNearestRoadNode(npc.group.position.x, npc.group.position.z, curY) : null;
@@ -94,6 +101,64 @@ export const WorkersMixin = {
       npc.targetPos.y = this.getFloorElevation(npc.targetPos.x, npc.targetPos.z);
     }
     npc.pathQueue = [];
+  },
+
+  dispatchSupplyTransfer(route, onDelivered) {
+    if (!route || !route.fromNodeId || !route.toNodeId) return null;
+    const src = this.roadNodesMap ? this.roadNodesMap.get(route.fromNodeId) : null;
+    const dst = this.roadNodesMap ? this.roadNodesMap.get(route.toNodeId) : null;
+    if (!src || !dst) return null;
+
+    const candidates = this.npcs.filter((n) => (
+      !n.isBuilder && !n.isCourier && !n.isBarraqueiro && !n.isScenicMirante &&
+      !n.isFisherman && !n.isAthlete && !n.isMateiro && !n.isCapoeira && !n.isHorta &&
+      !n.isMototaxi && !n.isSurfer && !n.isCalistenia && n.role !== 'Jogador da Pelada' &&
+      !(n.sambaState && n.sambaState.isActive)
+    ));
+    if (candidates.length === 0) return null;
+
+    let courier = candidates[0];
+    let bestDist = Infinity;
+    for (const c of candidates) {
+      const d = Math.hypot(c.group.position.x - src.position.x, c.group.position.z - src.position.z);
+      if (d < bestDist) {
+        bestDist = d;
+        courier = c;
+      }
+    }
+
+    const dstY = this.getFloorElevation(dst.position.x, dst.position.z);
+    courier.isCourier = true;
+    courier.courierState = 'delivering';
+    courier.role = 'Carregador de Insumos';
+    courier.currentAction = `Carreto: ${route.label || 'Suprimentos'}`;
+    courier.courierSite = {
+      isSupplyTransfer: true,
+      route,
+      plateau: { x: dst.position.x, y: dstY, z: dst.position.z, faction: route.district || 'sol' }
+    };
+    courier.onDelivered = () => {
+      if (onDelivered) onDelivered(route);
+    };
+
+    if (courier.cartGroup) courier.cartGroup.visible = true;
+    const startY = this.getFloorElevation(src.position.x, src.position.z);
+    courier.group.position.set(src.position.x, startY, src.position.z);
+
+    const avoidPlaza = new Set(['plaza', 'soccer', 'beach']);
+    const path = this.findRoadPath ? this.findRoadPath(route.fromNodeId, route.toNodeId, avoidPlaza) : [route.toNodeId];
+    const queue = (path && path.length > 0) ? [...path] : [route.toNodeId];
+    if (queue[0] === route.fromNodeId && queue.length > 1) {
+      courier.currentNodeId = queue.shift();
+    } else {
+      courier.currentNodeId = route.fromNodeId;
+    }
+    courier.targetNodeId = queue.shift() || route.toNodeId;
+    const nxt = this.roadNodesMap ? this.roadNodesMap.get(courier.targetNodeId) : null;
+    courier.targetPos = nxt ? nxt.position.clone() : dst.position.clone();
+    courier.targetPos.y = this.getFloorElevation(courier.targetPos.x, courier.targetPos.z);
+    courier.pathQueue = queue;
+    return courier;
   },
 
   // RECRUIT REAL CITIZENS FROM THE WORKING POPULATION AS BUILDERS

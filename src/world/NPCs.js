@@ -809,8 +809,12 @@ export class NPCManager {
         return;
       }
 
-      // 3. WHEELBARROW COURIER LOGISTICS (Carreto de Tijolos)
+      // 3. WHEELBARROW COURIER LOGISTICS (Carreto de Tijolos & Insumos)
       if (npc.isCourier) {
+        if (!npc.courierSite || !npc.courierSite.plateau) {
+          this.releaseCourier(npc);
+          return;
+        }
         // Rotate wheel continuously while moving
         npc.cartWheel.rotation.x += delta * 14;
 

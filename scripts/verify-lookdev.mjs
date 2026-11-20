@@ -318,6 +318,22 @@ try {
     try { if (pcam?.matches(':popover-open')) pcam.hidePopover(); } catch {}
   });
 
+  // 6M2. Mercado & Estoques Popover + Novos Polos 3D (Criação Caipira, Açougue/Feira, Serraria)
+  await setModeAndPhase('bloom', 'day');
+  await setCam(-52, 54, 128, 0, 12, -16);
+  await page.evaluate(() => {
+    document.getElementById('pop-market')?.showPopover?.();
+  });
+  await new Promise((r) => setTimeout(r, 450));
+  await snap('26_hud_market_popover_day.png');
+  await page.evaluate(() => {
+    const pm = document.getElementById('pop-market');
+    try { if (pm?.matches(':popover-open')) pm.hidePopover(); } catch {}
+  });
+
+  await setCam(94, 42, 26, 76, 8, -22);
+  await snap('27_economy_hubs_3d_day.png');
+
   // 6N. Menuzinho Inicial Carioca (Dia + Escolher Save)
   await setModeAndPhase('bloom', 'day');
   await page.evaluate(() => {
@@ -820,6 +836,88 @@ try {
       )
     };
 
+    // Auditoria do novo sistema de Economia Orgânica das Famílias (Sprint 13)
+    let economyAudit = { ok: false };
+    try {
+      const eco = m.simulation?.economy;
+      const familiesAssigned = houses.filter((h) => h.family && h.family.surname && h.family.stock).length;
+      const linkedNpcCount = npcs.filter((n) => Boolean(n.homeHouseId)).length;
+      const ecoSummaryBefore = eco ? eco.getSummary() : null;
+      const hubsCount = ecoSummaryBefore?.hubs?.length || 0;
+      const has3DHubs = Boolean(
+        arch?.pedreiraGroup &&
+        arch?.serrariaGroup &&
+        arch?.criacaoGroup &&
+        arch?.acougueGroup &&
+        arch?.sawmillBlade &&
+        (arch?.chickens?.length || 0) === 5
+      );
+
+      let marketPopoverOk = false;
+      const pMkt = document.getElementById('pop-market');
+      if (pMkt && typeof pMkt.showPopover === 'function') {
+        pMkt.showPopover();
+        const isOpen = pMkt.matches(':popover-open');
+        const resCards = document.querySelectorAll('#pop-market-resources .market-res-card').length;
+        const hubRows = document.querySelectorAll('#pop-market-hubs [data-hub-focus]').length;
+        pMkt.hidePopover();
+        marketPopoverOk = Boolean(isOpen && resCards === 3 && hubRows === 5 && !pMkt.matches(':popover-open'));
+      }
+
+      const stepRes = eco ? eco.stepDay(houses, m.simulation.factions, m.simulation.totalDays) : null;
+      const stepDayOk = Boolean(stepRes && stepRes.totals && stepRes.totals.food > 0);
+
+      let purchaseOk = false;
+      if (eco && npcs.length > 0) {
+        const linkedNpc = npcs.find((n) => n.homeHouseId) || npcs[0];
+        const buyRes = eco.executeNpcHouseholdPurchase(linkedNpc, {
+          id: 'criacao_caipira',
+          name: 'Criação Caipira',
+          district: 'varzea',
+          itemName: 'Ovos & Queijo Fresco',
+          resource: 'food',
+          hubId: 'horta'
+        });
+        purchaseOk = Boolean(buyRes && buyRes.ok && buyRes.value >= 2);
+      }
+
+      let transferOk = false;
+      if (eco && m.npcs?.dispatchSupplyTransfer) {
+        const route = eco.pickSupplyTransferRoute();
+        const courier = route ? m.npcs.dispatchSupplyTransfer(route, (r) => eco.completeSupplyTransfer(r)) : null;
+        if (route && courier) {
+          const msg = eco.completeSupplyTransfer(route);
+          transferOk = Boolean(courier.isCourier && courier.courierSite?.isSupplyTransfer && typeof msg === 'string');
+          m.npcs.releaseCourier(courier);
+        }
+      }
+
+      economyAudit = {
+        housesCount: houses.length,
+        familiesAssigned,
+        linkedNpcCount,
+        hubsCount,
+        has3DHubs,
+        marketPopoverOk,
+        stepDayOk,
+        purchaseOk,
+        transferOk,
+        ok: Boolean(
+          houses.length >= 48 &&
+          familiesAssigned === houses.length &&
+          linkedNpcCount >= 30 &&
+          hubsCount === 5 &&
+          has3DHubs &&
+          marketPopoverOk &&
+          stepDayOk &&
+          purchaseOk &&
+          transferOk
+        )
+      };
+    } catch (err) {
+      economyAudit = { ok: false, error: err?.message || String(err) };
+    }
+
     return {
       fpsMaquete: Number(fpsMaquete.toFixed(1)),
       fpsStudioFX: Number(fpsStudioFX.toFixed(1)),
@@ -830,6 +928,7 @@ try {
       petAudit,
       menuAudit,
       hudAudit,
+      economyAudit,
       perf: m.perf.snapshot(),
       cull: m.culler.stats,
       batch: m.batcher.stats,
@@ -882,10 +981,12 @@ try {
     }
     const worldTitleText = document.getElementById('hud-world-title')?.textContent?.trim() || '';
 
-    // Testa round-trip save/load do slot-4 garantindo zero injeção extra (+100 casas) ou perda de moradias
+    // Testa round-trip save/load do slot-4 garantindo zero injeção extra (+100 casas), perda de moradias ou troca de família
+    const beforeLoadFirstSurname = m.architecture.houses[0]?.family?.surname || null;
     m.simulation.performAutoSave('slot-4');
     m.applyWorldTransition({ mode: 'load', slotId: 'slot-4' });
     const loadedHousesCount = m.architecture.houses.length;
+    const afterLoadFirstSurname = m.architecture.houses[0]?.family?.surname || null;
     m.SaveSystem.deleteSlot('slot-4');
 
     return {
@@ -895,7 +996,8 @@ try {
       detachedRecsCount,
       worldTitleOk: worldTitleText === 'Teste Reset',
       loadedHousesCount,
-      roundTripExact: loadedHousesCount === afterHousesCount
+      roundTripExact: loadedHousesCount === afterHousesCount && Boolean(beforeLoadFirstSurname) && beforeLoadFirstSurname === afterLoadFirstSurname,
+      familyRoundTripOk: Boolean(beforeLoadFirstSurname && beforeLoadFirstSurname === afterLoadFirstSurname)
     };
   });
   resetAudit.beforeHousesCount = resetInfo.beforeHousesCount;
@@ -911,7 +1013,7 @@ try {
   );
 
   console.log(JSON.stringify({ outDir, wasdMovedDist, pickCheck, audioCheck, metrics, resetAudit, errors, warningCount: warnings.length }, null, 2));
-  if (errors.length > 0 || !metrics.npcAudit?.ok || !metrics.spatialAudit?.ok || !metrics.petAudit?.ok || !metrics.hudAudit?.ok || !metrics.menuAudit?.ok || !resetAudit?.ok) process.exitCode = 1;
+  if (errors.length > 0 || !metrics.npcAudit?.ok || !metrics.spatialAudit?.ok || !metrics.petAudit?.ok || !metrics.hudAudit?.ok || !metrics.menuAudit?.ok || !metrics.economyAudit?.ok || !resetAudit?.ok) process.exitCode = 1;
 } finally {
   await browser.close();
 }

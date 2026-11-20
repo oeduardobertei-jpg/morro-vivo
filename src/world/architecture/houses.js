@@ -191,6 +191,9 @@ export const HousesMixin = {
       this.createExpandedNeighborhoodHubs();
       this.createSolarLamps();
       this.createHillsideCommunityDetails();
+      if (this.createStoneQuarry) this.createStoneQuarry({ x: -46, z: -86 });
+      if (this.createSustainableSawmill) this.createSustainableSawmill({ x: 118, z: -48 });
+      if (this.createPoultryAndButcherHub) this.createPoultryAndButcherHub();
       if (this.createMobilitySystems) this.createMobilitySystems();
       this.infrastructureCreated = true;
     }
@@ -264,6 +267,7 @@ export const HousesMixin = {
         if (house) {
           if (sh.wealth) house.wealth = sh.wealth;
           if (sh.residents) house.residents = sh.residents;
+          if (sh.family) house.family = sh.family;
           this.houses.push(house);
         }
       });
@@ -713,6 +717,7 @@ export const HousesMixin = {
   // VISUAL TERRAIN TERRAFORMING & STEP-BY-STEP CONSTRUCTION BY REAL CITIZEN BUILDERS
   startHouseConstruction(plateau, paletteItem, onComplete = null) {
     const siteGroup = new THREE.Group();
+    siteGroup.userData.dynamic = true;
     const groundY = this.terrain ? this.terrain.getElevation(plateau.x, plateau.z) : plateau.y;
     siteGroup.position.set(plateau.x, groundY, plateau.z);
 
@@ -757,6 +762,7 @@ export const HousesMixin = {
 
     // 4. Wooden Scaffolding Poles (Andaimes de Obra - appears during scaffolding phase)
     const scaffoldGroup = new THREE.Group();
+    scaffoldGroup.userData.dynamic = true;
     const woodMat = new THREE.MeshLambertMaterial({ color: 0x8C7456, flatShading: true });
     const poleGeo = new THREE.CylinderGeometry(0.06, 0.06, 3.6, 4);
     corners.forEach(c => {
@@ -1115,6 +1121,26 @@ export const HousesMixin = {
     const _skipSubs = new Set([...houseData.stories, houseData.laje].filter(Boolean));
     _compactStaticChildren(houseGroup, _shared, _skipSubs);
 
+    // Pilha de materiais na porta quando a família está prestes a fazer puxadinho
+    const stagingPileGroup = new THREE.Group();
+    stagingPileGroup.name = 'house-staging-pile';
+    stagingPileGroup.userData.dynamic = true;
+    stagingPileGroup.visible = false;
+    const stWx = plat.x + Math.cos(naturalAngle) * 2.55 + Math.sin(naturalAngle) * 1.05;
+    const stWz = plat.z - Math.sin(naturalAngle) * 2.55 + Math.cos(naturalAngle) * 1.05;
+    const stWy = this.terrain ? this.terrain.getElevation(stWx, stWz) : houseGroup.position.y;
+    stagingPileGroup.position.set(2.55, (stWy - houseGroup.position.y) + 0.02, 1.05);
+
+    const matStageWood = getSharedStylizedMaterial(0x9C6B3B, 'wood', { flatShading: true });
+    const palletMesh = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.36, 0.52), matStageWood);
+    palletMesh.position.set(0, 0.18, 0);
+    palletMesh.castShadow = false;
+    palletMesh.receiveShadow = true;
+    palletMesh.userData.dynamic = true;
+    stagingPileGroup.add(palletMesh);
+    stagingPileGroup.userData = { dynamic: true, palletMesh };
+    houseGroup.add(stagingPileGroup);
+
     // CONGELAR MATRIZES (PERFORMANCE OPTIMIZATION)
     // Casas nunca mudam de posição, então desabilitamos os recálculos da placa de vídeo
     houseGroup.traverse((child) => {
@@ -1127,6 +1153,9 @@ export const HousesMixin = {
     this.group.add(houseGroup);
     if (this.batcher) {
       this.batcher.ingestGroup(houseGroup);
+    }
+    if (houseData) {
+      houseData.stagingPile = stagingPileGroup;
     }
     return houseData;
   },
@@ -1751,6 +1780,7 @@ export const HousesMixin = {
     for (let i = 0; i < numParticles; i++) {
       const mat = mats[Math.floor(Math.random() * mats.length)];
       const cube = new THREE.Mesh(this.sharedPuffGeo, mat);
+      cube.userData.dynamic = true;
       cube.position.set(
         pos.x + (Math.random() - 0.5) * 1.6,
         pos.y + 1.2 + Math.random() * 1.4,
@@ -1772,6 +1802,28 @@ export const HousesMixin = {
     }
   },
 
+  syncHouseStagingPile(house) {
+    if (!house || !house.stagingPile) return;
+    const fam = house.family;
+    const readiness = fam ? (fam.readinessPct || 0) : 0;
+    const show = Boolean(
+      !house.isUpgrading &&
+      fam &&
+      fam.status === 'pronta_obra' &&
+      readiness >= 95 &&
+      (house.level || 1) < 3
+    );
+    house.stagingPile.visible = show;
+    if (!show) return;
+    const ud = house.stagingPile.userData || {};
+    const wood = fam.stock?.wood ?? 0;
+    const stone = fam.stock?.stone ?? 0;
+    if (ud.palletMesh) {
+      ud.palletMesh.scale.y = Math.max(0.65, Math.min(1.35, 0.65 + ((wood + stone) * 0.04)));
+      ud.palletMesh.updateMatrix();
+    }
+  },
+
   getActiveHousesData() {
     return this.houses.map(h => ({
       id: h.id,
@@ -1783,7 +1835,12 @@ export const HousesMixin = {
       color: h.color,
       colorName: h.colorName,
       wealth: h.wealth,
-      residents: h.residents
+      residents: h.residents,
+      family: h.family ? {
+        ...h.family,
+        stock: h.family.stock ? { ...h.family.stock } : { food: 4, wood: 2, stone: 1 },
+        goal: h.family.goal ? { ...h.family.goal } : null
+      } : null
     }));
   },
 

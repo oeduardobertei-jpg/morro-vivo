@@ -1,5 +1,6 @@
 import { SaveSystem } from './SaveSystem.js';
 import { PoliticsEngine } from './PoliticsEngine.js';
+import { EconomyEngine } from './EconomyEngine.js';
 
 export const ACTION_COSTS = {
   puxadinho: 60,
@@ -25,6 +26,8 @@ export class SimulationEngine {
 
     // Motor de IA Política, Eleições e Ideologias
     this.politics = new PoliticsEngine(this);
+    // Motor Econômico Familiar & Polos Produtivos
+    this.economy = new EconomyEngine(this);
 
     if (savedData) {
       this.rehydrate(savedData);
@@ -32,6 +35,7 @@ export class SimulationEngine {
       this.initNewWorld();
     }
     if (this.arch) {
+      this.economy.ensureAllHouses(this.arch.houses);
       this.arch.currentPopulation = this.globalMetrics.population || 320;
       if (this.arch.resetBoatsForNewWorld) {
         this.arch.resetBoatsForNewWorld(this.arch.currentPopulation);
@@ -56,6 +60,9 @@ export class SimulationEngine {
       for (let i = 0; i < spawnCount; i++) {
         this.npcs.spawnNewCivilian();
       }
+    }
+    if (this.npcs.assignNPCHomes) {
+      this.npcs.assignNPCHomes();
     }
     if (this.politics) {
       this.npcs.npcs.forEach(n => this.politics.ensureNPCPolitics(n));
@@ -188,6 +195,9 @@ export class SimulationEngine {
     if (data.politics && this.politics) {
       this.politics.rehydrate(data.politics);
     }
+    if (data.economy && this.economy) {
+      this.economy.rehydrate(data.economy);
+    }
   }
 
   onUpdate(callback) {
@@ -315,6 +325,11 @@ export class SimulationEngine {
       this.factions[fKey].wealth += Math.floor(Math.random() * 4) + 2;
     });
 
+    // 1B. MOTOR ECONÔMICO FAMILIAR & PRODUÇÃO DOS 5 POLOS
+    if (this.economy) {
+      this.economy.stepDay(this.arch.houses, this.factions, this.totalDays);
+    }
+
     // 2. IA POLÍTICA, OPINIÃO PÚBLICA & ELEIÇÕES DE GESTORES
     if (this.politics) {
       this.politics.updateElectorateDynamics();
@@ -352,44 +367,74 @@ export class SimulationEngine {
         ? leastFaction
         : (r < 0.54 ? 'prainha' : (r < 0.73 ? 'varzea' : (r < 0.89 ? 'serra' : 'sol')));
 
-      const buildResult = this.arch.spawnNewHouse(chosenFaction, (completedHouse) => {
-        if (!completedHouse) return;
-        const actualFaction = completedHouse.faction || chosenFaction;
-        if (this.factions[actualFaction]) {
-          this.factions[actualFaction].wealth = Math.max(10, this.factions[actualFaction].wealth - 25);
-        }
-        const factionInfo = this.factions[actualFaction] || { name: 'Comunidade' };
-        this.addEvent(`🎉 Nova moradia concluída em ${factionInfo.name}! Casa de tom ${completedHouse.colorName} foi entregue na encosta!`, 'build');
-        this.performAutoSave();
-      });
+      const resourceCheck = this.economy
+        ? this.economy.consumeNewHouseResources(this.arch.houses, chosenFaction)
+        : { ok: true, sponsorSurname: null };
 
-      if (buildResult && buildResult.isConstructing) {
-        const actualFaction = buildResult.faction || chosenFaction;
-        const factionInfo = this.factions[actualFaction] || { name: 'Comunidade' };
-        this.addEvent(`🚜 Mutirão de Moradia! Pedreiros e carregadores iniciam obras em ${factionInfo.name}!`, 'build');
+      if (resourceCheck.ok) {
+        const buildResult = this.arch.spawnNewHouse(chosenFaction, (completedHouse) => {
+          if (!completedHouse) return;
+          if (this.economy) this.economy.ensureHouseFamily(completedHouse);
+          const actualFaction = completedHouse.faction || chosenFaction;
+          if (this.factions[actualFaction]) {
+            this.factions[actualFaction].wealth = Math.max(10, this.factions[actualFaction].wealth - 25);
+          }
+          const factionInfo = this.factions[actualFaction] || { name: 'Comunidade' };
+          const famLabel = completedHouse.family ? `Família ${completedHouse.family.surname}` : `Casa de tom ${completedHouse.colorName}`;
+          this.addEvent(`🎉 ${famLabel} recebeu sua nova moradia em ${factionInfo.name}!`, 'build');
+          this.performAutoSave();
+        });
+
+        if (buildResult && buildResult.isConstructing) {
+          const actualFaction = buildResult.faction || chosenFaction;
+          const factionInfo = this.factions[actualFaction] || { name: 'Comunidade' };
+          const sponsorNote = resourceCheck.sponsorSurname
+            ? ` (patrocínio da Família ${resourceCheck.sponsorSurname})`
+            : '';
+          this.addEvent(`🚜 Mutirão de Moradia em ${factionInfo.name}${sponsorNote}: madeira e alvenaria liberadas para a obra!`, 'build');
+        }
       }
     }
 
-    // 4. VERTICAL EXPANSION: PUXADINHOS & LAJES
-    const eligibleHouses = this.arch.houses.filter(h => h.level < 3 && h.wealth >= 25 && !h.isUpgrading);
-    if (isWorkHours && eligibleHouses.length > 0 && Math.random() < 0.60 && this.arch.activeUpgrades.length < 4) {
-      const luckyHouse = eligibleHouses[Math.floor(Math.random() * eligibleHouses.length)];
-      const faction = this.factions[luckyHouse.faction] || { name: 'Comunidade' };
+    // 4. VERTICAL EXPANSION: PUXADINHOS & LAJES MOVIDOS POR ESTOQUES REAIS DA FAMÍLIA
+    const eligibleHouses = this.arch.houses.filter(h => h.level < 3 && !h.isUpgrading);
+    if (isWorkHours && eligibleHouses.length > 0 && Math.random() < 0.65 && this.arch.activeUpgrades.length < 4) {
+      const readyHouse = this.economy
+        ? this.economy.pickHouseReadyForUpgrade(eligibleHouses)
+        : eligibleHouses[Math.floor(Math.random() * eligibleHouses.length)];
+      if (readyHouse) {
+        const faction = this.factions[readyHouse.faction] || { name: 'Comunidade' };
+        const famLabel = readyHouse.family ? `Família ${readyHouse.family.surname}` : `casa de tom ${readyHouse.colorName}`;
 
-      const upgraded = this.arch.upgradeHouse(luckyHouse.id, (upgradedHouse) => {
-        upgradedHouse.wealth = Math.max(5, upgradedHouse.wealth - 20);
-        this.addEvent(
-          `🧱 Puxadinho concluído! A casa de tom ${upgradedHouse.colorName} em ${faction.name} agora possui ${upgradedHouse.level} pavimentos e caixa d'água!`,
-          'build'
-        );
-        this.performAutoSave();
-      });
+        const upgraded = this.arch.upgradeHouse(readyHouse.id, (upgradedHouse) => {
+          if (this.economy) this.economy.ensureHouseFamily(upgradedHouse);
+          this.addEvent(
+            `🧱 Puxadinho concluído! A ${famLabel} (${faction.name}) agora vive em ${upgradedHouse.level} pavimentos com laje equipada!`,
+            'build'
+          );
+          this.performAutoSave();
+        });
 
-      if (upgraded) {
-        this.addEvent(
-          `👷 Equipe de obras erguendo andaimes para bater laje na casa de tom ${luckyHouse.colorName} em ${faction.name}!`,
-          'build'
-        );
+        if (upgraded) {
+          this.addEvent(
+            `👷 A ${famLabel} reuniu tijolos e tábuas em ${faction.name} e começou a bater laje!`,
+            'build'
+          );
+        }
+      }
+    }
+
+    // 4B. LOGÍSTICA DE CARRETOS REAIS ENTRE POLOS PRODUTIVOS (Pedreira->Olaria, Serraria->Obra, Píer->Feira)
+    if (isWorkHours && this.totalDays % 2 === 0 && this.economy && this.npcs && this.npcs.dispatchSupplyTransfer) {
+      const activeCouriers = (this.npcs.npcs || []).filter(n => n.isCourier).length;
+      if (activeCouriers < 3) {
+        const route = this.economy.pickSupplyTransferRoute();
+        if (route) {
+          this.npcs.dispatchSupplyTransfer(route, () => {
+            const note = this.economy.completeSupplyTransfer(route);
+            if (note) this.addEvent(note, 'economy');
+          });
+        }
       }
     }
 
@@ -467,6 +512,30 @@ export class SimulationEngine {
           this.globalMetrics.culture = Math.min(100, this.globalMetrics.culture + 2);
           if (this.factions.varzea) this.factions.varzea.harmony = Math.min(100, this.factions.varzea.harmony + 2);
         }
+      },
+      {
+        text: '🪨 Mutirão na Pedreira da Serra liberou nova jazida de blocos para as lajes do morro!',
+        type: 'resource',
+        effect: () => {
+          if (this.economy) this.economy.boostHubProduction('pedreira', 12);
+          this.globalMetrics.wealth += 22;
+        }
+      },
+      {
+        text: '🪵 Serraria Sustentável colheu lote manejado de reflorestamento reforçando andaimes e telhados!',
+        type: 'resource',
+        effect: () => {
+          if (this.economy) this.economy.boostHubProduction('serraria', 12);
+          this.globalMetrics.energy = Math.min(100, this.globalMetrics.energy + 2);
+        }
+      },
+      {
+        text: '🐔 Criação Caipira e Açougue da Feira abasteceram as famílias com ovos frescos e cortes do dia!',
+        type: 'economy',
+        effect: () => {
+          if (this.economy) this.economy.boostHubProduction('horta', 14);
+          if (this.factions.varzea) this.factions.varzea.harmony = Math.min(100, this.factions.varzea.harmony + 2);
+        }
       }
     ];
 
@@ -532,6 +601,7 @@ export class SimulationEngine {
       diplomacy: this.diplomacy,
       feed: this.eventFeed,
       politics: this.politics ? this.politics.serialize() : null,
+      economy: this.economy ? this.economy.serialize() : null,
       activeHouses: this.arch.getActiveHousesData()
     };
   }
@@ -566,11 +636,13 @@ export class SimulationEngine {
     this.tickTimer = 0;
     this.autoSaveTimer = 0;
     this.politics = new PoliticsEngine(this);
+    this.economy = new EconomyEngine(this);
     this.initNewWorld();
     if (this.npcs) {
       this.npcs.clearAll();
     }
     this.arch.createInitialSettlements(this.arch.allPlateaus, null);
+    this.economy.ensureAllHouses(this.arch.houses);
 
     if (this.npcs) {
       this.npcs.spawnInitialPopulation();
@@ -605,6 +677,7 @@ export class SimulationEngine {
     this.tickTimer = 0;
     this.autoSaveTimer = 0;
     this.politics = new PoliticsEngine(this);
+    this.economy = new EconomyEngine(this);
     this.rehydrate(savedData);
 
     if (this.npcs) {
@@ -619,6 +692,7 @@ export class SimulationEngine {
       savedData.activeHouses || [],
       { allowLegacyFrontierBackfill }
     );
+    this.economy.ensureAllHouses(this.arch.houses);
 
     if (this.npcs) {
       this.npcs.spawnInitialPopulation();
@@ -656,6 +730,7 @@ export class SimulationEngine {
       factions: this.factions,
       diplomacy: this.diplomacy,
       politics: this.politics ? this.politics.getSummary() : null,
+      economy: this.economy ? this.economy.getSummary() : null,
       feed: this.eventFeed,
       housesCount: this.arch.houses.length,
       factionHouses,

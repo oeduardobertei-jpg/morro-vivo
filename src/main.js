@@ -400,16 +400,37 @@ function showInspector(house) {
     3: 'Laje Completa com Caixa D\'Água & Churrasqueira'
   };
 
+  const fam = house.family;
+  const stock = fam?.stock || { food: 0, wood: 0, stone: 0 };
+  const goal = fam?.goal || { food: 4, wood: 3, stone: 3, money: 32 };
+  const savings = fam ? Math.round(fam.savings) : Math.round(house.wealth || 0);
+  const readiness = fam ? Math.max(0, Math.min(100, fam.readinessPct || 0)) : 50;
+  const statusLabel = !fam ? 'Estabelecida'
+    : (fam.status === 'pronta_obra' || fam.status === 'pronta_para_obra') ? 'Pronta p/ puxadinho'
+      : fam.status === 'despensa_baixa' ? 'Despensa baixa'
+        : fam.status === 'estocando_obra' ? 'Estocando obra'
+          : 'Prosperando';
+  const titleLabel = fam?.surname ? `🏠 Família ${fam.surname} (${house.colorName})` : `🏠 Casa na Encosta (${house.colorName})`;
+  const subLabel = `Bairro: ${factionNames[house.faction] || 'Comunidade'}${fam?.trade ? ` · ${fam.trade}` : ''}`;
+
   const canUpgrade = house.level < 3;
   const cost = ACTION_COSTS.houseUpgrade;
 
   inspectorContent.innerHTML = `
-    <h3 class="insp-title">🏠 Casa na Encosta (${house.colorName})</h3>
-    <div class="insp-sub">Bairro: ${factionNames[house.faction] || 'Comunidade'}</div>
+    <h3 class="insp-title">${titleLabel}</h3>
+    <div class="insp-sub">${subLabel}</div>
     <div class="insp-meta">
       <div>• <strong>Estrutura:</strong> ${levelLabels[house.level] || 'Laje'}</div>
       <div>• <strong>Moradores:</strong> ${house.residents} pessoas</div>
-      <div>• <strong>Economia da Casa:</strong> R$ ${house.wealth}</div>
+      <div>• <strong>Poupança da Família:</strong> R$ ${savings}</div>
+      ${fam ? `
+        <div>• <strong>Despensa & Obra:</strong> 🐟 ${Number(stock.food).toFixed(1)}/${goal.food}kg · 🪵 ${Number(stock.wood).toFixed(1)}/${goal.wood}m³ · 🧱 ${Number(stock.stone).toFixed(1)}/${goal.stone}un</div>
+        <div>
+          • <strong>Meta da Casa:</strong> ${readiness}% (${statusLabel})
+          <progress class="hud-progress insp-progress" max="100" value="${readiness}" aria-label="Progresso da meta da casa"></progress>
+        </div>
+        <div>• <strong>Última compra:</strong> ${fam.lastPurchase || 'Sem movimentação'}</div>
+      ` : ''}
       <div>• <strong>Água na Caixa:</strong> ${house.waterLevel}%</div>
     </div>
     <div class="insp-actions">
@@ -445,8 +466,10 @@ function showInspector(house) {
       if (!simulation.spendWealth(cost, 'Financiar Puxadinho na Casa')) return;
       const ok = architecture.upgradeHouse(house.id);
       if (ok) {
+        if (simulation.economy) simulation.economy.consumeUpgradeResources(house);
+        architecture.syncHouseStagingPile?.(house);
         if (simulation.politics) simulation.politics.boostIdeology('infra', 2);
-        simulation.addEvent(`🎉 Investimento de R$ ${cost}: Equipe de obras iniciou puxadinho na casa em ${factionNames[house.faction]}!`, 'build');
+        simulation.addEvent(`🎉 Investimento de R$ ${cost}: Equipe de obras iniciou puxadinho na casa ${fam?.surname ? `da Família ${fam.surname}` : ''} em ${factionNames[house.faction]}!`, 'build');
         simulation.performAutoSave();
         showInspector(house);
       } else {
@@ -471,6 +494,7 @@ function showCitizenInspector(npc) {
     <h3 class="insp-title">👤 ${npc.citizenName}</h3>
     <div class="insp-sub">Função: ${npc.role} ${teamLabel}</div>
     <div class="insp-meta">
+      <div>• <strong>Lar:</strong> ${npc.familySurname ? `Família ${npc.familySurname}` : 'Comunidade'}</div>
       <div>• <strong>Ocupação:</strong> ${npc.currentAction}</div>
       <div>• <strong>Rotina:</strong> ${statusLabel}</div>
       <div>• <strong>Ideologia:</strong> <span style="color: ${ideoInfo.color}; font-weight: 700;">${ideoInfo.icon} ${ideoInfo.shortName}</span></div>
@@ -678,8 +702,105 @@ const hudFeedList = document.getElementById('hud-feed-list');
 const feedUnreadDot = document.getElementById('feed-unread-dot');
 const popFeed = document.getElementById('pop-feed');
 const popDistricts = document.getElementById('pop-districts');
+const popMarket = document.getElementById('pop-market');
+const hudMarketStatus = document.getElementById('hud-market-status');
+const marketAlertDot = document.getElementById('market-alert-dot');
+const marketTradesBadge = document.getElementById('market-trades-badge');
+const popMarketResources = document.getElementById('pop-market-resources');
+const popMarketHubs = document.getElementById('pop-market-hubs');
+const popMarketFamilies = document.getElementById('pop-market-families');
 const popBuild = document.getElementById('pop-build');
 const buildTreasuryHint = document.getElementById('build-treasury-hint');
+
+function renderMarketPopover(summary) {
+  const eco = summary?.economy;
+  if (!eco) return;
+
+  const shortages = eco.shortages || { food: false, wood: false, stone: false };
+  const anyShortage = Boolean(shortages.food || shortages.wood || shortages.stone);
+  if (hudMarketStatus) {
+    hudMarketStatus.innerText = shortages.food ? 'Risco Fome' : (anyShortage ? 'Gargalo' : 'Estável');
+  }
+  if (marketAlertDot) {
+    marketAlertDot.classList.toggle('is-critical', Boolean(shortages.food));
+    marketAlertDot.classList.toggle('is-warning', !shortages.food && Boolean(shortages.wood || shortages.stone));
+  }
+  if (marketTradesBadge) {
+    const trades = eco.dailyStats?.tradesCount ?? 0;
+    marketTradesBadge.innerText = `${trades} trocas hoje`;
+  }
+
+  if (popMarketResources) {
+    const defs = [
+      { key: 'food', label: 'Alimentos', icon: '🐟', unit: 'kg', accent: '#38bdf8' },
+      { key: 'wood', label: 'Madeira', icon: '🪵', unit: 'm³', accent: '#34d399' },
+      { key: 'stone', label: 'Alvenaria', icon: '🧱', unit: 'un', accent: '#f59e0b' }
+    ];
+    popMarketResources.innerHTML = defs.map((d) => {
+      const total = Math.round(eco.totals?.[d.key] ?? 0);
+      const cap = Math.max(1, Math.round(eco.caps?.[d.key] ?? 100));
+      const pct = Math.max(0, Math.min(100, Math.round((total / cap) * 100)));
+      const price = eco.prices?.[d.key] ?? 4;
+      const tr = eco.priceTrend?.[d.key] ?? 0;
+      const arrow = tr > 0 ? '↗' : (tr < 0 ? '↘' : '•');
+      const low = Boolean(shortages[d.key]);
+      return `
+        <div class="market-res-card${low ? ' is-low' : ''}" style="--accent: ${d.accent};">
+          <div class="market-res-top"><span>${d.icon} ${d.label}</span><span>${arrow}</span></div>
+          <div class="market-res-price">R$ ${price}/${d.unit}</div>
+          <div class="market-res-qty">${total}/${cap}${d.unit}</div>
+          <progress class="hud-progress" max="100" value="${pct}" aria-label="${d.label}"></progress>
+        </div>
+      `;
+    }).join('');
+  }
+
+  if (popMarketHubs && Array.isArray(eco.hubs)) {
+    const iconByHub = { pedreira: '🪨', serraria: '🪵', olaria: '🧱', pier: '🐟', horta: '🥚' };
+    popMarketHubs.innerHTML = eco.hubs.map((hub) => {
+      const pct = Math.max(0, Math.min(100, Math.round((hub.stock / Math.max(1, hub.cap)) * 100)));
+      const accent = hub.resource === 'food' ? '#38bdf8' : (hub.resource === 'wood' ? '#34d399' : '#f59e0b');
+      return `
+        <button type="button" class="market-hub-row" data-hub-focus="${hub.id}" style="--accent: ${accent};">
+          <div class="market-hub-top">
+            <span>${iconByHub[hub.id] || '🏭'} ${hub.name}</span>
+            <span class="market-hub-meta">${Math.round(hub.stock)}/${hub.cap}</span>
+          </div>
+          <progress class="hud-progress" max="100" value="${pct}" aria-label="${hub.name}"></progress>
+        </button>
+      `;
+    }).join('');
+  }
+
+  if (popMarketFamilies && eco.houseSummary) {
+    const hs = eco.houseSummary;
+    const totalFam = hs.totalHouses ?? (architecture?.houses?.length || 0);
+    const readyCnt = hs.readyForWorkCount ?? 0;
+    const restockCnt = hs.restockingCount ?? 0;
+    popMarketFamilies.innerHTML = `
+      <div>• <strong>${totalFam} Famílias</strong> · Média poupança: <strong>R$ ${hs.avgSavings ?? 0}</strong></div>
+      <div>• <strong>${readyCnt}</strong> casas prontas p/ puxadinho · <strong>${restockCnt}</strong> despensa baixa</div>
+    `;
+  }
+}
+
+if (popMarketHubs) {
+  popMarketHubs.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-hub-focus]');
+    if (!btn || !simulation.economy) return;
+    const hubId = btn.getAttribute('data-hub-focus');
+    const hub = simulation.economy.hubs?.[hubId];
+    if (!hub) return;
+    if (cinematicCam.enabled) toggleCinematicMode();
+    followTargetGroup = null;
+    const gy = terrain ? terrain.getElevation(hub.x, hub.z) : 8;
+    const cx = hub.x + (hub.x < 0 ? 16 : -16);
+    const cz = hub.z + 20;
+    const camY = Math.max(gy + 12, (terrain ? terrain.getElevation(cx, cz) : gy) + 10);
+    animateCameraTo(new THREE.Vector3(cx, camY, cz), new THREE.Vector3(hub.x, gy + 1.5, hub.z));
+    hidePopoverSafe(popMarket);
+  });
+}
 
 let whisperTimerId = null;
 let lastFeedSignature = '';
@@ -1029,7 +1150,16 @@ simulation.onUpdate((summary) => {
   }
 
   renderPoliticsModal(summary);
+  renderMarketPopover(summary);
+  if (architecture && Array.isArray(architecture.houses) && architecture.syncHouseStagingPile) {
+    for (let i = 0; i < architecture.houses.length; i++) {
+      architecture.syncHouseStagingPile(architecture.houses[i]);
+    }
+  }
 });
+
+renderMarketPopover(simulation.getSummary());
+(architecture.houses || []).forEach((h) => architecture.syncHouseStagingPile?.(h));
 
 // Action Buttons (with active strategic costs and ideological impact)
 document.getElementById('act-puxadinho').onclick = () => {
@@ -1866,6 +1996,8 @@ window.addEventListener('keydown', (e) => {
     else openPoliticsModal();
   } else if (e.key === 'm' || e.key === 'M') {
     togglePopoverSafe(popDistricts);
+  } else if (e.key === 'k' || e.key === 'K') {
+    togglePopoverSafe(popMarket);
   } else if (e.key === 'i' || e.key === 'I') {
     togglePopoverSafe(popBuild);
   } else if (e.key === 't' || e.key === 'T') {
@@ -2157,6 +2289,15 @@ function applyWorldTransition({ mode = 'new', slotId = null, worldName = null } 
   }
 
   pets.resetForNewWorld();
+  if (npcs && npcs.assignNPCHomes) {
+    npcs.npcs.forEach((n) => {
+      n.homeHouseId = null;
+      n.familySurname = null;
+    });
+    npcs.assignNPCHomes();
+  }
+  (architecture.houses || []).forEach((h) => architecture.syncHouseStagingPile?.(h));
+  renderMarketPopover(simulation.getSummary());
   if (typeof batcher !== 'undefined' && batcher) {
     batcher.reset();
   }

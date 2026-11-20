@@ -86,6 +86,11 @@ export const RoadGraphMixin = {
       { cx: -62.0,  cz: -66.0,  hw: 4.3,  hd: 4.3,  off: 0.22 }, // Largo do Ipê Oeste
       { cx: 56.0,   cz: -64.0,  hw: 4.3,  hd: 4.3,  off: 0.22 }  // Largo do Ipê Leste
     ];
+    hubTerraces.push(
+      { cx: -46.0, cz: -86.0, hw: 7.5, hd: 6.5, off: 0.25 },
+      { cx: 118.0, cz: -48.0, hw: 7.5, hd: 6.5, off: 0.25 },
+      { cx: 64.0, cz: -31.0, hw: 6.0, hd: 5.5, off: 0.22 }
+    );
     for (let i = 0; i < hubTerraces.length; i++) {
       const ht = hubTerraces[i];
       if (Math.abs(x - ht.cx) <= ht.hw && Math.abs(z - ht.cz) <= ht.hd) {
@@ -287,7 +292,10 @@ export const RoadGraphMixin = {
       { id: 'hub_capela_poente', x: -216.0, z: -8.5,   type: 'viela',  desc: 'Adro da Capela Caiçara do Poente' },
       { id: 'hub_praca_levante', x: 216.0,  z: -8.5,   type: 'viela',  desc: 'Calçadão da Praça da Bocha' },
       { id: 'hub_sitio_sela',    x: -66.0,  z: -138.5, type: 'viela',  desc: 'Entrada do Sítio Agroecológico' },
-      { id: 'hub_anfiteatro_sela', x: -2.0, z: -163.0, type: 'viela',  desc: 'Esplanada do Anfiteatro da Sela' }
+      { id: 'hub_anfiteatro_sela', x: -2.0, z: -163.0, type: 'viela',  desc: 'Esplanada do Anfiteatro da Sela' },
+      { id: 'hub_pedreira', x: -46.0, z: -78.0, type: 'industry', desc: 'Acesso da Pedreira da Serra' },
+      { id: 'hub_serraria', x: 112.0, z: -42.0, type: 'industry', desc: 'Pátio da Serraria Sustentável' },
+      { id: 'hub_criacao', x: 64.0, z: -24.0, type: 'agro', desc: 'Acesso da Criação Caipira' }
     ];
 
     const nodeMap = new Map();
@@ -543,6 +551,12 @@ export const RoadGraphMixin = {
     addEdge('coast_exp_e_2', 'hub_praca_levante');
     addEdge('exp_n_w1', 'hub_sitio_sela');
     addEdge('exp_n_center', 'hub_anfiteatro_sela');
+    addEdge('mid_ring_w_1', 'hub_pedreira');
+    addEdge('high_crista_w', 'hub_pedreira');
+    addEdge('east_pipodromo', 'hub_serraria');
+    addEdge('viela_e_4', 'hub_serraria');
+    addEdge('mid_e_4', 'hub_criacao');
+    addEdge('east_pomar_agro', 'hub_criacao');
 
     this.roadNodes = Array.from(nodeMap.values());
     this.roadNodesMap = nodeMap;

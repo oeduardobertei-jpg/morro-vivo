@@ -101,15 +101,24 @@
         </div>
       </div>
 
-      <!-- Micro-pílula de Bairros com os 4 pips cromáticos -->
-      <button id="toggle-drawer-left" type="button" class="hud-districts-pill interactive" popovertarget="pop-districts"
-        title="Bairros, Gestores & Pactos (Atalho: Tecla M)">
-        <span class="dist-pips" aria-hidden="true">
-          <i class="pip-prainha"></i><i class="pip-sol"></i><i class="pip-serra"></i><i class="pip-varzea"></i>
-        </span>
-        <span>4 Bairros</span>
-        <span id="hud-avg-harmony" class="pill-mono">93%</span>
-      </button>
+      <!-- Micro-pílulas: Bairros + Mercado & Estoques -->
+      <div class="hud-pills-row">
+        <button id="toggle-drawer-left" type="button" class="hud-districts-pill interactive" popovertarget="pop-districts"
+          title="Bairros, Gestores & Pactos (Atalho: Tecla M)">
+          <span class="dist-pips" aria-hidden="true">
+            <i class="pip-prainha"></i><i class="pip-sol"></i><i class="pip-serra"></i><i class="pip-varzea"></i>
+          </span>
+          <span>4 Bairros</span>
+          <span id="hud-avg-harmony" class="pill-mono">93%</span>
+        </button>
+
+        <button id="btn-market-popover" type="button" class="hud-districts-pill hud-market-pill interactive" popovertarget="pop-market"
+          title="Mercado, Despensas & Insumos (Atalho: Tecla K)">
+          <span class="market-pill-dot" id="market-alert-dot" aria-hidden="true"></span>
+          <span>Mercado</span>
+          <span id="hud-market-status" class="pill-mono">Estável</span>
+        </button>
+      </div>
     </header>
 
     <!-- Zone 2: Top-Right Bandeja de Comando Jacarandá & Latão -->
@@ -327,6 +336,20 @@
       <button id="btn-open-politics-panel" type="button" class="drawer-footer-btn">
         Abrir Conselho & Eleições (P)
       </button>
+    </div>
+
+    <!-- POPOVER 1B: Mercado, Estoques & Famílias -->
+    <div id="pop-market" class="hud-popover pop-market interactive" popover="auto" aria-label="Mercado e estoques">
+      <div class="pop-head">
+        <span class="pop-title">Mercado & Estoques</span>
+        <span id="market-trades-badge" class="pop-sub">preços locais vivos</span>
+      </div>
+      <div id="pop-market-resources" class="market-res-grid"></div>
+      <div class="pop-divider"></div>
+      <div class="pop-subhead">POLOS PRODUTIVOS (CLIQUE P/ FOCAR)</div>
+      <div id="pop-market-hubs" class="market-hubs-list hud-scroll"></div>
+      <div class="pop-divider"></div>
+      <div id="pop-market-families" class="market-families-bar"></div>
     </div>
 
     <!-- POPOVER 2: Obras & Mutirão -->
@@ -573,6 +596,7 @@
         <div><span class="kbd-cap">C</span> Tour cinema</div>
         <div><span class="kbd-cap">I</span> Obras</div>
         <div><span class="kbd-cap">M</span> Bairros</div>
+        <div><span class="kbd-cap">K</span> Mercado</div>
         <div><span class="kbd-cap">P</span> Conselho</div>
         <div><span class="kbd-cap">H</span> Modo Zen</div>
       </div>

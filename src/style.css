@@ -358,24 +358,54 @@ body.ui-off .hud-zen-restore {
   background: #F4976C;
 }
 
-/* Micro-pílula dos 4 Macro-Distritos */
-.hud-districts-pill {
+/* Micro-pílulas: Bairros + Mercado */
+.hud-pills-row {
   margin-top: 0.42rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.38rem;
+  pointer-events: auto;
+}
+
+.hud-districts-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.42rem;
   min-block-size: 1.85rem;
-  padding: 0.26rem 0.7rem;
+  padding: 0.24rem 0.65rem;
   border-radius: 999px;
   background: var(--hud-surface);
   border: 1px solid var(--hud-brass);
   color: var(--hud-ivory);
   font-family: var(--font-title);
-  font-size: 0.75rem;
+  font-size: 0.74rem;
   font-weight: 600;
   line-height: 1.2;
   cursor: pointer;
   transition: border-color 0.2s ease, transform 0.16s ease, background 0.2s ease;
+}
+
+.hud-market-pill {
+  gap: 0.38rem;
+}
+
+.market-pill-dot {
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--hud-live);
+  box-shadow: 0 0 6px var(--hud-live);
+}
+
+.market-pill-dot.is-warning {
+  background: #f59e0b;
+  box-shadow: 0 0 8px #f59e0b;
+}
+
+.market-pill-dot.is-critical {
+  background: #ef4444;
+  box-shadow: 0 0 8px #ef4444;
 }
 
 .hud-districts-pill:hover {
@@ -1075,6 +1105,138 @@ body:has([popover]:popover-open, dialog[open]) .hud-whisper {
   top: 138px;
   left: max(18px, env(safe-area-inset-left));
   inline-size: min(334px, calc(100vw - 32px));
+}
+
+.pop-market {
+  top: 138px;
+  left: max(18px, env(safe-area-inset-left));
+  inline-size: min(360px, calc(100vw - 32px));
+}
+
+.hud-progress {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
+  inline-size: 100%;
+  block-size: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.10);
+  overflow: hidden;
+  margin-top: 0.24rem;
+}
+
+.hud-progress::-webkit-progress-bar {
+  background: rgba(255, 255, 255, 0.10);
+  border-radius: 999px;
+}
+
+.hud-progress::-webkit-progress-value {
+  background: linear-gradient(90deg, var(--accent, var(--hud-gold)), #f6dfb9);
+  border-radius: 999px;
+  transition: width 0.24s ease;
+}
+
+.hud-progress::-moz-progress-bar {
+  background: linear-gradient(90deg, var(--accent, var(--hud-gold)), #f6dfb9);
+  border-radius: 999px;
+}
+
+.insp-progress {
+  block-size: 5px;
+  margin-top: 0.28rem;
+  margin-bottom: 0.14rem;
+}
+
+.market-res-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.42rem;
+}
+
+.market-res-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hud-brass-soft);
+  border-radius: 10px;
+  padding: 0.44rem 0.5rem;
+}
+
+.market-res-card.is-low {
+  border-color: rgba(245, 158, 11, 0.65);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.market-res-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--hud-ivory);
+}
+
+.market-res-price {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--hud-gold);
+  margin-top: 0.16rem;
+}
+
+.market-res-qty {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  color: var(--hud-sand);
+  margin-top: 0.08rem;
+}
+
+.market-hubs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.26rem;
+  max-block-size: 36vh;
+  overflow-y: auto;
+}
+
+.market-hub-row {
+  inline-size: 100%;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--hud-brass-soft);
+  border-radius: 9px;
+  padding: 0.32rem 0.5rem;
+  color: var(--hud-ivory);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.market-hub-row:hover {
+  background: rgba(246, 223, 185, 0.09);
+  border-color: var(--accent);
+}
+
+.market-hub-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.market-hub-meta {
+  font-family: var(--font-mono);
+  font-size: 0.64rem;
+  color: var(--hud-sand);
+}
+
+.market-families-bar {
+  font-size: 0.72rem;
+  color: var(--hud-sand);
+  line-height: 1.4;
+}
+
+.market-families-bar strong {
+  color: var(--hud-ivory);
 }
 
 .pop-build {

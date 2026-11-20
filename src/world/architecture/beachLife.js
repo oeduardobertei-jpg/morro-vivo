@@ -1345,6 +1345,7 @@ export const BeachLifeMixin = {
   spawnCoinFeedback(pos) {
     if (!this.stallCoinGeo || !this.stallMatCoin) return;
     const coinMesh = new THREE.Mesh(this.stallCoinGeo, this.stallMatCoin);
+    coinMesh.userData.dynamic = true;
     coinMesh.position.set(pos.x, pos.y + 0.8, pos.z);
     this.group.add(coinMesh);
     this.particles.push({

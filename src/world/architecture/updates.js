@@ -589,6 +589,28 @@ export const UpdatesMixin = {
       this.kilnFire.intensity = 1.6 + Math.sin(time * 5.0) * 0.4;
     }
 
+    // Serra circular da Serraria Sustentável + galinhas bicando na Criação Caipira
+    const phaseNow = this.environment ? this.environment.currentPhase : 'day';
+    const sawmillWork = (phaseNow === 'day' || phaseNow === 'sunset');
+    if (this.sawmillBlade) {
+      this.sawmillBlade.rotation.z += delta * (sawmillWork ? 9.5 : 0.6);
+    }
+    if (this.chickens && this.chickens.length > 0) {
+      for (let i = 0; i < this.chickens.length; i++) {
+        const ch = this.chickens[i];
+        if (!ch || !ch.group) continue;
+        const peck = Math.sin(time * 3.4 + ch.phase);
+        if (ch.head) {
+          ch.head.rotation.x = peck > 0.25 ? (peck - 0.25) * 0.85 : 0;
+        } else {
+          ch.group.rotation.x = peck > 0.25 ? (peck - 0.25) * 0.45 : 0;
+        }
+        ch.group.position.x = ch.baseX + Math.sin(time * 0.72 + ch.phase) * 0.22;
+        ch.group.position.z = ch.baseZ + Math.cos(time * 0.58 + ch.phase) * 0.16;
+        ch.group.rotation.y = ch.baseRotY + Math.cos(time * 0.72 + ch.phase) * 0.28;
+      }
+    }
+
     // Dynamic Night Lighting (Windows, Solar Streetlamps & Rotating Lighthouse Beam)
     this.updateNightLighting(delta, time);
 
@@ -832,6 +854,7 @@ export const UpdatesMixin = {
   spawnSmokePuff(pos) {
     if (this.smokeParticles.length > 18) return; // Clean particle pool limit
     const puff = new THREE.Mesh(this.sharedSmokeGeo, this.sharedSmokeMat);
+    puff.userData.dynamic = true;
     puff.position.copy(pos);
     puff.position.x += (Math.random() - 0.5) * 0.18;
     puff.position.z += (Math.random() - 0.5) * 0.18;

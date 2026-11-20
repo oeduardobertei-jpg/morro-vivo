@@ -376,21 +376,31 @@ export class PoliticsEngine {
    */
   updateElectorateDynamics() {
     const m = this.sim.globalMetrics;
+    const eco = this.sim.economy ? this.sim.economy.getSummary() : null;
+    const sev = eco?.shortages?.severity || { food: 0, wood: 0, stone: 0 };
 
     // 1. Urgência utilitária: o que a população mais sente falta ganha clamor popular
     const waterNeed = Math.max(0, (92 - m.water) * 0.45);
     const energyNeed = Math.max(0, (90 - m.energy) * 0.42);
     const cultureNeed = Math.max(0, (92 - m.culture) * 0.40);
-    const economyNeed = m.wealth < 250 ? (250 - m.wealth) * 0.06 : 0;
+    const economyNeed = (m.wealth < 250 ? (250 - m.wealth) * 0.06 : 0) + (sev.food * 14 + sev.wood * 6 + sev.stone * 6);
 
-    // Pesos brutos das 5 correntes ideológicas
+    // Pesos brutos das 5 correntes ideológicas (incluindo gargalos reais de alimentos, madeira e alvenaria)
     const rawWeights = {
-      infra: 22 + waterNeed * 0.7 + (this.sim.arch.activeConstructions.length * 2.5),
-      eco: 18 + energyNeed * 0.8 + waterNeed * 0.4,
+      infra: 22 + waterNeed * 0.7 + (this.sim.arch.activeConstructions.length * 2.5) + sev.stone * 18,
+      eco: 18 + energyNeed * 0.8 + waterNeed * 0.4 + sev.wood * 16 + sev.food * 8,
       cultura: 24 + cultureNeed * 0.6 + (m.culture > 94 ? 4 : 0),
-      comercio: 20 + economyNeed + (m.wealth > 500 ? 3 : 0),
+      comercio: 20 + economyNeed + (m.wealth > 500 ? 3 : 0) + sev.food * 16,
       esporte: 16 + cultureNeed * 0.35 + (this.sim.arch.soccerScore.yellow + this.sim.arch.soccerScore.blue) * 0.6
     };
+
+    if (sev.food > 0.3 && this.sim.factions) {
+      Object.values(this.sim.factions).forEach((f) => {
+        if (f && typeof f.harmony === 'number') {
+          f.harmony = Math.max(45, f.harmony - 0.15);
+        }
+      });
+    }
 
     // Suavização com o estado anterior para evitar oscilações bruscas
     let sum = 0;
@@ -477,6 +487,34 @@ export class PoliticsEngine {
     const leader = electedLeaders[Math.floor(Math.random() * electedLeaders.length)];
     const faction = this.sim.factions[leader.district];
     if (!faction) return;
+
+    // Reação política viva a gargalos reais de alimentos, madeira e alvenaria
+    const eco = this.sim.economy ? this.sim.economy.getSummary() : null;
+    if (eco && this.sim.economy) {
+      if (eco.shortages.food) {
+        this.sim.economy.boostHubProduction('pier', 12);
+        this.sim.economy.boostHubProduction('horta', 12);
+        const msg = `${leader.avatar} Gestor(a) ${leader.name} (${faction.name}) acionou mutirão pesqueiro e abastecimento na Feira!`;
+        this.logPoliticalAction(msg);
+        this.sim.addEvent(msg, 'diplomacy');
+        return;
+      }
+      if (eco.shortages.wood) {
+        this.sim.economy.boostHubProduction('serraria', 11);
+        const msg = `${leader.avatar} Gestor(a) ${leader.name} (${faction.name}) liberou plano de manejo na Serraria Sustentável!`;
+        this.logPoliticalAction(msg);
+        this.sim.addEvent(msg, 'diplomacy');
+        return;
+      }
+      if (eco.shortages.stone) {
+        this.sim.economy.boostHubProduction('pedreira', 10);
+        this.sim.economy.boostHubProduction('olaria', 10);
+        const msg = `${leader.avatar} Gestor(a) ${leader.name} (${faction.name}) impulsionou extração na Pedreira e fornada na Olaria!`;
+        this.logPoliticalAction(msg);
+        this.sim.addEvent(msg, 'diplomacy');
+        return;
+      }
+    }
 
     switch (leader.ideology) {
       case 'comercio': {

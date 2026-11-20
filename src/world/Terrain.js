@@ -482,16 +482,19 @@ export class Terrain {
     // Encruzilhada da Alameda (impede casas de bloquearem o fluxo de pedestres na base da escadaria)
     if (Math.hypot(x - (-6.0), z - (-19.5)) < 4.8 + margin) return true;
 
-    // 2. Campinho de Futebol & Mercado Cultural da Várzea
+    // 2. Campinho de Futebol & Mercado Cultural + Açougue/Peixaria da Várzea
     if (Math.abs(x - 55.0) < 16.5 + margin && Math.abs(z - 4.0) < 11.5 + margin) return true;
-    if (Math.abs(x - 75.0) < 10.5 + margin && Math.abs(z - 4.0) < 8.5 + margin) return true;
+    if (Math.abs(x - 76.5) < 12.2 + margin && Math.abs(z - 4.0) < 8.5 + margin) return true;
 
-    // 3. Olarias & Fazendas Agroflorestais
+    // 3. Olarias, Fazendas Agroflorestais & Polos Produtivos (Pedreira, Serraria, Criação)
     if (Math.abs(x - (-22.0)) < 9.5 + margin && Math.abs(z - (-14.0)) < 7.5 + margin) return true;
     if (Math.hypot(x - 95.0, z - (-18.0)) < 10.0 + margin) return true; // Grande Olaria Leste
     if (Math.abs(x - 82.0) < 10.5 + margin && Math.abs(z - (-8.0)) < 7.5 + margin) return true;
     if (Math.abs(x - 75.0) < 9.5 + margin && Math.abs(z - (-45.0)) < 6.8 + margin) return true; // Socalcos Leste
     if (Math.abs(x - 96.0) < 7.5 + margin && Math.abs(z - (-28.0)) < 5.8 + margin) return true; // Pomar Agroflorestal
+    if (Math.hypot(x - (-46.0), z - (-86.0)) < 9.5 + margin) return true; // Pedreira da Serra
+    if (Math.hypot(x - 118.0, z - (-48.0)) < 9.5 + margin) return true; // Serraria Sustentável
+    if (Math.hypot(x - 64.0, z - (-31.0)) < 7.8 + margin) return true;  // Criação Caipira
 
     // 4. Parque Solar, Nascente, Torre de Rádio, Mirante Imperial & Turbinas Eólicas (Alto da Serra)
     if (Math.abs(x - (-18.0)) < 12.2 + margin && Math.abs(z - (-72.0)) < 9.5 + margin) return true; // Parque Solar

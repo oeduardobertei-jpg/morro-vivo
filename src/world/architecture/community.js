@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { getSharedStylizedMaterial } from '../../render/StylizedMaterials.js';
 
 /** Centro e várzea: samba, futebol, feira, horta agroflorestal e usina solar. */
 export const CommunityMixin = {
@@ -880,5 +881,390 @@ export const CommunityMixin = {
     this.solarPark = parkGroup;
     this.propObstacles = this.propObstacles || [];
     this.propObstacles.push({ x: pos.x, z: pos.z, hw: 9.2, hd: 6.6, rotY: 0 });
+  },
+
+  createStoneQuarry(pos = { x: -46, z: -86 }) {
+    const x = pos.x;
+    const z = pos.z;
+    const getElev = (px, pz) => (this.terrain ? this.terrain.getElevation(px, pz) : 12.0);
+    const gy = getElev(x, z);
+    const yMin = Math.min(gy, getElev(x - 6, z - 5), getElev(x + 6, z - 5), getElev(x - 6, z + 5), getElev(x + 6, z + 5));
+
+    const g = new THREE.Group();
+    g.name = 'pedreira-serra';
+    g.position.set(x, gy, z);
+
+    const matStone = getSharedStylizedMaterial(0x78716C, 'stone', { flatShading: true });
+    const matGranite = getSharedStylizedMaterial(0xA8A29E, 'stone', { flatShading: true });
+    const matDarkRock = getSharedStylizedMaterial(0x57534E, 'stone', { flatShading: true });
+    const matWood = getSharedStylizedMaterial(0x8B5A2B, 'wood', { flatShading: true });
+    const matRoof = getSharedStylizedMaterial(0xC2410C, 'brick', { flatShading: true });
+    const matIron = getSharedStylizedMaterial(0x334155, 'metal', { flatShading: true });
+
+    const baseH = Math.max(4.5, (gy - yMin) + 3.5);
+    const terrace = new THREE.Mesh(new THREE.BoxGeometry(11.6, baseH, 9.2), matDarkRock);
+    terrace.position.set(0, -baseH * 0.5 + 0.16, 0);
+    terrace.castShadow = true;
+    terrace.receiveShadow = true;
+    g.add(terrace);
+
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(11.2, 0.24, 8.8), matStone);
+    deck.position.set(0, 0.12, 0);
+    deck.receiveShadow = true;
+    g.add(deck);
+
+    // Paredão rochoso escavado ao norte
+    const wallSpecs = [
+      [-3.8, 1.5, -3.1, 3.6, 3.1, 2.2, 0.1],
+      [0.1, 2.0, -3.2, 4.4, 4.0, 2.5, -0.08],
+      [3.9, 1.3, -2.9, 3.2, 2.7, 2.1, 0.14]
+    ];
+    for (const [bx, by, bz, bw, bh, bd, ry] of wallSpecs) {
+      const cliff = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), matDarkRock);
+      cliff.position.set(bx, by, bz);
+      cliff.rotation.y = ry;
+      cliff.castShadow = true;
+      cliff.receiveShadow = true;
+      g.add(cliff);
+    }
+
+    // Pilhas de blocos de granito cortados e brita
+    const blockCoords = [
+      [-3.4, 0.58, 1.6], [-2.5, 0.58, 1.6], [-3.4, 0.58, 2.45],
+      [-2.95, 1.22, 1.9], [-2.5, 0.58, 2.45], [3.6, 0.58, 2.1], [4.35, 0.58, 2.1]
+    ];
+    for (const [lx, ly, lz] of blockCoords) {
+      const blk = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.64, 0.72), matGranite);
+      blk.position.set(lx, ly, lz);
+      blk.receiveShadow = true;
+      g.add(blk);
+    }
+
+    const gravel = new THREE.Mesh(new THREE.ConeGeometry(1.45, 1.25, 7), matGranite);
+    gravel.position.set(0.2, 0.8, 2.2);
+    gravel.receiveShadow = true;
+    g.add(gravel);
+
+    // Guindaste manual de madeira (pórtico A-frame) com bloco suspenso
+    for (const side of [-1, 1]) {
+      const leg1 = new THREE.Mesh(new THREE.BoxGeometry(0.22, 4.1, 0.22), matWood);
+      leg1.position.set(side * 1.15, 2.0, -0.7);
+      leg1.rotation.z = side * 0.24;
+      leg1.castShadow = true;
+      g.add(leg1);
+    }
+    const boom = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.24, 4.4), matWood);
+    boom.position.set(0, 3.65, 0.45);
+    boom.rotation.x = -0.18;
+    boom.castShadow = true;
+    g.add(boom);
+
+    const hoistCable = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.35, 6), matIron);
+    hoistCable.position.set(0, 2.65, 1.8);
+    g.add(hoistCable);
+
+    const slungBlock = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.68, 0.76), matGranite);
+    slungBlock.position.set(0, 1.75, 1.8);
+    slungBlock.castShadow = true;
+    g.add(slungBlock);
+
+    // Abrigo do canteiro de obras
+    for (const [px, pz] of [[-4.7, -0.9], [-2.5, -0.9], [-4.7, 0.6], [-2.5, 0.6]]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.3, 0.16), matWood);
+      post.position.set(px, 1.3, pz);
+      post.castShadow = true;
+      g.add(post);
+    }
+    const shedRoof = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.18, 2.1), matRoof);
+    shedRoof.position.set(-3.6, 2.5, -0.15);
+    shedRoof.rotation.x = 0.16;
+    shedRoof.castShadow = true;
+    g.add(shedRoof);
+
+    g.traverse((c) => {
+      if (c.isMesh) {
+        c.matrixAutoUpdate = false;
+        c.updateMatrix();
+      }
+    });
+    this.group.add(g);
+    this.pedreiraGroup = g;
+    this.propObstacles = this.propObstacles || [];
+    this.propObstacles.push({ x, z: z - 0.5, hw: 6.0, hd: 4.8, rotY: 0 });
+    if (this.infrastructureNodes) {
+      this.infrastructureNodes.push({ x, z, r: 9.5, name: 'Pedreira da Serra' });
+    }
+  },
+
+  createSustainableSawmill(pos = { x: 118, z: -48 }) {
+    const x = pos.x;
+    const z = pos.z;
+    const getElev = (px, pz) => (this.terrain ? this.terrain.getElevation(px, pz) : 10.0);
+    const gy = getElev(x, z);
+    const yMin = Math.min(gy, getElev(x - 6, z - 5), getElev(x + 6, z - 5), getElev(x - 6, z + 5), getElev(x + 6, z + 5));
+
+    const g = new THREE.Group();
+    g.name = 'serraria-sustentavel';
+    g.position.set(x, gy, z);
+
+    const matStone = getSharedStylizedMaterial(0x645E58, 'stone', { flatShading: true });
+    const matPlank = getSharedStylizedMaterial(0xB47B44, 'wood', { flatShading: true });
+    const matTimber = getSharedStylizedMaterial(0x784922, 'wood', { flatShading: true });
+    const matRoof = getSharedStylizedMaterial(0x0F766E, 'ceramic', { flatShading: true });
+    const matBlade = getSharedStylizedMaterial(0xCBD5E1, 'metal', { flatShading: true });
+    const matFoliage = getSharedStylizedMaterial(0x2D6A4F, 'foliage', { flatShading: true });
+    const matSolar = getSharedStylizedMaterial(0x1E3A8A, 'ceramic', { flatShading: true });
+
+    const baseH = Math.max(4.5, (gy - yMin) + 3.4);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(10.8, baseH, 8.8), matStone);
+    base.position.set(0, -baseH * 0.5 + 0.16, 0);
+    base.castShadow = true;
+    base.receiveShadow = true;
+    g.add(base);
+
+    const deck = new THREE.Mesh(new THREE.BoxGeometry(10.4, 0.22, 8.4), matPlank);
+    deck.position.set(0, 0.11, 0);
+    deck.receiveShadow = true;
+    g.add(deck);
+
+    // Galpão aberto com placas solares ecológicas no telhado
+    for (const [px, pz] of [[-3.6, -2.4], [1.4, -2.4], [-3.6, 0.9], [1.4, 0.9]]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 3.0, 0.22), matTimber);
+      post.position.set(px, 1.65, pz);
+      post.castShadow = true;
+      g.add(post);
+    }
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(5.8, 0.22, 4.1), matRoof);
+    roof.position.set(-1.1, 3.25, -0.75);
+    roof.rotation.x = 0.18;
+    roof.castShadow = true;
+    g.add(roof);
+
+    const panel = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.08, 1.6), matSolar);
+    panel.position.set(-1.1, 3.42, -0.75);
+    panel.rotation.x = 0.18;
+    g.add(panel);
+
+    // Bancada e serra circular animada (dinâmica)
+    const bench = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.92, 1.15), matTimber);
+    bench.position.set(-1.1, 0.68, -0.7);
+    bench.castShadow = true;
+    bench.receiveShadow = true;
+    g.add(bench);
+
+    const bladeGroup = new THREE.Group();
+    bladeGroup.position.set(-0.7, 1.24, -0.7);
+    bladeGroup.userData.dynamic = true;
+    const bladeDisc = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.54, 0.06, 14), matBlade);
+    bladeDisc.rotation.x = Math.PI * 0.5;
+    bladeDisc.castShadow = false;
+    bladeDisc.userData.dynamic = true;
+    bladeGroup.add(bladeDisc);
+    g.add(bladeGroup);
+    this.sawmillBlade = bladeGroup;
+    this.mobilityDynamicGroups = this.mobilityDynamicGroups || [];
+    this.mobilityDynamicGroups.push(bladeGroup);
+
+    // Pilhas de tábuas e toras reflorestadas
+    for (let layer = 0; layer < 3; layer++) {
+      const plankStack = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.28, 1.05), layer % 2 === 0 ? matPlank : matTimber);
+      plankStack.position.set(-2.2, 0.36 + layer * 0.3, 2.35);
+      plankStack.receiveShadow = true;
+      g.add(plankStack);
+    }
+    for (let l = 0; l < 3; l++) {
+      const log = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.26, 2.2, 8), matTimber);
+      log.rotation.z = Math.PI * 0.5;
+      log.position.set(2.4, 0.44 + (l === 2 ? 0.38 : 0), -1.8 + (l % 2) * 0.52);
+      g.add(log);
+    }
+
+    // 6 mudas de reflorestamento dentro do viveiro leste/norte
+    const saplingOffsets = [
+      [3.4, 1.2], [4.2, 0.2], [3.6, 2.5], [4.4, 2.2], [2.2, 2.8], [4.3, -2.5]
+    ];
+    for (const [sx, sz] of saplingOffsets) {
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.9, 6), matTimber);
+      trunk.position.set(sx, 0.65, sz);
+      const crown = new THREE.Mesh(new THREE.ConeGeometry(0.48, 1.15, 7), matFoliage);
+      crown.position.set(sx, 1.4, sz);
+      g.add(trunk, crown);
+    }
+
+    g.traverse((c) => {
+      if (c.isMesh && !(c.userData && c.userData.dynamic)) {
+        c.matrixAutoUpdate = false;
+        c.updateMatrix();
+      }
+    });
+    this.group.add(g);
+    this.serrariaGroup = g;
+    this.propObstacles = this.propObstacles || [];
+    this.propObstacles.push({ x: x + 0.3, z, hw: 5.5, hd: 4.8, rotY: 0 });
+    if (this.infrastructureNodes) {
+      this.infrastructureNodes.push({ x, z, r: 9.5, name: 'Serraria Sustentável' });
+    }
+  },
+
+  createPoultryAndButcherHub() {
+    const getElev = (px, pz) => (this.terrain ? this.terrain.getElevation(px, pz) : 6.0);
+    this.propObstacles = this.propObstacles || [];
+    this.mobilityDynamicGroups = this.mobilityDynamicGroups || [];
+
+    // A) Criação Caipira (64, -31)
+    const cx = 64.0;
+    const cz = -31.0;
+    const cGy = getElev(cx, cz);
+    const cYMin = Math.min(cGy, getElev(cx - 5, cz - 4), getElev(cx + 5, cz - 4), getElev(cx - 5, cz + 4), getElev(cx + 5, cz + 4));
+
+    const cGroup = new THREE.Group();
+    cGroup.name = 'criacao-caipira';
+    cGroup.position.set(cx, cGy, cz);
+
+    const matStone = getSharedStylizedMaterial(0x645E58, 'stone', { flatShading: true });
+    const matDirt = getSharedStylizedMaterial(0xA17C52, 'stone', { flatShading: true });
+    const matWood = getSharedStylizedMaterial(0x8B5A2B, 'wood', { flatShading: true });
+    const matRoof = getSharedStylizedMaterial(0xC2410C, 'brick', { flatShading: true });
+    const matRed = getSharedStylizedMaterial(0xDC2626, 'plaster', { flatShading: true });
+    const matBeak = getSharedStylizedMaterial(0xF59E0B, 'plaster', { flatShading: true });
+    const matCream = getSharedStylizedMaterial(0xFEF3C7, 'plaster', { flatShading: true });
+    const matCaramel = getSharedStylizedMaterial(0xB45309, 'plaster', { flatShading: true });
+
+    const baseH = Math.max(4.0, (cGy - cYMin) + 3.2);
+    const cBase = new THREE.Mesh(new THREE.BoxGeometry(9.6, baseH, 8.2), matStone);
+    cBase.position.set(0, -baseH * 0.5 + 0.14, 0);
+    cBase.castShadow = true;
+    cBase.receiveShadow = true;
+    cGroup.add(cBase);
+
+    const cYard = new THREE.Mesh(new THREE.BoxGeometry(9.2, 0.2, 7.8), matDirt);
+    cYard.position.set(0, 0.1, 0);
+    cYard.receiveShadow = true;
+    cGroup.add(cYard);
+
+    // Galinheiro elevado de madeira com telhado cerâmico
+    const coopBody = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.55, 2.0), matWood);
+    coopBody.position.set(-2.2, 1.15, -1.6);
+    coopBody.castShadow = true;
+    const coopRoof = new THREE.Mesh(new THREE.BoxGeometry(2.95, 0.22, 2.35), matRoof);
+    coopRoof.position.set(-2.2, 2.02, -1.6);
+    coopRoof.rotation.x = 0.2;
+    coopRoof.castShadow = true;
+    const ramp = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.1, 1.5), matWood);
+    ramp.position.set(-2.2, 0.5, -0.15);
+    ramp.rotation.x = 0.45;
+    cGroup.add(coopBody, coopRoof, ramp);
+
+    // Cercado perimetral e cocho
+    const fenceBars = [
+      [0, 0.58, -3.55, 8.4, 0.12, 0.12],
+      [0, 0.58, 3.55, 8.4, 0.12, 0.12],
+      [-4.2, 0.58, 0, 0.12, 0.12, 7.1],
+      [4.2, 0.58, 0, 0.12, 0.12, 7.1]
+    ];
+    for (const [fx, fy, fz, fw, fh, fd] of fenceBars) {
+      const rail = new THREE.Mesh(new THREE.BoxGeometry(fw, fh, fd), matWood);
+      rail.position.set(fx, fy, fz);
+      cGroup.add(rail);
+    }
+    const trough = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.26, 0.45), matWood);
+    trough.position.set(1.6, 0.33, -1.4);
+    const eggsCrate = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.34, 0.48), matCream);
+    eggsCrate.position.set(2.8, 0.37, 1.8);
+    cGroup.add(trough, eggsCrate);
+
+    // 5 Galinhas caipiras animadas no cercado
+    this.chickens = [];
+    const chickenSpots = [
+      [-0.2, 0.8, 0.4, matCream],
+      [1.4, 0.2, -0.9, matCaramel],
+      [0.6, -1.9, 1.6, matCream],
+      [2.5, -0.5, -2.1, matCaramel],
+      [-1.1, 2.0, 0.9, matCream]
+    ];
+    const chickenBodyGeo = new THREE.BoxGeometry(0.32, 0.28, 0.46);
+    chickenSpots.forEach(([chx, chz, rotY, plumMat], idx) => {
+      const ch = new THREE.Group();
+      ch.position.set(chx, 0.2, chz);
+      ch.rotation.y = rotY;
+      ch.userData.dynamic = true;
+
+      const body = new THREE.Mesh(chickenBodyGeo, plumMat);
+      body.position.y = 0.22;
+      body.castShadow = false;
+      body.userData.dynamic = true;
+
+      ch.add(body);
+      cGroup.add(ch);
+      this.chickens.push({ group: ch, head: null, baseX: chx, baseZ: chz, baseRotY: rotY, phase: idx * 1.4 });
+      this.mobilityDynamicGroups.push(ch);
+    });
+
+    cGroup.traverse((c) => {
+      if (c.isMesh && !(c.userData && c.userData.dynamic)) {
+        c.matrixAutoUpdate = false;
+        c.updateMatrix();
+      }
+    });
+    this.group.add(cGroup);
+    this.criacaoGroup = cGroup;
+    this.propObstacles.push({ x: cx, z: cz, hw: 5.0, hd: 4.4, rotY: 0 });
+    if (this.infrastructureNodes) {
+      this.infrastructureNodes.push({ x: cx, z: cz, r: 7.5, name: 'Criação Caipira' });
+    }
+
+    // B) Açougue & Peixaria Artesanal anexo ao Mercado Cultural (69.6, -0.2)
+    const bx = 69.6;
+    const bz = -0.2;
+    const bGy = getElev(bx, bz);
+    const bGroup = new THREE.Group();
+    bGroup.name = 'acougue-peixaria-feira';
+    bGroup.position.set(bx, bGy, bz);
+
+    const matWhite = getSharedStylizedMaterial(0xF8FAFC, 'plaster', { flatShading: true });
+    const matAwningRed = getSharedStylizedMaterial(0xB91C1C, 'fabric', { flatShading: true });
+    const matIceBlue = getSharedStylizedMaterial(0x38BDF8, 'ceramic', { flatShading: true });
+
+    const bPlinth = new THREE.Mesh(new THREE.BoxGeometry(3.8, 3.6, 3.0), matStone);
+    bPlinth.position.set(0, -1.72, 0);
+    bPlinth.castShadow = true;
+    bPlinth.receiveShadow = true;
+    const bFloor = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.16, 2.8), matWhite);
+    bFloor.position.set(0, 0.08, 0);
+    const counter = new THREE.Mesh(new THREE.BoxGeometry(3.1, 0.96, 0.85), matWhite);
+    counter.position.set(0, 0.56, 0.55);
+    counter.castShadow = true;
+    const chopBlock = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.86, 8), matWood);
+    chopBlock.position.set(-1.1, 0.51, -0.55);
+    const iceTray = new THREE.Mesh(new THREE.BoxGeometry(1.35, 0.14, 0.65), matIceBlue);
+    iceTray.position.set(0.65, 1.06, 0.55);
+
+    for (const [px, pz] of [[-1.55, -1.15], [1.55, -1.15], [-1.55, 1.15], [1.55, 1.15]]) {
+      const pMesh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 2.35, 0.14), matWood);
+      pMesh.position.set(px, 1.25, pz);
+      bGroup.add(pMesh);
+    }
+    const awning = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.18, 2.9), matAwningRed);
+    awning.position.set(0, 2.5, 0);
+    awning.rotation.x = 0.14;
+    awning.castShadow = true;
+    const meatRack = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, 0.08), matWood);
+    meatRack.position.set(0.2, 2.1, -0.85);
+    for (let s = -2; s <= 2; s++) {
+      const cut = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.07, 0.42, 6), s % 2 === 0 ? matAwningRed : matCaramel);
+      cut.position.set(0.2 + s * 0.42, 1.82, -0.85);
+      bGroup.add(cut);
+    }
+
+    bGroup.add(bPlinth, bFloor, counter, chopBlock, iceTray, awning, meatRack);
+    bGroup.traverse((c) => {
+      if (c.isMesh) {
+        c.matrixAutoUpdate = false;
+        c.updateMatrix();
+      }
+    });
+    this.group.add(bGroup);
+    this.acougueGroup = bGroup;
+    this.propObstacles.push({ x: bx, z: bz, hw: 2.0, hd: 1.6, rotY: 0 });
   }
 };

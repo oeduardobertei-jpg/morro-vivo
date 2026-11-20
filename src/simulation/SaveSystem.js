@@ -54,6 +54,7 @@ function readStore() {
               factions: legacy.factions || {},
               diplomacy: legacy.diplomacy || {},
               politics: legacy.politics || null,
+              economy: legacy.economy || null,
               feed: Array.isArray(legacy.feed) ? legacy.feed.slice(0, 20) : [],
               activeHouses: sanitizeHouses(legacy.activeHouses, true)
             }
@@ -178,6 +179,7 @@ export class SaveSystem {
         factions: data.factions,
         diplomacy: data.diplomacy,
         politics: data.politics || null,
+        economy: data.economy || null,
         feed: data.feed ? data.feed.slice(0, 20) : [],
         activeHouses: sanitizeHouses(data.activeHouses)
       };

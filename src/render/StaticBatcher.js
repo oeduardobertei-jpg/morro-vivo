@@ -168,13 +168,75 @@ export class StaticBatcher {
     }
   }
 
+  /** Remove imediatamente todas as malhas de uma subárvore removida e reconstrói apenas seus chunks. */
+  removeGroup(rootGroup) {
+    if (!this.enabled || !rootGroup || (this.state !== 'active' && this.state !== 'building')) return;
+    const dirty = new Set();
+    rootGroup.traverse((o) => {
+      const rec = this.recByMesh.get(o);
+      if (!rec || rec.removed) return;
+      this._release(rec, true);
+      if (rec.chunk) dirty.add(rec.chunk);
+    });
+    if (dirty.size > 0) {
+      for (const ch of dirty) this._buildChunk(ch);
+      this.stats.rebuilds += dirty.size;
+      this._refreshStats();
+    }
+  }
+
+  /** Descarta todos os lotes estáticos atuais e reinicia a calibração para novo mundo ou save carregado. */
+  reset() {
+    for (const chunk of this.chunks) {
+      if (chunk.mesh) {
+        this.scene.remove(chunk.mesh);
+        if (chunk.mesh.geometry) chunk.mesh.geometry.dispose();
+        chunk.mesh = null;
+      }
+    }
+    for (const r of this.recs) {
+      if (!this._detached(r) && r.mesh) {
+        r.mesh.layers.set(0);
+      }
+      if (r.mesh && r.mesh.userData) {
+        delete r.mesh.userData.__batched;
+      }
+    }
+    this.recs = [];
+    this.recByMesh = new WeakMap();
+    this.matRecs.clear();
+    this.chunks = [];
+    this.chunkById.clear();
+    this.queue = [];
+    this._t = 0;
+    this._watchCursor = 0;
+    this._matWatchTimer = 0;
+    this._notifiedActive = false;
+    this.state = 'waiting';
+    this.stats = {
+      eligible: 0,
+      merged: 0,
+      chunks: 0,
+      dynamic: 0,
+      removed: 0,
+      rebuilds: 0,
+      state: 'waiting',
+      skipped: {}
+    };
+  }
+
   /** Verdadeiro se algo mudou em relação ao estado gravado. */
   _changed(rec) {
     const m = rec.mesh;
     if (m.parent !== rec.parent || m.geometry !== rec.geometry || m.material !== rec.material || !m.visible) return true;
     const e = m.matrixWorld.elements, b = rec.matrix;
     for (let k = 0; k < 16; k++) if (Math.abs(e[k] - b[k]) > 1e-5) return true;
-    for (let p = m.parent; p; p = p.parent) if (!p.visible) return true;
+    let top = m;
+    for (let p = m.parent; p; p = p.parent) {
+      if (!p.visible) return true;
+      top = p;
+    }
+    if (top !== this.scene) return true;
     return false;
   }
 

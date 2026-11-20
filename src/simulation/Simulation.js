@@ -20,6 +20,8 @@ export class SimulationEngine {
     this.tickTimer = 0;
     this.autoSaveTimer = 0;
     this.onUpdateCallbacks = [];
+    this.worldName = savedData?.name || 'Morro do Sol';
+    this.slotId = savedData?.id || SaveSystem.getActiveSlotId() || 'slot-1';
 
     // Motor de IA Política, Eleições e Ideologias
     this.politics = new PoliticsEngine(this);
@@ -36,40 +38,45 @@ export class SimulationEngine {
       }
     }
 
-    // Densidade orgânica equilibrada nas ruas (até 115 civis ativos no Morro Central e bairros)
+    this._syncCivilianDensity();
+    this._spawnInitialConstructions();
+  }
+
+  _syncCivilianDensity() {
     const MAX_3D_CIVILIANS = 115;
-    if (this.npcs && this.npcs.npcs) {
-      const expectedCivilians = Math.min(MAX_3D_CIVILIANS, Math.max(45, Math.floor(this.globalMetrics.population / 10)));
-      const currentCivilians = this.npcs.npcs.filter(n =>
-        !n.isDedicatedBeachgoer && !n.isBarraqueiro && !n.isScenicMirante && !n.isFisherman &&
-        !n.isAthlete && !n.isMateiro && !n.isCapoeira && !n.isHorta && !n.isMototaxi &&
-        !n.isSurfer && !n.isCalistenia
-      ).length;
-      if (currentCivilians < expectedCivilians) {
-        const spawnCount = expectedCivilians - Math.max(0, currentCivilians);
-        for (let i = 0; i < spawnCount; i++) {
-          this.npcs.spawnNewCivilian();
-        }
+    if (!this.npcs || !this.npcs.npcs) return;
+    const expectedCivilians = Math.min(MAX_3D_CIVILIANS, Math.max(45, Math.floor((this.globalMetrics.population || 320) / 10)));
+    const currentCivilians = this.npcs.npcs.filter(n =>
+      !n.isDedicatedBeachgoer && !n.isBarraqueiro && !n.isScenicMirante && !n.isFisherman &&
+      !n.isAthlete && !n.isMateiro && !n.isCapoeira && !n.isHorta && !n.isMototaxi &&
+      !n.isSurfer && !n.isCalistenia
+    ).length;
+    if (currentCivilians < expectedCivilians) {
+      const spawnCount = expectedCivilians - Math.max(0, currentCivilians);
+      for (let i = 0; i < spawnCount; i++) {
+        this.npcs.spawnNewCivilian();
       }
-      // Inicializa perfil político de cada cidadão
+    }
+    if (this.politics) {
       this.npcs.npcs.forEach(n => this.politics.ensureNPCPolitics(n));
     }
+  }
 
-    // Inicia imediatamente obras ativas nos 4 macro-distritos (Sol, Prainha, Várzea e Serra)
-    if (this.arch && this.arch.activeConstructions && this.arch.activeConstructions.length < 4) {
-      ['sol', 'prainha', 'varzea', 'serra'].forEach(fac => {
-        if (this.arch.activeConstructions.length >= 4) return;
-        this.arch.spawnNewHouse(fac, (completedHouse) => {
-          const actualFaction = completedHouse.faction || fac;
-          if (this.factions[actualFaction]) {
-            this.factions[actualFaction].wealth = Math.max(10, this.factions[actualFaction].wealth - 20);
-          }
-          const factionInfo = this.factions[actualFaction] || { name: 'Comunidade' };
-          this.addEvent(`🎉 Nova moradia concluída em ${factionInfo.name}! Casa de tom ${completedHouse.colorName} entregue na encosta!`, 'build');
-          this.performAutoSave();
-        });
+  _spawnInitialConstructions() {
+    if (!this.arch || !this.arch.activeConstructions || this.arch.activeConstructions.length >= 4) return;
+    ['sol', 'prainha', 'varzea', 'serra'].forEach(fac => {
+      if (this.arch.activeConstructions.length >= 4) return;
+      this.arch.spawnNewHouse(fac, (completedHouse) => {
+        if (!completedHouse) return;
+        const actualFaction = completedHouse.faction || fac;
+        if (this.factions[actualFaction]) {
+          this.factions[actualFaction].wealth = Math.max(10, this.factions[actualFaction].wealth - 20);
+        }
+        const factionInfo = this.factions[actualFaction] || { name: 'Comunidade' };
+        this.addEvent(`🎉 Nova moradia concluída em ${factionInfo.name}! Casa de tom ${completedHouse.colorName} entregue na encosta!`, 'build');
+        this.performAutoSave();
       });
-    }
+    });
   }
 
   initNewWorld() {
@@ -508,8 +515,16 @@ export class SimulationEngine {
   }
 
   getSavePayload() {
+    const timeInfo = this.arch?.env?.getTimeOfDay ? this.arch.env.getTimeOfDay() : null;
+    const phase = typeof timeInfo === 'string' ? timeInfo : (timeInfo?.phase || 'day');
+    const cycleProgress = this.arch?.env?.getCycleProgress ? this.arch.env.getCycleProgress() : null;
     return {
+      schemaVersion: 2,
+      id: this.slotId || 'slot-1',
+      name: this.worldName || 'Morro do Sol',
       day: this.totalDays,
+      phase,
+      cycleProgress,
       speed: this.speed,
       metrics: { ...this.globalMetrics },
       lastIncomeBreakdown: this.lastIncomeBreakdown,
@@ -521,9 +536,11 @@ export class SimulationEngine {
     };
   }
 
-  performAutoSave() {
+  performAutoSave(targetSlotId = null) {
+    const slot = targetSlotId || this.slotId || SaveSystem.getActiveSlotId() || 'slot-1';
+    this.slotId = slot;
     const payload = this.getSavePayload();
-    const ok = SaveSystem.save(payload);
+    const ok = SaveSystem.save(payload, slot);
     if (ok) {
       const badge = document.getElementById('save-status');
       if (badge) {
@@ -532,12 +549,22 @@ export class SimulationEngine {
         setTimeout(() => badge.classList.remove('saved-flash'), 1200);
       }
     }
+    return ok;
   }
 
-  resetToNewWorld() {
-    SaveSystem.reset();
+  resetToNewWorld(opts = {}) {
+    const targetSlot = opts.slotId || this.slotId || SaveSystem.getActiveSlotId() || 'slot-1';
+    const nextName = (typeof opts.worldName === 'string' && opts.worldName.trim())
+      ? opts.worldName.trim().slice(0, 28)
+      : (this.worldName || 'Morro do Sol');
+
+    this.slotId = targetSlot;
+    this.worldName = nextName;
+    SaveSystem.setActiveSlotId(targetSlot);
+
     this.speed = 1;
     this.tickTimer = 0;
+    this.autoSaveTimer = 0;
     this.politics = new PoliticsEngine(this);
     this.initNewWorld();
     if (this.npcs) {
@@ -547,7 +574,55 @@ export class SimulationEngine {
 
     if (this.npcs) {
       this.npcs.spawnInitialPopulation();
-      this.npcs.npcs.forEach(n => this.politics.ensureNPCPolitics(n));
+      this._syncCivilianDensity();
+    }
+
+    if (this.arch) {
+      this.arch.currentPopulation = this.globalMetrics.population || 320;
+      if (this.arch.resetBoatsForNewWorld) {
+        this.arch.resetBoatsForNewWorld(this.arch.currentPopulation);
+      }
+      this._spawnInitialConstructions();
+    }
+
+    this.performAutoSave(this.slotId);
+    this.notifyUpdate();
+    this.addEvent(`✨ ${this.worldName} fundada! Os núcleos pioneiros iniciam sua expansão orgânica.`, 'info');
+  }
+
+  loadWorldData(savedData, opts = {}) {
+    if (!savedData) {
+      this.resetToNewWorld(opts);
+      return;
+    }
+
+    const targetSlot = opts.slotId || savedData.id || this.slotId || 'slot-1';
+    this.slotId = targetSlot;
+    this.worldName = savedData.name || 'Morro do Sol';
+    SaveSystem.setActiveSlotId(targetSlot);
+
+    this.speed = 1;
+    this.tickTimer = 0;
+    this.autoSaveTimer = 0;
+    this.politics = new PoliticsEngine(this);
+    this.rehydrate(savedData);
+
+    if (this.npcs) {
+      this.npcs.clearAll();
+    }
+
+    const allowLegacyFrontierBackfill = Boolean(
+      savedData.migratedFromV1 && (!savedData.schemaVersion || savedData.schemaVersion < 2)
+    );
+    this.arch.createInitialSettlements(
+      this.arch.allPlateaus,
+      savedData.activeHouses || [],
+      { allowLegacyFrontierBackfill }
+    );
+
+    if (this.npcs) {
+      this.npcs.spawnInitialPopulation();
+      this._syncCivilianDensity();
     }
 
     if (this.arch) {
@@ -558,7 +633,6 @@ export class SimulationEngine {
     }
 
     this.notifyUpdate();
-    this.addEvent('✨ Novo Mundo fundado! Morro do Sol inicia como centro vivo com suas moradias e líderes fundadores.', 'info');
   }
 
   getSummary() {

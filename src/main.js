@@ -9,7 +9,7 @@ import { PetManager } from './world/Pets.js';
 import { SimulationEngine, ACTION_COSTS } from './simulation/Simulation.js';
 import { IDEOLOGIES } from './simulation/PoliticsEngine.js';
 import { AmbientSoundtrack } from './audio/Soundtrack.js';
-import { SaveSystem } from './simulation/SaveSystem.js';
+import { SaveSystem, SLOT_IDS } from './simulation/SaveSystem.js';
 import { CinematicCamera } from './camera/CinematicCamera.js';
 import { PerfMonitor } from './debug/PerfMonitor.js';
 import { ContributionCuller } from './render/ContributionCuller.js';
@@ -57,8 +57,8 @@ controls.target.set(0, 10, -15);
 // Cinematic Camera Controller
 const cinematicCam = new CinematicCamera(camera, controls);
 
-// Check for persistent save data
-const savedGameData = SaveSystem.load();
+// Check for persistent save data across slots (including v1 migration)
+const savedGameData = SaveSystem.getLatestSlot();
 
 // Initialize Game Systems
 const env = new Environment(scene);
@@ -68,9 +68,24 @@ env.setTerrain(terrain);
 cinematicCam.setTerrain(terrain);
 const architecture = new Architecture(scene, env, terrain);
 
-// Rehydrate saved houses or start humble 8-house pioneer settlement
+// Restore time-of-day from saved snapshot when available before first render
+if (savedGameData) {
+  if (typeof savedGameData.cycleProgress === 'number') {
+    env.cycleTime = savedGameData.cycleProgress * env.cycleDuration;
+    env.applyLighting(0, true);
+  } else if (savedGameData.phase && env.setTimeOfDay) {
+    env.setTimeOfDay(savedGameData.phase);
+  }
+}
+
+// Rehydrate saved houses or start fresh polycentric nuclei
 if (savedGameData && savedGameData.activeHouses && savedGameData.activeHouses.length > 0) {
-  architecture.createInitialSettlements(terrain.plateaus, savedGameData.activeHouses);
+  const allowLegacyFrontierBackfill = Boolean(
+    savedGameData.migratedFromV1 && (!savedGameData.schemaVersion || savedGameData.schemaVersion < 2)
+  );
+  architecture.createInitialSettlements(terrain.plateaus, savedGameData.activeHouses, {
+    allowLegacyFrontierBackfill
+  });
 } else {
   architecture.createInitialSettlements(terrain.plateaus, null);
 }
@@ -142,7 +157,10 @@ function isTypingInUI(el) {
   return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
 }
 
+const isStartMenuOpen = () => Boolean(document.getElementById('start-menu')?.open);
+
 window.addEventListener('keydown', (e) => {
+  if (isStartMenuOpen()) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   if (isTypingInUI(document.activeElement)) return;
   if (!CAM_KEY_CODES.has(e.code)) return;
@@ -337,8 +355,8 @@ const fastPicker = new FastPicker(camera, architecture, npcs, pets);
 const mouse = new THREE.Vector2();
 
 window.addEventListener('click', (event) => {
-  // Ignore clicks on UI elements, popovers, dialogs or debug controls
-  if (event.target.closest('#ui-overlay, [popover], dialog, .lil-gui')) {
+  // Ignore clicks on UI elements, popovers, dialogs, start menu or debug controls
+  if (isStartMenuOpen() || event.target.closest('#ui-overlay, [popover], dialog, .lil-gui')) {
     return;
   }
 
@@ -1100,9 +1118,11 @@ if (btnNewWorld && modalNewWorld) {
   };
 
   modalConfirmReset.onclick = () => {
-    simulation.resetToNewWorld();
-    pets.resetForNewWorld();
-    setGameSpeed(1);
+    applyWorldTransition({
+      mode: 'new',
+      slotId: simulation.slotId || SaveSystem.getActiveSlotId() || 'slot-1',
+      worldName: simulation.worldName || 'Morro do Sol'
+    });
     closeTopLayer(modalNewWorld);
   };
 }
@@ -1477,6 +1497,8 @@ const mixerSliders = {
   sfx: { input: document.getElementById('vol-sfx'), label: document.getElementById('label-vol-sfx') }
 };
 
+let _syncMenuOptionsCb = null;
+
 function syncMixerUI() {
   const vols = soundtrack.getVolumes();
   Object.keys(mixerSliders).forEach(ch => {
@@ -1488,6 +1510,7 @@ function syncMixerUI() {
       syncSliderVisual(item.input);
     }
   });
+  _syncMenuOptionsCb?.();
 }
 
 Object.keys(mixerSliders).forEach(ch => {
@@ -1689,6 +1712,7 @@ function updateFxButtonUI() {
       btn.classList.toggle('active', btn.getAttribute('data-fx-mode') === postFX.mode);
     });
   }
+  _syncMenuOptionsCb?.();
 }
 updateFxButtonUI();
 postFX.onModeChange = updateFxButtonUI;
@@ -1762,6 +1786,7 @@ if (toggleAutoZen) {
       localStorage.setItem('morro_vivo_auto_zen', autoZenEnabled ? '1' : '0');
     } catch {}
     if (!autoZenEnabled) document.body.classList.remove('idle');
+    _syncMenuOptionsCb?.();
     resetIdleZenTimer();
   });
 }
@@ -1821,6 +1846,7 @@ if (btnScreenshot) {
 
 // Global Keyboard Shortcuts (WASD free! C=Tour, P=Conselho, I=Obras, M=Bairros, T=Horário, B=Lente, H=Zen, F=Fullscreen, N=Next Track, Space=Play/Pause, G=lil-gui, Esc=Close)
 window.addEventListener('keydown', (e) => {
+  if (isStartMenuOpen()) return;
   if (isTypingInUI(document.activeElement)) return;
   if (e.ctrlKey || e.metaKey || e.altKey) return;
 
@@ -1962,8 +1988,17 @@ function animate() {
     }
   });
 
-  // Update camera system: follow target (NPC/Bondinho/Mototáxi), cinematic drone, or user orbit + WASD controls
-  if (followTargetGroup) {
+  // Update camera system: orbiting diorama while Start Menu is open, follow target, cinematic drone, or user orbit + WASD controls
+  if (isStartMenuOpen()) {
+    menuOrbitAngle += rawDelta * 0.065;
+    camera.position.set(
+      Math.cos(menuOrbitAngle) * 138,
+      54 + Math.sin(menuOrbitAngle * 0.7) * 5,
+      Math.sin(menuOrbitAngle) * 138
+    );
+    controls.target.set(0, 12, -16);
+    camera.lookAt(controls.target);
+  } else if (followTargetGroup) {
     const tp = followTargetGroup.position;
     _followTargetTmp.set(tp.x, tp.y + 1.2, tp.z);
     controls.target.lerp(_followTargetTmp, Math.min(1, rawDelta * 6));
@@ -2007,6 +2042,451 @@ function animate() {
   perf.endFrame(rawDelta);
 }
 
+// =========================================================================
+// COORDENADOR DE TRANSIÇÃO DE MUNDO & MENUZINHO INICIAL MODERNISMO CARIOCA
+// =========================================================================
+const hudWorldTitle = document.getElementById('hud-world-title');
+if (hudWorldTitle) {
+  hudWorldTitle.textContent = simulation.worldName || 'Morro Vivo';
+}
+
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+const startMenu = document.getElementById('start-menu');
+const btnMainMenu = document.getElementById('btn-main-menu');
+const menuViews = {
+  home: document.getElementById('menu-view-home'),
+  new: document.getElementById('menu-view-new'),
+  saves: document.getElementById('menu-view-saves'),
+  options: document.getElementById('menu-view-options')
+};
+const menuBtnContinue = document.getElementById('menu-btn-continue');
+const menuContinueMeta = document.getElementById('menu-continue-meta');
+const menuBtnNewGame = document.getElementById('menu-btn-new-game');
+const menuBtnSaves = document.getElementById('menu-btn-saves');
+const menuSavesCount = document.getElementById('menu-saves-count');
+const menuBtnOptions = document.getElementById('menu-btn-options');
+const menuFootnote = document.getElementById('start-menu-footnote');
+
+const formNewGame = document.getElementById('form-new-game');
+const newWorldNameInput = document.getElementById('new-world-name');
+const newGameSlotRadios = document.getElementById('new-game-slot-radios');
+const menuNewBack = document.getElementById('menu-new-back');
+
+const saveSlotsList = document.getElementById('save-slots-list');
+const menuSavesTitle = document.getElementById('menu-saves-title');
+const menuSavesBack = document.getElementById('menu-saves-back');
+
+const menuOptionsTitle = document.getElementById('menu-options-title');
+const menuOptionsBack = document.getElementById('menu-options-back');
+const menuOptAutoZen = document.getElementById('menu-opt-auto-zen');
+const menuSliders = {
+  master: { input: document.getElementById('menu-vol-master'), label: document.getElementById('label-menu-vol-master') },
+  music: { input: document.getElementById('menu-vol-music'), label: document.getElementById('label-menu-vol-music') },
+  sea: { input: document.getElementById('menu-vol-sea'), label: document.getElementById('label-menu-vol-sea') }
+};
+
+let menuInitialBoot = false;
+let activeMenuView = 'home';
+let activeSessionDeleted = false;
+let pendingDeleteSlotId = null;
+let pendingDeleteTimer = null;
+let preMenuCamPos = null;
+let preMenuCamTarget = null;
+let worldChangedInMenu = false;
+let menuOrbitAngle = Math.atan2(camera.position.z + 15, camera.position.x);
+let isNewWorldImeComposing = false;
+
+const dateFmtPt = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
+
+function syncMenuOptionsUI() {
+  if (menuViews.options) {
+    menuViews.options.querySelectorAll('input[name="menuFxMode"]').forEach((radio) => {
+      radio.checked = radio.value === postFX.mode;
+    });
+  }
+  const vols = soundtrack.getVolumes();
+  Object.keys(menuSliders).forEach((ch) => {
+    const item = menuSliders[ch];
+    if (item && item.input && item.label) {
+      const val = vols[ch] ?? 50;
+      item.input.value = val;
+      item.label.textContent = `${val}%`;
+      syncSliderVisual(item.input);
+    }
+  });
+  if (menuOptAutoZen) {
+    menuOptAutoZen.checked = autoZenEnabled;
+  }
+}
+_syncMenuOptionsCb = syncMenuOptionsUI;
+
+function applyWorldTransition({ mode = 'new', slotId = null, worldName = null } = {}) {
+  if (inspectorCard) inspectorCard.classList.remove('visible');
+  followTargetGroup = null;
+  closeAllOpenPopovers();
+  if (modalNewWorld && modalNewWorld.open) modalNewWorld.close();
+  if (modalPolitics && modalPolitics.open) modalPolitics.close();
+
+  lastFeedSignature = '';
+  isInitialFeedSync = true;
+  if (hudFeedList) hudFeedList.innerHTML = '';
+
+  if (mode === 'load') {
+    const targetId = slotId || SaveSystem.getActiveSlotId();
+    const loadedData = SaveSystem.load(targetId);
+    simulation.loadWorldData(loadedData, { slotId: targetId });
+    if (loadedData && typeof loadedData.cycleProgress === 'number') {
+      env.cycleTime = loadedData.cycleProgress * env.cycleDuration;
+      env.applyLighting(0, true);
+    } else if (loadedData?.phase && env.setTimeOfDay) {
+      env.setTimeOfDay(loadedData.phase);
+    } else if (env.setTimeOfDay) {
+      env.setTimeOfDay('day');
+    }
+  } else {
+    simulation.resetToNewWorld({ worldName, slotId });
+    if (env.setTimeOfDay) env.setTimeOfDay('day');
+  }
+
+  pets.resetForNewWorld();
+  if (typeof batcher !== 'undefined' && batcher) {
+    batcher.reset();
+  }
+  if (typeof culler !== 'undefined' && culler) {
+    culler.collect();
+  }
+  renderer.shadowMap.needsUpdate = true;
+
+  if (hudWorldTitle) {
+    hudWorldTitle.textContent = simulation.worldName || 'Morro Vivo';
+  }
+
+  activePresetKey = 'pan';
+  presetAngleIndex.pan = 0;
+  setActiveCamBtn('pan');
+  if (cinematicCam.enabled) toggleCinematicMode();
+  const pan0 = cameraPresets.pan.angles[0];
+  if (activeCamLabel) activeCamLabel.innerText = camShortNames.pan;
+  if (activeCamAngle) activeCamAngle.innerText = `1/${cameraPresets.pan.angles.length}`;
+  if (hudRegionSubtitle) hudRegionSubtitle.innerText = pan0.label;
+  camera.position.copy(pan0.pos);
+  controls.target.copy(pan0.target);
+  controls.update();
+
+  setGameSpeed(1);
+  syncPhaseHUD(env.currentPhase || 'day');
+  syncSolarClock(env.currentPhase || 'day');
+  worldChangedInMenu = true;
+  activeSessionDeleted = false;
+  if (startMenu?.open) renderStartMenuData();
+}
+
+function renderStartMenuData() {
+  const slots = SaveSystem.listSlots();
+  const filled = slots.filter((s) => !s.empty);
+  const latest = SaveSystem.getLatestSlot();
+  const canResumeCurrent = !menuInitialBoot && !activeSessionDeleted;
+
+  if (menuBtnContinue && menuContinueMeta) {
+    if (canResumeCurrent) {
+      menuBtnContinue.setAttribute('aria-disabled', 'false');
+      menuContinueMeta.textContent = `Retomar ${simulation.worldName} · DIA ${simulation.totalDays}`;
+    } else if (latest) {
+      menuBtnContinue.setAttribute('aria-disabled', 'false');
+      const pop = latest.metrics?.population || 320;
+      menuContinueMeta.textContent = `${latest.name} · DIA ${latest.day} · ${pop} mor.`;
+    } else {
+      menuBtnContinue.setAttribute('aria-disabled', 'true');
+      menuContinueMeta.textContent = 'Nenhum save encontrado ainda';
+    }
+  }
+
+  if (menuSavesCount) {
+    menuSavesCount.textContent = `${filled.length}/${SLOT_IDS.length} espaços ocupados`;
+  }
+
+  if (menuFootnote) {
+    menuFootnote.textContent = canResumeCurrent
+      ? `Pausado em ${simulation.worldName} · Esc para voltar`
+      : '4 bairros orgânicos · Bossa & Mar generativos';
+  }
+
+  if (newGameSlotRadios) {
+    const currentChecked = newGameSlotRadios.querySelector('input[name="targetSlot"]:checked')?.value;
+    const defaultSlot = (currentChecked && SLOT_IDS.includes(currentChecked))
+      ? currentChecked
+      : SaveSystem.findFirstEmptySlot();
+
+    newGameSlotRadios.innerHTML = slots.map((s) => {
+      const checkedAttr = s.id === defaultSlot ? 'checked' : '';
+      const meta = s.empty ? 'Vazio' : `${escapeHtml(s.name)} · Dia ${s.day}`;
+      return `
+        <div class="slot-radio-item">
+          <input type="radio" class="slot-radio-input" id="new-slot-${s.id}" name="targetSlot" value="${s.id}" ${checkedAttr} />
+          <label for="new-slot-${s.id}" class="slot-radio-label">
+            <span class="slot-radio-title">Espaço ${s.index}</span>
+            <span class="slot-radio-meta">${meta}</span>
+          </label>
+        </div>
+      `;
+    }).join('');
+  }
+
+  if (saveSlotsList) {
+    saveSlotsList.innerHTML = slots.map((s) => {
+      if (s.empty) {
+        return `
+          <li class="save-slot-card">
+            <div class="save-slot-top">
+              <span class="save-slot-name">Espaço ${s.index} · Livre</span>
+              <span class="save-slot-badge">vazio</span>
+            </div>
+            <div class="save-slot-meta">Nenhuma comunidade fundada neste espaço ainda.</div>
+            <div class="save-slot-actions">
+              <button type="button" class="slot-action-btn slot-action-load" data-slot-create="${s.id}" aria-label="Criar Novo Aqui no Espaço ${s.index}">Criar Novo Aqui</button>
+            </div>
+          </li>
+        `;
+      }
+      const dateStr = s.timestamp ? dateFmtPt.format(new Date(s.timestamp)) : 'Agora';
+      const isConfirming = pendingDeleteSlotId === s.id;
+      const safeName = escapeHtml(s.name);
+      return `
+        <li class="save-slot-card ${s.id === simulation.slotId && !activeSessionDeleted ? 'is-active' : ''}">
+          <div class="save-slot-top">
+            <span class="save-slot-name">${safeName}</span>
+            <span class="save-slot-badge">DIA ${s.day} · E${s.index}</span>
+          </div>
+          <div class="save-slot-meta">Mor. ${s.population} · Caixa R$ ${s.wealth} · ${s.housesCount} casas · ${dateStr}</div>
+          <div class="save-slot-actions">
+            <button type="button" class="slot-action-btn slot-action-load" data-slot-load="${s.id}" aria-label="Carregar ${safeName} do Espaço ${s.index}">Carregar</button>
+            <button type="button" class="slot-action-btn slot-action-delete ${isConfirming ? 'is-confirming' : ''}" data-slot-delete="${s.id}" aria-label="Apagar ${safeName} do Espaço ${s.index}">${isConfirming ? 'Confirmar?' : 'Apagar'}</button>
+          </div>
+        </li>
+      `;
+    }).join('');
+  }
+
+  syncMenuOptionsUI();
+}
+
+function clearPendingDelete() {
+  pendingDeleteSlotId = null;
+  if (pendingDeleteTimer) {
+    clearTimeout(pendingDeleteTimer);
+    pendingDeleteTimer = null;
+  }
+}
+
+function switchMenuView(view = 'home') {
+  activeMenuView = menuViews[view] ? view : 'home';
+  clearPendingDelete();
+  Object.keys(menuViews).forEach((k) => {
+    if (menuViews[k]) menuViews[k].hidden = k !== activeMenuView;
+  });
+  renderStartMenuData();
+
+  if (activeMenuView === 'new' && newWorldNameInput) {
+    newWorldNameInput.focus();
+    newWorldNameInput.select();
+  } else if (activeMenuView === 'saves' && menuSavesTitle) {
+    menuSavesTitle.focus();
+  } else if (activeMenuView === 'options' && menuOptionsTitle) {
+    menuOptionsTitle.focus();
+  } else if (activeMenuView === 'home') {
+    const canContinue = menuBtnContinue && menuBtnContinue.getAttribute('aria-disabled') !== 'true';
+    (canContinue ? menuBtnContinue : menuBtnNewGame)?.focus();
+  }
+}
+
+function openStartMenu(view = 'home', { initialBoot = false } = {}) {
+  if (!startMenu) return;
+  menuInitialBoot = Boolean(initialBoot);
+  if (!startMenu.open) {
+    preMenuCamPos = camera.position.clone();
+    preMenuCamTarget = controls.target.clone();
+    worldChangedInMenu = false;
+    menuOrbitAngle = Math.atan2(camera.position.z + 15, camera.position.x);
+  }
+  if (inspectorCard) inspectorCard.classList.remove('visible');
+  followTargetGroup = null;
+  closeAllOpenPopovers();
+  simulation.isPaused = true;
+  controls.enabled = false;
+  document.body.classList.add('in-menu');
+  if (!startMenu.open) {
+    startMenu.showModal();
+  }
+  switchMenuView(view);
+}
+
+function closeStartMenu() {
+  clearPendingDelete();
+  if (startMenu && startMenu.open) {
+    startMenu.close();
+  }
+  document.body.classList.remove('in-menu');
+  controls.enabled = true;
+  simulation.isPaused = false;
+  if (!menuInitialBoot && !worldChangedInMenu && preMenuCamPos && preMenuCamTarget) {
+    camera.position.copy(preMenuCamPos);
+    controls.target.copy(preMenuCamTarget);
+    controls.update();
+  }
+  menuInitialBoot = false;
+}
+
+if (startMenu) {
+  startMenu.addEventListener('cancel', (e) => {
+    e.preventDefault();
+    if (activeMenuView !== 'home') {
+      switchMenuView('home');
+      return;
+    }
+    if (!menuInitialBoot && !activeSessionDeleted) {
+      closeStartMenu();
+    }
+  });
+}
+
+if (btnMainMenu) {
+  btnMainMenu.onclick = () => {
+    if (!activeSessionDeleted) {
+      simulation.performAutoSave();
+    }
+    openStartMenu('home', { initialBoot: false });
+  };
+}
+
+if (menuBtnContinue) {
+  menuBtnContinue.onclick = () => {
+    if (menuBtnContinue.getAttribute('aria-disabled') === 'true') return;
+    if (!menuInitialBoot && !activeSessionDeleted) {
+      closeStartMenu();
+      return;
+    }
+    const latest = SaveSystem.getLatestSlot();
+    if (!latest) return;
+    if (latest.id !== simulation.slotId) {
+      applyWorldTransition({ mode: 'load', slotId: latest.id });
+    }
+    closeStartMenu();
+  };
+}
+
+if (menuBtnNewGame) menuBtnNewGame.onclick = () => switchMenuView('new');
+if (menuBtnSaves) menuBtnSaves.onclick = () => switchMenuView('saves');
+if (menuBtnOptions) menuBtnOptions.onclick = () => switchMenuView('options');
+if (menuNewBack) menuNewBack.onclick = () => switchMenuView('home');
+if (menuSavesBack) menuSavesBack.onclick = () => switchMenuView('home');
+if (menuOptionsBack) menuOptionsBack.onclick = () => switchMenuView('home');
+
+if (newWorldNameInput) {
+  newWorldNameInput.addEventListener('compositionstart', () => { isNewWorldImeComposing = true; });
+  newWorldNameInput.addEventListener('compositionend', () => { isNewWorldImeComposing = false; });
+  newWorldNameInput.addEventListener('keydown', (e) => {
+    if (e.isComposing || isNewWorldImeComposing) e.stopPropagation();
+  });
+}
+
+if (formNewGame) {
+  formNewGame.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (isNewWorldImeComposing) return;
+    const worldName = (newWorldNameInput?.value || '').trim().slice(0, 28) || 'Morro do Sol';
+    const checkedSlot = formNewGame.querySelector('input[name="targetSlot"]:checked')?.value;
+    const targetSlot = SLOT_IDS.includes(checkedSlot) ? checkedSlot : SaveSystem.findFirstEmptySlot();
+    applyWorldTransition({ mode: 'new', slotId: targetSlot, worldName });
+    closeStartMenu();
+  });
+}
+
+if (saveSlotsList) {
+  saveSlotsList.addEventListener('click', (e) => {
+    const loadBtn = e.target.closest('[data-slot-load]');
+    if (loadBtn) {
+      const slotId = loadBtn.getAttribute('data-slot-load');
+      applyWorldTransition({ mode: 'load', slotId });
+      closeStartMenu();
+      return;
+    }
+    const createBtn = e.target.closest('[data-slot-create]');
+    if (createBtn) {
+      const slotId = createBtn.getAttribute('data-slot-create');
+      switchMenuView('new');
+      const targetRadio = document.getElementById(`new-slot-${slotId}`);
+      if (targetRadio) targetRadio.checked = true;
+      return;
+    }
+    const deleteBtn = e.target.closest('[data-slot-delete]');
+    if (deleteBtn) {
+      const slotId = deleteBtn.getAttribute('data-slot-delete');
+      if (pendingDeleteSlotId === slotId) {
+        clearPendingDelete();
+        SaveSystem.deleteSlot(slotId);
+        if (slotId === simulation.slotId) {
+          activeSessionDeleted = true;
+        }
+        renderStartMenuData();
+      } else {
+        clearPendingDelete();
+        pendingDeleteSlotId = slotId;
+        pendingDeleteTimer = setTimeout(() => {
+          pendingDeleteSlotId = null;
+          renderStartMenuData();
+        }, 3500);
+        renderStartMenuData();
+      }
+    }
+  });
+}
+
+if (menuViews.options) {
+  menuViews.options.querySelectorAll('input[name="menuFxMode"]').forEach((radio) => {
+    radio.addEventListener('change', () => {
+      if (radio.checked && postFX.setMode) {
+        postFX.setMode(radio.value);
+        updateFxButtonUI();
+      }
+    });
+  });
+}
+
+Object.keys(menuSliders).forEach((ch) => {
+  const item = menuSliders[ch];
+  if (item && item.input) {
+    item.input.oninput = (e) => {
+      const val = Number(e.target.value);
+      soundtrack.setVolume(ch, val);
+      if (item.label) item.label.textContent = `${val}%`;
+      syncSliderVisual(item.input);
+      syncMixerUI();
+    };
+  }
+});
+
+if (menuOptAutoZen) {
+  menuOptAutoZen.addEventListener('change', () => {
+    autoZenEnabled = menuOptAutoZen.checked;
+    try {
+      localStorage.setItem('morro_vivo_auto_zen', autoZenEnabled ? '1' : '0');
+    } catch {}
+    if (toggleAutoZen) toggleAutoZen.checked = autoZenEnabled;
+    if (!autoZenEnabled) document.body.classList.remove('idle');
+    resetIdleZenTimer();
+  });
+}
+
+syncMenuOptionsUI();
+
 // Acesso para depuração e testes automatizados
 window.__morro = {
   renderer,
@@ -2014,6 +2494,7 @@ window.__morro = {
   camera,
   controls,
   simulation,
+  SaveSystem,
   setSpeed: setGameSpeed,
   npcs,
   pets,
@@ -2025,11 +2506,20 @@ window.__morro = {
   fastPicker,
   postFX,
   env,
-  soundtrack
+  soundtrack,
+  applyWorldTransition,
+  openStartMenu,
+  closeStartMenu,
+  switchMenuView
 };
 
 // Initial simulation notification
 simulation.notifyUpdate();
+
+// Show Start Menu automatically on normal boot (bypassed under ?debug / ?nomenu)
+if (!urlParams.has('debug') && !urlParams.has('nomenu')) {
+  openStartMenu('home', { initialBoot: true });
+}
 
 // Start render loop
 animate();

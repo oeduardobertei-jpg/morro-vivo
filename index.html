@@ -59,7 +59,7 @@
 
         <div class="hud-title-col">
           <div class="hud-title-row">
-            <h1 class="hud-title">Morro Vivo</h1>
+            <h1 id="hud-world-title" class="hud-title">Morro Vivo</h1>
             <span id="day-counter" class="hud-day-seal">DIA 1</span>
           </div>
           <p class="hud-sub">
@@ -129,6 +129,10 @@
       </button>
 
       <span class="cmd-sep" aria-hidden="true"></span>
+
+      <button id="btn-main-menu" type="button" class="cmd-icon-btn" title="Menu Principal (Salvar e alternar mundo)">
+        <svg class="hud-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 10v10h14V10"/><path d="M9.5 20v-6h5v6"/></svg>
+      </button>
 
       <button id="btn-save" type="button" class="cmd-icon-btn" title="Salvar Progresso Imediatamente">
         <svg class="hud-svg-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
@@ -653,6 +657,164 @@
       </div>
     </dialog>
   </div>
+
+  <!-- Menu Inicial Modernismo Carioca (Native Top-Layer Modal Dialog) -->
+  <dialog id="start-menu" class="start-menu-dialog interactive" closedby="none" aria-labelledby="start-menu-title">
+    <div class="start-menu-card">
+      <svg class="hud-wave-filigree start-menu-wave" viewBox="0 0 400 6" preserveAspectRatio="none" aria-hidden="true">
+        <path d="M0 3 Q12.5 0.5 25 3 T50 3 T75 3 T100 3 T125 3 T150 3 T175 3 T200 3 T225 3 T250 3 T275 3 T300 3 T325 3 T350 3 T375 3 T400 3"
+          fill="none" stroke="rgba(246,223,185,0.28)" stroke-width="1"/>
+      </svg>
+
+      <header class="start-menu-hero">
+        <div class="start-menu-crest" aria-hidden="true">
+          <svg viewBox="0 0 44 44" fill="none">
+            <circle cx="22" cy="22" r="20.5" fill="rgba(22,18,22,0.84)" stroke="rgba(246,223,185,0.36)" stroke-width="1.2"/>
+            <circle cx="29" cy="14.5" r="4.8" fill="var(--accent)"/>
+            <path d="M6 30 L17 15.5 L25 25.5 L31 19.5 L38 30 Z" fill="rgba(250,244,234,0.94)"/>
+            <path d="M8 34 Q15 30.5 22 34 T36 34" stroke="var(--accent-2)" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="start-menu-titles">
+          <span class="start-menu-kicker">Maquete Viva da Guanabara</span>
+          <h1 id="start-menu-title" class="start-menu-title">Morro Vivo</h1>
+        </div>
+      </header>
+
+      <!-- Vista 1: Menu Principal -->
+      <nav id="menu-view-home" class="start-menu-nav" aria-label="Menu principal">
+        <button id="menu-btn-continue" type="button" class="start-menu-btn start-menu-btn-primary" autofocus>
+          <span class="menu-btn-main">
+            <span class="menu-btn-label">CONTINUAR</span>
+            <span id="menu-continue-meta" class="menu-btn-sub">Retomar comunidade salva</span>
+          </span>
+          <span class="menu-btn-arrow" aria-hidden="true">›</span>
+        </button>
+
+        <button id="menu-btn-new-game" type="button" class="start-menu-btn">
+          <span class="menu-btn-main">
+            <span class="menu-btn-label">NOVO JOGO</span>
+            <span class="menu-btn-sub">Fundar nova comunidade do zero</span>
+          </span>
+          <span class="menu-btn-arrow" aria-hidden="true">›</span>
+        </button>
+
+        <button id="menu-btn-saves" type="button" class="start-menu-btn">
+          <span class="menu-btn-main">
+            <span class="menu-btn-label">ESCOLHER SAVE</span>
+            <span id="menu-saves-count" class="menu-btn-sub">4 espaços disponíveis</span>
+          </span>
+          <span class="menu-btn-arrow" aria-hidden="true">›</span>
+        </button>
+
+        <button id="menu-btn-options" type="button" class="start-menu-btn">
+          <span class="menu-btn-main">
+            <span class="menu-btn-label">OPÇÕES</span>
+            <span class="menu-btn-sub">Ótica visual, volumes e HUD</span>
+          </span>
+          <span class="menu-btn-arrow" aria-hidden="true">›</span>
+        </button>
+
+        <p id="start-menu-footnote" class="start-menu-footnote">
+          4 bairros orgânicos · Bossa & Mar generativos
+        </p>
+      </nav>
+
+      <!-- Vista 2: Novo Jogo -->
+      <section id="menu-view-new" class="start-menu-subview" hidden aria-labelledby="menu-new-title">
+        <h2 id="menu-new-title" class="menu-sub-title" tabindex="-1">Fundar Nova Comunidade</h2>
+        <form id="form-new-game" class="menu-form" aria-labelledby="menu-new-title">
+          <div class="menu-field-group">
+            <label for="new-world-name" class="menu-field-label">Nome da Comunidade</label>
+            <span id="new-world-hint" class="menu-field-hint">Até 28 caracteres (ex.: Vila da Serra).</span>
+            <input
+              type="text"
+              id="new-world-name"
+              name="worldName"
+              maxlength="28"
+              required
+              enterkeyhint="go"
+              autocorrect="off"
+              spellcheck="false"
+              value="Morro do Sol"
+              aria-describedby="new-world-hint"
+            />
+          </div>
+
+          <fieldset class="slot-radio-fieldset">
+            <legend class="menu-field-label">Escolha o espaço do save</legend>
+            <div id="new-game-slot-radios" class="slot-radio-grid"></div>
+          </fieldset>
+
+          <div class="menu-sub-actions">
+            <button id="menu-new-back" type="button" class="menu-btn-secondary">Voltar</button>
+            <button id="menu-new-submit" type="submit" class="menu-btn-confirm">Fundar Comunidade</button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Vista 3: Escolher Save -->
+      <section id="menu-view-saves" class="start-menu-subview" hidden aria-labelledby="menu-saves-title">
+        <div class="menu-sub-head">
+          <h2 id="menu-saves-title" class="menu-sub-title" tabindex="-1">Escolher Save</h2>
+          <span class="menu-sub-tag">armazenamento local</span>
+        </div>
+        <ul id="save-slots-list" class="save-slots-list hud-scroll"></ul>
+        <div class="menu-sub-actions">
+          <button id="menu-saves-back" type="button" class="menu-btn-secondary">Voltar</button>
+        </div>
+      </section>
+
+      <!-- Vista 4: Opções -->
+      <section id="menu-view-options" class="start-menu-subview" hidden aria-labelledby="menu-options-title">
+        <h2 id="menu-options-title" class="menu-sub-title" tabindex="-1">Opções do Morro</h2>
+
+        <fieldset class="menu-fx-fieldset">
+          <legend class="menu-field-label">Ótica da Maquete</legend>
+          <div class="menu-fx-radios">
+            <input type="radio" id="menu-fx-maquete" name="menuFxMode" value="maquete" class="menu-fx-radio" />
+            <label for="menu-fx-maquete" class="menu-fx-pill">Maquete</label>
+
+            <input type="radio" id="menu-fx-bloom" name="menuFxMode" value="bloom" class="menu-fx-radio" />
+            <label for="menu-fx-bloom" class="menu-fx-pill">Studio FX</label>
+
+            <input type="radio" id="menu-fx-off" name="menuFxMode" value="off" class="menu-fx-radio" />
+            <label for="menu-fx-off" class="menu-fx-pill">Limpo</label>
+          </div>
+        </fieldset>
+
+        <div class="menu-sliders-block">
+          <div class="pop-mixer-row">
+            <label for="menu-vol-master" class="pop-mixer-label">Geral (Master)</label>
+            <input type="range" id="menu-vol-master" min="0" max="100" value="80" class="hud-slider" />
+            <span id="label-menu-vol-master" class="channel-percent">80%</span>
+          </div>
+          <div class="pop-mixer-row">
+            <label for="menu-vol-music" class="pop-mixer-label">Vitrola & Violão</label>
+            <input type="range" id="menu-vol-music" min="0" max="100" value="70" class="hud-slider" />
+            <span id="label-menu-vol-music" class="channel-percent">70%</span>
+          </div>
+          <div class="pop-mixer-row">
+            <label for="menu-vol-sea" class="pop-mixer-label">Mar & Pássaros</label>
+            <input type="range" id="menu-vol-sea" min="0" max="100" value="68" class="hud-slider" />
+            <span id="label-menu-vol-sea" class="channel-percent">68%</span>
+          </div>
+        </div>
+
+        <label class="pop-toggle-row menu-opt-toggle" for="menu-opt-auto-zen">
+          <div>
+            <div class="pop-setting-label">Auto-ocultar HUD</div>
+            <div class="pop-item-sub">recolhe após 22s sem mover o mouse</div>
+          </div>
+          <input type="checkbox" id="menu-opt-auto-zen" class="hud-switch" />
+        </label>
+
+        <div class="menu-sub-actions">
+          <button id="menu-options-back" type="button" class="menu-btn-secondary">Voltar</button>
+        </div>
+      </section>
+    </div>
+  </dialog>
 
   <!-- Main JavaScript Entrypoint -->
   <script type="module" src="/src/main.js"></script>

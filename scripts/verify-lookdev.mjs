@@ -314,9 +314,27 @@ try {
   await snap('23_hud_lofi_night_cameras.png');
 
   await page.evaluate(() => {
-    const m = window.__morro;
     const pcam = document.getElementById('pop-cameras');
     try { if (pcam?.matches(':popover-open')) pcam.hidePopover(); } catch {}
+  });
+
+  // 6N. Menuzinho Inicial Carioca (Dia + Escolher Save)
+  await setModeAndPhase('bloom', 'day');
+  await page.evaluate(() => {
+    window.__morro.openStartMenu('home', { initialBoot: false });
+  });
+  await new Promise((r) => setTimeout(r, 450));
+  await snap('24_start_menu_day.png');
+
+  await page.evaluate(() => {
+    window.__morro.switchMenuView('saves');
+  });
+  await new Promise((r) => setTimeout(r, 350));
+  await snap('25_start_menu_saves.png');
+
+  await page.evaluate(() => {
+    const m = window.__morro;
+    m.closeStartMenu();
     if (m.perf) {
       m.perf.visible = true;
       m.perf.render();
@@ -742,6 +760,46 @@ try {
 
     const phaseSyncOk = document.body.dataset.phase === m.env.currentPhase;
 
+    let menuAudit = { ok: false };
+    try {
+      const dlg = document.getElementById('start-menu');
+      m.openStartMenu('home', { initialBoot: false });
+      const opened = Boolean(dlg && dlg.open === true && document.body.classList.contains('in-menu'));
+      const pausedInMenu = Boolean(m.simulation.isPaused && !m.controls.enabled);
+      const has4HomeBtns = Boolean(
+        document.getElementById('menu-btn-continue') &&
+        document.getElementById('menu-btn-new-game') &&
+        document.getElementById('menu-btn-saves') &&
+        document.getElementById('menu-btn-options')
+      );
+      m.switchMenuView('saves');
+      const savesVisible = !document.getElementById('menu-view-saves')?.hidden;
+      const homeHiddenInSaves = getComputedStyle(document.getElementById('menu-view-home')).display === 'none';
+      const slotCardsCount = document.querySelectorAll('#save-slots-list > li').length;
+      m.switchMenuView('options');
+      const optionsVisible = !document.getElementById('menu-view-options')?.hidden;
+      m.switchMenuView('new');
+      const newVisible = !document.getElementById('menu-view-new')?.hidden;
+      m.closeStartMenu();
+      const closedCleanly = Boolean(
+        dlg && !dlg.open && !document.body.classList.contains('in-menu') && !m.simulation.isPaused && m.controls.enabled
+      );
+      menuAudit = {
+        opened,
+        pausedInMenu,
+        has4HomeBtns,
+        savesVisible,
+        homeHiddenInSaves,
+        slotCardsCount,
+        optionsVisible,
+        newVisible,
+        closedCleanly,
+        ok: Boolean(opened && pausedInMenu && has4HomeBtns && savesVisible && homeHiddenInSaves && slotCardsCount === 4 && optionsVisible && newVisible && closedCleanly)
+      };
+    } catch {
+      menuAudit = { ok: false };
+    }
+
     const hudAudit = {
       hasLegacyBars,
       dockWidth: dockRect ? Math.round(dockRect.width) : 0,
@@ -770,6 +828,7 @@ try {
       npcAudit,
       spatialAudit,
       petAudit,
+      menuAudit,
       hudAudit,
       perf: m.perf.snapshot(),
       cull: m.culler.stats,
@@ -781,8 +840,78 @@ try {
     };
   });
 
-  console.log(JSON.stringify({ outDir, wasdMovedDist, pickCheck, audioCheck, metrics, errors, warningCount: warnings.length }, null, 2));
-  if (errors.length > 0 || !metrics.npcAudit?.ok || !metrics.spatialAudit?.ok || !metrics.petAudit?.ok || !metrics.hudAudit?.ok) process.exitCode = 1;
+  // 9. Auditoria estrita de Reset / Novo Mundo + Save Round-Trip (zero casas fantasmas em StaticBatcher)
+  await page.evaluate(() => {
+    const m = window.__morro;
+    const extras = [
+      { id: 'audit_extra_1', x: -64, z: -20, faction: 'prainha' },
+      { id: 'audit_extra_2', x: 64, z: -26, faction: 'varzea' },
+      { id: 'audit_extra_3', x: -34, z: -32, faction: 'sol' },
+      { id: 'audit_extra_4', x: 34, z: -48, faction: 'serra' },
+      { id: 'audit_extra_5', x: 14, z: -76, faction: 'serra' }
+    ];
+    extras.forEach((ex, i) => {
+      const gy = m.architecture.terrain ? m.architecture.terrain.getElevation(ex.x, ex.z) : 5;
+      const h = m.architecture.buildHouse({ id: ex.id, faction: ex.faction, order: 900 + i, x: ex.x, y: gy, z: ex.z }, 1, m.architecture.palette[i]);
+      if (h) {
+        m.architecture.houses.push(h);
+        if (m.batcher && h.meshGroup) m.batcher.ingestGroup(h.meshGroup);
+      }
+    });
+  });
+  await page.waitForFunction(() => window.__morro.batcher.stats.state === 'active', { timeout: 25000 });
+
+  const resetInfo = await page.evaluate(() => {
+    const m = window.__morro;
+    const beforeHousesCount = m.architecture.houses.length;
+    m.applyWorldTransition({ mode: 'new', slotId: 'slot-4', worldName: 'Teste Reset' });
+    return { beforeHousesCount };
+  });
+  await page.waitForFunction(() => window.__morro.batcher.stats.state === 'active', { timeout: 25000 });
+
+  const resetAudit = await page.evaluate(() => {
+    const m = window.__morro;
+    const afterHousesCount = m.architecture.houses.length;
+    const hasAuditExtra = m.architecture.houses.some((h) => String(h.id).startsWith('audit_extra_'));
+    const dayAfterReset = m.simulation.totalDays;
+    let detachedRecsCount = 0;
+    for (const r of m.batcher.recs) {
+      let p = r.mesh;
+      while (p && p.parent) p = p.parent;
+      if (p !== m.scene) detachedRecsCount++;
+    }
+    const worldTitleText = document.getElementById('hud-world-title')?.textContent?.trim() || '';
+
+    // Testa round-trip save/load do slot-4 garantindo zero injeção extra (+100 casas) ou perda de moradias
+    m.simulation.performAutoSave('slot-4');
+    m.applyWorldTransition({ mode: 'load', slotId: 'slot-4' });
+    const loadedHousesCount = m.architecture.houses.length;
+    m.SaveSystem.deleteSlot('slot-4');
+
+    return {
+      afterHousesCount,
+      hasAuditExtra,
+      dayAfterReset,
+      detachedRecsCount,
+      worldTitleOk: worldTitleText === 'Teste Reset',
+      loadedHousesCount,
+      roundTripExact: loadedHousesCount === afterHousesCount
+    };
+  });
+  resetAudit.beforeHousesCount = resetInfo.beforeHousesCount;
+  resetAudit.ok = Boolean(
+    !resetAudit.hasAuditExtra &&
+    resetAudit.afterHousesCount < resetAudit.beforeHousesCount &&
+    resetAudit.afterHousesCount >= 48 &&
+    resetAudit.afterHousesCount <= 58 &&
+    resetAudit.dayAfterReset === 1 &&
+    resetAudit.detachedRecsCount === 0 &&
+    resetAudit.worldTitleOk &&
+    resetAudit.roundTripExact
+  );
+
+  console.log(JSON.stringify({ outDir, wasdMovedDist, pickCheck, audioCheck, metrics, resetAudit, errors, warningCount: warnings.length }, null, 2));
+  if (errors.length > 0 || !metrics.npcAudit?.ok || !metrics.spatialAudit?.ok || !metrics.petAudit?.ok || !metrics.hudAudit?.ok || !metrics.menuAudit?.ok || !resetAudit?.ok) process.exitCode = 1;
 } finally {
   await browser.close();
 }

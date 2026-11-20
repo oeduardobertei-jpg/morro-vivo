@@ -12,6 +12,10 @@ export const UpdatesMixin = {
     // 1. UPDATE ONGOING VISUAL NEW HOUSE CONSTRUCTIONS
     for (let cIdx = this.activeConstructions.length - 1; cIdx >= 0; cIdx--) {
       const c = this.activeConstructions[cIdx];
+      if (!c || c.cancelled) {
+        this.activeConstructions.splice(cIdx, 1);
+        continue;
+      }
 
       // Phase 0: Waiting for materials to be delivered by pushcart courier from Olaria
       if (c.state === 'WAITING_SUPPLIES') {
@@ -127,6 +131,9 @@ export const UpdatesMixin = {
         const finalHouse = this.buildHouse(c.plateau, 1, c.paletteItem);
         if (finalHouse) {
           this.houses.push(finalHouse);
+          if (this.batcher && finalHouse.meshGroup) {
+            this.batcher.ingestGroup(finalHouse.meshGroup);
+          }
 
           // Big celebratory dust burst & chime!
           this.spawnConstructionPuff(finalHouse.position);
@@ -154,6 +161,10 @@ export const UpdatesMixin = {
     // 2. UPDATE ONGOING HOUSE UPGRADES (Puxadinhos & Lajes)
     for (let uIdx = this.activeUpgrades.length - 1; uIdx >= 0; uIdx--) {
       const u = this.activeUpgrades[uIdx];
+      if (!u || u.cancelled) {
+        this.activeUpgrades.splice(uIdx, 1);
+        continue;
+      }
 
       if (u.state === 'WAITING_WORKERS') {
         if ((!u.workers || u.workers.length === 0) && this.npcManager && isWorkHours) {
@@ -237,6 +248,9 @@ export const UpdatesMixin = {
         u.house.residents += 3;
         u.house.wealth += 25;
         u.house.isUpgrading = false;
+        if (this.batcher && u.house.meshGroup) {
+          this.batcher.ingestGroup(u.house.meshGroup);
+        }
 
         this.spawnConstructionPuff(u.house.position);
         if (this.soundtrack) {

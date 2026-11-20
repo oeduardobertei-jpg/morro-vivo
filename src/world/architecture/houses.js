@@ -125,9 +125,34 @@ function _getHouseGeo() {
   return _houseGeoCache;
 }
 
+function _getHouseSharedGeoSet(arch) {
+  const set = new Set(Object.values(_getHouseGeo()));
+  [
+    arch.sharedWaterTankGeo,
+    arch.sharedWaterTankLidGeo,
+    arch.sharedPuffGeo,
+    arch.sharedSmokeGeo,
+    arch.sharedFishGeo,
+    arch.stallDropletGeo,
+    arch.stallCoinGeo
+  ].forEach((g) => {
+    if (g) set.add(g);
+  });
+  return set;
+}
+
+function _disposeDetachedHouseGroup(group, sharedSet) {
+  if (!group) return;
+  group.traverse((node) => {
+    if (node.isMesh && node.geometry && !sharedSet.has(node.geometry)) {
+      node.geometry.dispose();
+    }
+  });
+}
+
 /** Casas, construção, upgrades e lajes. */
 export const HousesMixin = {
-  createInitialSettlements(plateaus, savedHouses = null) {
+  createInitialSettlements(plateaus, savedHouses = null, options = {}) {
     this.allPlateaus = plateaus;
 
     // Clear any previous houses if resetting or loading
@@ -171,58 +196,71 @@ export const HousesMixin = {
     }
 
     if (savedHouses && savedHouses.length > 0) {
-      // Rehydrate faithfully from Save Data, filtering out any obsolete houses inside the Mirante, Solar zone, or any Landmark footprint!
-      const sanitizedHouses = savedHouses.filter(sh => {
-        if (this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(sh.x, sh.z, 2.8)) {
-          return false;
-        }
-        const inMirante = Math.abs(sh.x - 50) <= 25 && sh.z <= -95;
-        const inCampinho = Math.abs(sh.x - 55) <= 16 && Math.abs(sh.z - 4) <= 12;
-        const inMercado = Math.abs(sh.x - 75) <= 11 && Math.abs(sh.z - 4) <= 9;
-        const inAgro = Math.abs(sh.x - 82) <= 15 && Math.abs(sh.z - -8) <= 12;
-        const inOlaria = Math.abs(sh.x - -22) <= 11 && Math.abs(sh.z - -14) <= 9;
-        const inSamba = Math.hypot(sh.x - (-2), sh.z - (-4)) <= 15.0; // Preservação Estrita da Praça do Samba!
-        const inNascente = Math.abs(sh.x - -8) <= 12 && Math.abs(sh.z - -65) <= 12;
-        const inBondinho = Math.abs(sh.x - 32.0) <= 8.2 && sh.z <= 17.0 && sh.z >= -66.0;
-        const inTurbines =
-          Math.hypot(sh.x - (-42.0), sh.z - (-116.0)) <= 9.0 ||
-          Math.hypot(sh.x - (-16.0), sh.z - (-120.0)) <= 9.0 ||
-          Math.hypot(sh.x - 26.0, sh.z - (-116.0)) <= 9.0;
+      const isLegacySave = Boolean(options.allowLegacyFrontierBackfill);
+      const sanitizedHouses = isLegacySave
+        ? savedHouses.filter(sh => {
+            if (this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(sh.x, sh.z, 2.8)) {
+              return false;
+            }
+            const inMirante = Math.abs(sh.x - 50) <= 25 && sh.z <= -95;
+            const inCampinho = Math.abs(sh.x - 55) <= 16 && Math.abs(sh.z - 4) <= 12;
+            const inMercado = Math.abs(sh.x - 75) <= 11 && Math.abs(sh.z - 4) <= 9;
+            const inAgro = Math.abs(sh.x - 82) <= 15 && Math.abs(sh.z - -8) <= 12;
+            const inOlaria = Math.abs(sh.x - -22) <= 11 && Math.abs(sh.z - -14) <= 9;
+            const inSamba = Math.hypot(sh.x - (-2), sh.z - (-4)) <= 15.0;
+            const inNascente = Math.abs(sh.x - -8) <= 12 && Math.abs(sh.z - -65) <= 12;
+            const inBondinho = Math.abs(sh.x - 32.0) <= 8.2 && sh.z <= 17.0 && sh.z >= -66.0;
+            const inTurbines =
+              Math.hypot(sh.x - (-42.0), sh.z - (-116.0)) <= 9.0 ||
+              Math.hypot(sh.x - (-16.0), sh.z - (-120.0)) <= 9.0 ||
+              Math.hypot(sh.x - 26.0, sh.z - (-116.0)) <= 9.0;
 
-        let inInfra = false;
-        if (this.infrastructureNodes) {
-          // Retroactively demolish houses intersecting infrastructure
-          inInfra = this.infrastructureNodes.some(node => Math.hypot(node.x - sh.x, node.z - sh.z) < (node.r ? Math.max(4.5, node.r) : 4.5));
-        }
+            let inInfra = false;
+            if (this.infrastructureNodes) {
+              inInfra = this.infrastructureNodes.some(node => Math.hypot(node.x - sh.x, node.z - sh.z) < (node.r ? Math.max(4.5, node.r) : 4.5));
+            }
 
-        // Remove legacy collinear rows from previous expansion versions so organic village clusters replace them cleanly
-        const isLegacyLinearExpansion = (Math.abs(sh.x) >= 145 || sh.z <= -135) &&
-          [10, -18, -44, -72, -142, -162].includes(Math.round(sh.z));
+            const isLegacyLinearExpansion = (Math.abs(sh.x) >= 145 || sh.z <= -135) &&
+              [10, -18, -44, -72, -142, -162].includes(Math.round(sh.z));
 
-        return !(inMirante || inCampinho || inMercado || inAgro || inOlaria || inSamba || inNascente || inBondinho || inTurbines || inInfra || isLegacyLinearExpansion);
-      });
+            return !(inMirante || inCampinho || inMercado || inAgro || inOlaria || inSamba || inNascente || inBondinho || inTurbines || inInfra || isLegacyLinearExpansion);
+          })
+        : savedHouses.filter((sh) => {
+            if (!sh) return false;
+            return !(this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(sh.x, sh.z, 2.2));
+          });
+
       const seenIds = new Set();
       const placedHouses = [];
+      const minSpacing = isLegacySave ? 7.5 : 5.5;
       sanitizedHouses.forEach((sh, idx) => {
         if (seenIds.has(sh.id)) return;
-        
-        // Estrita colisão 2D para impedir casas de nascerem fundidas umas nas outras (distância mínima de 7.5m)
-        const tooClose = placedHouses.some(ph => Math.hypot(ph.x - sh.x, ph.z - sh.z) < 7.5);
+
+        const tooClose = placedHouses.some(ph => Math.hypot(ph.x - sh.x, ph.z - sh.z) < minSpacing);
         if (tooClose) return;
 
         seenIds.add(sh.id);
         placedHouses.push(sh);
 
-        const plat = plateaus.find(p => p.id === sh.id) || {
-          id: sh.id,
-          faction: sh.faction || 'sol',
-          order: idx,
-          x: sh.x,
-          y: sh.y,
-          z: sh.z
-        };
+        const plat = isLegacySave
+          ? (plateaus.find(p => p.id === sh.id) || {
+              id: sh.id,
+              faction: sh.faction || 'sol',
+              order: idx,
+              x: sh.x,
+              y: sh.y,
+              z: sh.z
+            })
+          : {
+              id: sh.id,
+              faction: sh.faction || 'sol',
+              order: idx,
+              x: sh.x,
+              y: sh.y,
+              z: sh.z
+            };
         const paletteItem = this.palette.find(p => p.name === sh.colorName) || this.palette[idx % this.palette.length];
-        const house = this.buildHouse(plat, sh.level || 1, paletteItem);
+        const house = this.buildHouse(plat, sh.level || 1, paletteItem, { exactSaved: !isLegacySave });
         if (house) {
           if (sh.wealth) house.wealth = sh.wealth;
           if (sh.residents) house.residents = sh.residents;
@@ -415,14 +453,20 @@ export const HousesMixin = {
       { x: 242,  z: -42,  faction: 'varzea', level: 2 },
       { x: 192,  z: -56,  faction: 'varzea', level: 2 },
 
-      // 4. Sela Norte & Ombros da Serra (7 casas: Z = -136..-144)
+      // 4. Sela Norte & Ombros da Serra (9 casas: Z = -134..-150)
       { x: -112, z: -144, faction: 'serra', level: 2 },
       { x: -84,  z: -136, faction: 'serra', level: 1 },
       { x: -48,  z: -138, faction: 'serra', level: 2 },
       { x: -18,  z: -144, faction: 'serra', level: 2 },
       { x: 18,   z: -144, faction: 'serra', level: 2 },
       { x: 52,   z: -138, faction: 'serra', level: 1 },
-      { x: 86,   z: -136, faction: 'serra', level: 2 }
+      { x: 86,   z: -136, faction: 'serra', level: 2 },
+      { x: -96,  z: -28,  faction: 'prainha', level: 2 },
+      { x: -142, z: -26,  faction: 'prainha', level: 1 },
+      { x: 112,  z: -28,  faction: 'varzea', level: 2 },
+      { x: 142,  z: -26,  faction: 'varzea', level: 1 },
+      { x: -34,  z: -148, faction: 'serra', level: 1 },
+      { x: 34,   z: -148, faction: 'serra', level: 1 }
     ];
 
     const isNewWorldStart = !savedHouses || savedHouses.length === 0;
@@ -460,9 +504,9 @@ export const HousesMixin = {
 
     if (isNewWorldStart) {
       newWorldPolycentricNuclei.forEach((fp, i) => {
-        placeFrontierLot(fp, i, { landmarkMargin: 3.2, infraClearance: 4.6, houseClearance: 8.8, idPrefix: 'poly' });
+        placeFrontierLot(fp, i, { landmarkMargin: 3.0, infraClearance: 4.0, houseClearance: 7.4, idPrefix: 'poly' });
       });
-    } else {
+    } else if (options.allowLegacyFrontierBackfill && this.houses.length < 40) {
       continentalFrontierPioneers.forEach((fp, i) => {
         placeFrontierLot(fp, i, { landmarkMargin: 2.8, infraClearance: 4.2, houseClearance: 10.0, idPrefix: 'frontier' });
       });
@@ -477,25 +521,52 @@ export const HousesMixin = {
   },
 
   clearHouses() {
+    const sharedSet = _getHouseSharedGeoSet(this);
     this.houses.forEach(h => {
-      this.group.remove(h.meshGroup);
+      if (h.meshGroup) {
+        this.group.remove(h.meshGroup);
+        _disposeDetachedHouseGroup(h.meshGroup, sharedSet);
+      }
     });
     this.houses = [];
     this.windowMeshes = [];
     this.lajeBBQs = [];
+    this.clotheslines = [];
 
-    // Clear any ongoing construction sites and release workers
+    if (this.particles && this.particles.length) {
+      this.particles.forEach((pt) => {
+        if (pt && pt.mesh) this.group.remove(pt.mesh);
+      });
+      this.particles = [];
+    }
+    if (this.smokeParticles && this.smokeParticles.length) {
+      this.smokeParticles.forEach((sp) => {
+        if (sp && sp.mesh) this.group.remove(sp.mesh);
+      });
+      this.smokeParticles = [];
+    }
+
+    // Clear any ongoing construction sites, mark cancelled & release workers
     this.activeConstructions.forEach(c => {
-      this.group.remove(c.siteGroup);
+      c.cancelled = true;
+      if (c.siteGroup) {
+        this.group.remove(c.siteGroup);
+        _disposeDetachedHouseGroup(c.siteGroup, sharedSet);
+      }
       if (c.workers && this.npcManager) {
         c.workers.forEach(w => this.npcManager.releaseWorker(w));
       }
     });
     this.activeConstructions = [];
 
-    // Clear any ongoing upgrades and release workers
+    // Clear any ongoing upgrades, mark cancelled & release workers
     this.activeUpgrades.forEach(u => {
-      this.group.remove(u.scaffoldGroup);
+      u.cancelled = true;
+      if (u.house) u.house.isUpgrading = false;
+      if (u.scaffoldGroup) {
+        this.group.remove(u.scaffoldGroup);
+        _disposeDetachedHouseGroup(u.scaffoldGroup, sharedSet);
+      }
       if (u.workers && this.npcManager) {
         u.workers.forEach(w => this.npcManager.releaseWorker(w));
       }
@@ -742,6 +813,7 @@ export const HousesMixin = {
     // 6. Dispatch courier from Olaria with materials, then recruit builders upon arrival!
     if (this.npcManager) {
       this.npcManager.dispatchCourierWithSupplies(project, () => {
+        if (project.cancelled) return;
         // Material delivery arrived!
         project.brickStack.visible = true;
         project.cementBags.visible = true;
@@ -797,8 +869,8 @@ export const HousesMixin = {
     return false;
   },
 
-  buildHouse(plat, level = 1, paletteItem = null) {
-    if (this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(plat.x, plat.z, 2.8)) {
+  buildHouse(plat, level = 1, paletteItem = null, buildOpts = {}) {
+    if (!buildOpts.exactSaved && this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(plat.x, plat.z, 2.8)) {
       return null;
     }
 
@@ -819,7 +891,7 @@ export const HousesMixin = {
       return true;
     };
 
-    if (!isSpotClean(plat.x, plat.z)) {
+    if (!buildOpts.exactSaved && !isSpotClean(plat.x, plat.z)) {
       let relocated = false;
       const searchRadii = [5.2, 6.6];
       for (const rad of searchRadii) {

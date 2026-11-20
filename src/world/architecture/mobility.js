@@ -669,7 +669,8 @@ export const MobilityMixin = {
           { x: 0, z: -66 },
           { x: 16, z: -74 },
           { x: 32, z: -86 },
-          { x: 50, z: -102 }
+          { x: 46, z: -96 },
+          { x: 50, z: -101.2 }
         ]
       },
       {
@@ -686,7 +687,7 @@ export const MobilityMixin = {
           { x: 15, z: 18 },
           { x: 55, z: 18 },
           { x: 75, z: 18 },
-          { x: 92, z: 14 }
+          { x: 92, z: 18 }
         ]
       },
       {
@@ -697,8 +698,8 @@ export const MobilityMixin = {
         passengerShirt: 0xF97316,
         speed: 4.2,
         waypoints: [
-          { x: -78, z: 18 },
-          { x: -115, z: 12 },
+          { x: -102, z: 18 },
+          { x: -118, z: 10 },
           { x: -135, z: -20 },
           { x: -154, z: -16 },
           { x: -186, z: -22 },
@@ -716,8 +717,8 @@ export const MobilityMixin = {
         passengerShirt: 0xEC4899,
         speed: 4.2,
         waypoints: [
-          { x: 78, z: 18 },
-          { x: 115, z: 12 },
+          { x: 102, z: 18 },
+          { x: 118, z: 10 },
           { x: 135, z: -20 },
           { x: 154, z: -16 },
           { x: 186, z: -22 },

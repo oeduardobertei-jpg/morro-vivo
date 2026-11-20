@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createStylizedMaterial, getSharedStylizedMaterial, SHARED_SHADER_UNIFORMS } from '../render/StylizedMaterials.js';
+import { isNearRoad } from './RoadNetworkData.js';
 
 export class Terrain {
   constructor(scene) {
@@ -264,23 +265,13 @@ export class Terrain {
     }
 
     // Brick Olaria Terrace at (-22, -14)
-    const dxOlaria = Math.abs(x - (-22)) + Math.sin(z * 0.6) * 1.0;
-    const dzOlaria = Math.abs(z - (-14)) + Math.sin(x * 0.6) * 1.0;
-    if (dxOlaria < 9 && dzOlaria < 7) {
-      let tX = Math.max(0, Math.min(1, (dxOlaria - 7.0) / 2.0));
-      let tZ = Math.max(0, Math.min(1, (dzOlaria - 5.0) / 2.0));
+    const dxOlaria = Math.abs(x - (-22)) + Math.sin(z * 0.6) * 0.8;
+    const dzOlaria = Math.abs(z - (-14)) + Math.sin(x * 0.6) * 0.8;
+    if (dxOlaria < 10.5 && dzOlaria < 8.5) {
+      let tX = Math.max(0, Math.min(1, (dxOlaria - 8.2) / 2.3));
+      let tZ = Math.max(0, Math.min(1, (dzOlaria - 6.2) / 2.3));
       let blend = smoothBlend(Math.max(tX, tZ));
       elevation = elevation * blend + getNaturalElevation(-22, -14) * (1 - blend);
-    }
-
-    // Agroforest Farm Terrace at (82, -8)
-    const dxAgro = Math.abs(x - 82) + Math.sin(z * 0.9) * 0.8;
-    const dzAgro = Math.abs(z - (-8)) + Math.sin(x * 0.9) * 0.8;
-    if (dxAgro < 10 && dzAgro < 7.5) {
-      let tX = Math.max(0, Math.min(1, (dxAgro - 8.0) / 2.0));
-      let tZ = Math.max(0, Math.min(1, (dzAgro - 5.5) / 2.0));
-      let blend = smoothBlend(Math.max(tX, tZ));
-      elevation = elevation * blend + getNaturalElevation(82, -8) * (1 - blend);
     }
 
     // D. Mirante da Vista Imperial Plateau at (x: 50, z: -110)
@@ -299,14 +290,6 @@ export class Terrain {
       elevation = elevation * t + getNaturalElevation(-78, -50) * (1 - t);
     }
 
-    // F. Agrofloresta Terraces at (x: 75, z: -45)
-    const angleHorta = Math.atan2(z - (-45), x - 75);
-    const dHorta = Math.hypot(x - 75, z - (-45)) + Math.sin(angleHorta * 6) * 1.5;
-    if (dHorta < 14.0) {
-      const t = smoothBlend(Math.max(0, Math.min(1, (dHorta - 9.5) / 4.5)));
-      elevation = elevation * t + getNaturalElevation(75, -45) * (1 - t);
-    }
-
     // G. Mirante do Pôr do Sol Terrace at (x: -98, z: -55)
     const anglePoente = Math.atan2(z - (-55), x - (-98));
     const dPoente = Math.hypot(x - (-98), z - (-55)) + Math.sin(anglePoente * 4) * 1.5;
@@ -323,14 +306,6 @@ export class Terrain {
       elevation = elevation * t + getNaturalElevation(98, -55) * (1 - t);
     }
 
-    // I. Grande Olaria Imperial & Cerâmica at (x: 95, z: -18)
-    const angleOlaria2 = Math.atan2(z - (-18), x - 95);
-    const dOlaria2 = Math.hypot(x - 95, z - (-18)) + Math.sin(angleOlaria2 * 5) * 1.2;
-    if (dOlaria2 < 11.5) {
-      const t = smoothBlend(Math.max(0, Math.min(1, (dOlaria2 - 8.0) / 3.5)));
-      elevation = elevation * t + getNaturalElevation(95, -18) * (1 - t);
-    }
-
     // J. Vila dos Pescadores do Poente at (x: -95, z: 0)
     const angleCove = Math.atan2(z, x - (-95));
     const dCove = Math.hypot(x - (-95), z) + Math.sin(angleCove * 4) * 1.2;
@@ -339,15 +314,15 @@ export class Terrain {
       elevation = elevation * t + getNaturalElevation(-95, 0) * (1 - t);
     }
 
-    // K. Terraço Industrial do Parque Solar & Reservatório at (x: -18, z: -72)
-    // Nivelamento do relevo da serra para assentamento da usina (elimina 100% de grama sobre painéis)
+    // K. Terraço Integrado do Parque Solar & Reservatório at (x: -18, z: -72)
+    // Nivelamento suave do relevo da serra para assentamento da usina (elimina 100% de grama sobre painéis)
     const dxSolar = Math.abs(x - (-18));
     const dzSolar = Math.abs(z - (-72));
-    if (dxSolar < 11.5 && dzSolar < 9.0) {
-      const tX = Math.max(0, Math.min(1, (dxSolar - 8.5) / 3.0));
-      const tZ = Math.max(0, Math.min(1, (dzSolar - 6.2) / 2.8));
+    if (dxSolar < 14.0 && dzSolar < 11.2) {
+      const tX = Math.max(0, Math.min(1, (dxSolar - 10.6) / 3.4));
+      const tZ = Math.max(0, Math.min(1, (dzSolar - 8.0) / 3.2));
       const blend = smoothBlend(Math.max(tX, tZ));
-      const targetSolarY = getNaturalElevation(-18, -72) - 0.35;
+      const targetSolarY = getNaturalElevation(-18, -72) - 0.25;
       elevation = elevation * blend + targetSolarY * (1 - blend);
     }
 
@@ -415,26 +390,41 @@ export class Terrain {
       elevation = elevation * t + getNaturalElevation(-95, -68) * (1 - t);
     }
 
-    // T. Trilha da Crista Oriental at (x: 70, z: -72) & Pomar Agroflorestal at (x: 96, z: -28)
-    const dCrista = Math.hypot(x - 70, z - (-72));
-    if (dCrista < 6.5) {
-      const t = smoothBlend(Math.max(0, Math.min(1, (dCrista - 4.2) / 2.3)));
-      elevation = elevation * t + getNaturalElevation(70, -72) * (1 - t);
-    }
-    const dPomar = Math.hypot(x - 96, z - (-28));
-    if (dPomar < 7.8) {
-      const t = smoothBlend(Math.max(0, Math.min(1, (dPomar - 5.2) / 2.6)));
-      elevation = elevation * t + getNaturalElevation(96, -28) * (1 - t);
+    // T. Terraços Retangulares Nivelados de Todos os Polos Econômicos & Hubs Comunitários
+    // Folga extra de +2.2m além da borda garante que células inteiras da malha (4.26x4.0m) fiquem 100% planas!
+    const rectangularHubPlateaus = [
+      { cx: 142.0,  cz: -42.0,  fx: 9.2, fz: 7.2, bx: 3.6, bz: 3.4 }, // Quadra de Basquete do Levante
+      { cx: -142.0, cz: -42.0,  fx: 8.7, fz: 7.2, bx: 3.6, bz: 3.4 }, // Feirinha Orgânica do Poente
+      { cx: -32.0,  cz: -102.0, fx: 8.2, fz: 8.2, bx: 3.4, bz: 3.4 }, // Praça do Coreto da Serra
+      { cx: 118.0,  cz: -82.0,  fx: 8.4, fz: 7.0, bx: 3.6, bz: 3.4 }, // Galpão Cultural Nordeste
+      { cx: -118.0, cz: -82.0,  fx: 8.2, fz: 7.6, bx: 3.6, bz: 3.4 }, // Terreiro do Jongo Noroeste
+      { cx: 28.0,   cz: -136.0, fx: 8.0, fz: 6.6, bx: 3.4, bz: 3.2 }, // Mirante Panorâmico da Sela Norte
+      { cx: -46.0,  cz: -86.0,  fx: 8.6, fz: 7.4, bx: 3.6, bz: 3.4 }, // Pedreira da Serra
+      { cx: 118.0,  cz: -48.0,  fx: 8.4, fz: 7.2, bx: 3.6, bz: 3.4 }, // Serraria Sustentável
+      { cx: 64.0,   cz: -31.0,  fx: 7.6, fz: 6.8, bx: 3.4, bz: 3.2 }, // Criação Caipira
+      { cx: 96.0,   cz: -28.0,  fx: 9.0, fz: 7.6, bx: 3.6, bz: 3.4 }  // Pomar & Sítio Agroflorestal da Colina
+    ];
+    for (let h = 0; h < rectangularHubPlateaus.length; h++) {
+      const hp = rectangularHubPlateaus[h];
+      const dxH = Math.abs(x - hp.cx);
+      const dzH = Math.abs(z - hp.cz);
+      if (dxH < hp.fx + hp.bx && dzH < hp.fz + hp.bz) {
+        const tX = Math.max(0, Math.min(1, (dxH - hp.fx) / hp.bx));
+        const tZ = Math.max(0, Math.min(1, (dzH - hp.fz) / hp.bz));
+        const blend = smoothBlend(Math.max(tX, tZ));
+        elevation = elevation * blend + getNaturalElevation(hp.cx, hp.cz) * (1 - blend);
+      }
     }
 
-    // U. Novos Núcleos Policêntricos dos Vales, Sela Norte e Bolsões Intermediários (Sprint 8)
+    // U. Núcleos Policêntricos dos Vales, Sela Norte e Largos do Ipê (Sprint 8)
     const polycentricTerraces = [
       { cx: -216.0, cz: -14.0,  r: 15.0, flat: 9.0 }, // Capela Caiçara do Pontal Oeste
       { cx: 216.0,  cz: -14.0,  r: 15.0, flat: 9.0 }, // Praça do Chafariz & Bocha do Levante
       { cx: -66.0,  cz: -132.0, r: 15.0, flat: 9.0 }, // Sítio Agroecológico da Sela Oeste
       { cx: -2.0,   cz: -170.0, r: 15.0, flat: 9.0 }, // Anfiteatro de Pedra da Sela Norte
-      { cx: -62.0,  cz: -66.0,  r: 9.5,  flat: 5.5 }, // Largo do Ipê Oeste
-      { cx: 56.0,   cz: -64.0,  r: 9.5,  flat: 5.5 }  // Largo do Ipê Leste
+      { cx: -62.0,  cz: -60.0,  r: 9.2,  flat: 5.6 }, // Largo do Ipê Oeste (afastado da pista R16)
+      { cx: 46.0,   cz: -60.0,  r: 9.2,  flat: 5.6 }, // Largo do Ipê Leste (afastado da pista R17)
+      { cx: -19.5,  cz: -56.5,  r: 5.8,  flat: 3.6 }  // Bacia Natural da Nascente da Serra
     ];
     for (let u = 0; u < polycentricTerraces.length; u++) {
       const pt = polycentricTerraces[u];
@@ -486,19 +476,16 @@ export class Terrain {
     if (Math.abs(x - 55.0) < 16.5 + margin && Math.abs(z - 4.0) < 11.5 + margin) return true;
     if (Math.abs(x - 76.5) < 12.2 + margin && Math.abs(z - 4.0) < 8.5 + margin) return true;
 
-    // 3. Olarias, Fazendas Agroflorestais & Polos Produtivos (Pedreira, Serraria, Criação)
-    if (Math.abs(x - (-22.0)) < 9.5 + margin && Math.abs(z - (-14.0)) < 7.5 + margin) return true;
-    if (Math.hypot(x - 95.0, z - (-18.0)) < 10.0 + margin) return true; // Grande Olaria Leste
-    if (Math.abs(x - 82.0) < 10.5 + margin && Math.abs(z - (-8.0)) < 7.5 + margin) return true;
-    if (Math.abs(x - 75.0) < 9.5 + margin && Math.abs(z - (-45.0)) < 6.8 + margin) return true; // Socalcos Leste
-    if (Math.abs(x - 96.0) < 7.5 + margin && Math.abs(z - (-28.0)) < 5.8 + margin) return true; // Pomar Agroflorestal
+    // 3. Olaria Central, Sítio Agroflorestal & Polos Produtivos (Pedreira, Serraria, Criação)
+    if (Math.abs(x - (-22.0)) < 10.2 + margin && Math.abs(z - (-14.0)) < 8.2 + margin) return true;
+    if (Math.abs(x - 96.0) < 8.5 + margin && Math.abs(z - (-28.0)) < 7.2 + margin) return true; // Pomar & Sítio Agroflorestal
     if (Math.hypot(x - (-46.0), z - (-86.0)) < 9.5 + margin) return true; // Pedreira da Serra
     if (Math.hypot(x - 118.0, z - (-48.0)) < 9.5 + margin) return true; // Serraria Sustentável
-    if (Math.hypot(x - 64.0, z - (-31.0)) < 7.8 + margin) return true;  // Criação Caipira
+    if (Math.hypot(x - 64.0, z - (-31.0)) < 8.2 + margin) return true;  // Criação Caipira
 
     // 4. Parque Solar, Nascente, Torre de Rádio, Mirante Imperial & Turbinas Eólicas (Alto da Serra)
     if (Math.abs(x - (-18.0)) < 12.2 + margin && Math.abs(z - (-72.0)) < 9.5 + margin) return true; // Parque Solar
-    if (Math.hypot(x - (-8.0), z - (-65.0)) < 5.5 + margin) return true; // Nascente da Serra
+    if (Math.hypot(x - (-19.5), z - (-56.5)) < 5.5 + margin) return true; // Nascente da Serra
     if (Math.hypot(x - 0.0, z - (-104.0)) < 6.0 + margin) return true; // Torre de Rádio
     if (Math.hypot(x - 50.0, z - (-110.0)) < 11.5 + margin) return true; // Mirante Imperial
     if (Math.abs(x - 50.0) <= 18.0 + margin && z <= -94.0 + margin && z >= -118.0 - margin) return true;
@@ -521,8 +508,8 @@ export class Terrain {
     if (Math.hypot(x - 216.0, z - (-14.0)) < 10.0 + margin) return true;   // Praça do Chafariz & Bocha do Levante
     if (Math.hypot(x - (-66.0), z - (-132.0)) < 9.5 + margin) return true; // Sítio Agroecológico da Sela Oeste
     if (Math.hypot(x - (-2.0), z - (-170.0)) < 9.5 + margin) return true;  // Anfiteatro de Pedra da Sela Norte
-    if (Math.hypot(x - (-62.0), z - (-66.0)) < 6.0 + margin) return true;  // Largo Comunitário Oeste
-    if (Math.hypot(x - 56.0, z - (-64.0)) < 6.0 + margin) return true;     // Largo Comunitário Leste
+    if (Math.hypot(x - (-62.0), z - (-60.0)) < 6.4 + margin) return true;  // Largo Comunitário Oeste
+    if (Math.hypot(x - 46.0, z - (-60.0)) < 6.4 + margin) return true;     // Largo Comunitário Leste
 
     // 6. Mirantes, Decks, Capoeira, Horta, Dominó e Rancho do Flanco Oeste (Poente)
     if (Math.hypot(x - (-78.0), z - (-50.0)) < 10.5 + margin) return true; // Mirante das Pipas (14m deck)
@@ -534,10 +521,9 @@ export class Terrain {
     if (Math.hypot(x - (-110.0), z - (-15.0)) < 7.5 + margin) return true; // Terreiro de Capoeira
     if (Math.abs(x - (-92.0)) < 6.0 + margin && Math.abs(z - (-25.0)) < 4.8 + margin) return true; // Horta em Socalcos
 
-    // 7. Pipódromo, Mirante do Levante, Trilha da Crista, Academia e Mototáxi (Flanco Leste)
+    // 7. Pipódromo, Mirante do Levante, Academia e Mototáxi (Flanco Leste)
     if (Math.hypot(x - 88.0, z - (-48.0)) < 9.0 + margin) return true; // Pipódromo do Alto do Levante
     if (Math.hypot(x - 98.0, z - (-55.0)) < 6.0 + margin) return true; // Mirante do Sol Nascente
-    if (Math.hypot(x - 70.0, z - (-72.0)) < 5.5 + margin) return true; // Trilha da Crista Oriental
     if (Math.abs(x - 112.0) < 7.0 + margin && Math.abs(z - (-12.0)) < 5.2 + margin) return true; // Academia ao Ar Livre
     if (Math.abs(x - 92.0) < 4.0 + margin && Math.abs(z - 14.0) < 3.5 + margin) return true; // Ponto de Mototáxi
 
@@ -585,8 +571,8 @@ export class Terrain {
       const hz = this.getAnalyticalElevation(x, z + 1.0);
       const slope = Math.hypot(hx - h, hz - h);
 
-      // Slight organic terrain jitter on hills only (never on landmark plateaus or coastal borders)
-      if (h > 0.5 && z < 16 && Math.abs(x) < 395 && z > -335 && !this.isProtectedLandmark(x, z, 2.0)) {
+      // Slight organic terrain jitter on hills only (never on landmark plateaus, roads, or coastal borders)
+      if (h > 0.5 && z < 16 && Math.abs(x) < 395 && z > -335 && !this.isProtectedLandmark(x, z, 2.0) && !isNearRoad(x, z, 2.6)) {
         h += (Math.random() - 0.5) * 0.08;
       }
       pos.setY(i, h);
@@ -766,7 +752,7 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
       if (Math.abs(vx - targetX) > radius) continue;
       const vz = pos.getZ(i);
       if (Math.abs(vz - targetZ) > radius) continue;
-      if (this.isProtectedLandmark(vx, vz, 1.0)) continue;
+      if (this.isProtectedLandmark(vx, vz, 1.0) || isNearRoad(vx, vz, 2.4)) continue;
       const dist = Math.hypot(vx - targetX, vz - targetZ);
       if (dist < radius) {
         const currentY = pos.getY(i);
@@ -1150,9 +1136,10 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
         if (Math.hypot(loc.x - kx, loc.z - 21.5) < 7.0) return;
       }
 
-      // Preservação do Campinho da Várzea e Monumentos/Mirantes Protegidos
+      // Preservação do Campinho da Várzea, Estradas e Monumentos/Mirantes Protegidos
       if (Math.abs(loc.x - 55) < 20.0 && Math.abs(loc.z - 4) < 14.0) return;
       if (this.isProtectedLandmark(loc.x, loc.z, 3.5)) return;
+      if (isNearRoad(loc.x, loc.z, 1.5)) return;
 
       // Preservação Residencial: nunca brotar sobre plateaus de casas
       if (this.allPlateaus && this.allPlateaus.some(pl => Math.hypot(pl.x - loc.x, pl.z - loc.z) < 7.5)) return;
@@ -1171,30 +1158,29 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
 
     // ==========================================
     // 2. LAJES E AFLORAMENTOS DE GRANITO NATURAL (Maciço Geológico do Cume & Costões)
-    // Lajes amplas, assentadas e integradas à encosta, emoldurando a paisagem com zero aperto!
+    // Lajes amplas, assentadas e integradas à encosta, emoldurando a paisagem com zero invasão de vias!
     // ==========================================
     const monolithCoords = [
-      // A. AFLORAMENTOS EM DEGRAUS NATURAIS DO CUME (Flancos Exteriores da Serra)
-      // Flanco Oeste da Encosta (recuado a |X| >= 26, emoldurando a vista para o mar e poente com passagem ampla para a via)
-      { x: -28, z: -78, s: 2.8, rot: 0.4 },
-      { x: -32, z: -84, s: 3.4, rot: 1.1 },
-      { x: -36, z: -90, s: 3.8, rot: 2.0 },
-      { x: -30, z: -98, s: 3.2, rot: 0.7 },
+      // A. AFLORAMENTOS EM DEGRAUS NATURAIS DO CUME (Flancos Exteriores da Serra, 100% fora das estradas!)
+      { x: -24, z: -78, s: 2.8, rot: 0.4 },
+      { x: -16, z: -84, s: 2.8, rot: 1.1 },
+      { x: -38, z: -96, s: 3.2, rot: 2.0 },
+      { x: -30, z: -98, s: 3.0, rot: 0.7 },
 
-      // Flanco Leste da Encosta (recuado a |X| >= 26, emoldurando a vista para a várzea e baía com passagem ampla para a via)
-      { x: 28,  z: -78, s: 2.8, rot: 1.2 },
-      { x: 32,  z: -84, s: 3.4, rot: 2.2 },
-      { x: 36,  z: -90, s: 3.8, rot: 0.5 },
-      { x: 30,  z: -98, s: 3.2, rot: 1.8 },
+      // Flanco Leste da Encosta (afastado da Estrada da Crista R6 e da Coroa das Alturas R8!)
+      { x: 24,  z: -62, s: 2.6, rot: 1.2 },
+      { x: 43,  z: -74, s: 3.0, rot: 2.2 },
+      { x: 48,  z: -82, s: 3.2, rot: 0.5 },
+      { x: 30,  z: -99, s: 2.8, rot: 1.8 },
 
       // Paredão Geológico de Fundo (Crista Norte Profunda a Z <= -105, coroando a montanha)
-      { x: -16, z: -108, s: 4.2, rot: 1.3 },
-      { x: 0,   z: -112, s: 4.8, rot: 0.4 },
-      { x: 16,  z: -108, s: 4.2, rot: 2.1 },
-      { x: -38, z: -105, s: 4.0, rot: 0.8 },
-      { x: 38,  z: -105, s: 4.0, rot: 1.6 },
-      { x: -52, z: -98,  s: 3.6, rot: 2.4 },
-      { x: 52,  z: -98,  s: 3.6, rot: 0.7 },
+      { x: -16, z: -108, s: 3.8, rot: 1.3 },
+      { x: 0,   z: -114, s: 4.2, rot: 0.4 },
+      { x: 25,  z: -107, s: 3.6, rot: 2.1 },
+      { x: -38, z: -106, s: 3.6, rot: 0.8 },
+      { x: 38,  z: -106, s: 3.6, rot: 1.6 },
+      { x: -58, z: -98,  s: 3.2, rot: 2.4 },
+      { x: 63,  z: -94,  s: 3.2, rot: 0.7 },
 
       // B. Falésias e Crag Ocidental (Borda Oeste)
       { x: -122, z: -25, s: 2.2, rot: 0.3 },
@@ -1213,10 +1199,10 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
       { x: 68,  z: -30, s: 1.8, rot: 0.9 },
 
       // D. Costão Rochoso da Prainha e Quebra-Mar
-      { x: -112, z: 12, s: 2.8, rot: 0.4 },
+      { x: -114, z: 26, s: 2.5, rot: 0.4 },
       { x: -106, z: 28, s: 2.2, rot: 1.2 },
       { x: 106,  z: 28, s: 2.2, rot: 1.8 },
-      { x: 112,  z: 12, s: 2.8, rot: 2.5 },
+      { x: 114,  z: 26, s: 2.5, rot: 2.5 },
 
       // E. Paredão Granítico Esculpido do Morro do Sol (lajes angulares rasas e embutidas no gnaisse central)
       { x: -12.0, z: 6.2,  s: 2.3, rot: 0.35, cliffFace: true, hMul: 0.42 },
@@ -1231,6 +1217,8 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
     ];
 
     const safeMonoliths = monolithCoords.filter(b => {
+      const roadMargin = (b.s || 2.5) * 1.15 + 0.9;
+      if (isNearRoad(b.x, b.z, roadMargin)) return false;
       if (b.cliffFace) {
         const distSamba = Math.hypot(b.x - (-2.0), b.z - (-4.0));
         return distSamba > 10.5 && (!this.allPlateaus || !this.allPlateaus.some(pl => Math.hypot(pl.x - b.x, pl.z - b.z) < 5.5));
@@ -1238,6 +1226,11 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
       return !this.isProtectedLandmark(b.x, b.z, 4.5) &&
         (!this.allPlateaus || !this.allPlateaus.some(pl => Math.hypot(pl.x - b.x, pl.z - b.z) < 7.0));
     });
+    this.monolithObstacles = safeMonoliths.map((b) => ({
+      x: b.x,
+      z: b.z,
+      r: (b.s || 2.2) * (b.cliffFace ? 1.10 : 1.05)
+    }));
     const monolithMat = getSharedStylizedMaterial(0x747C85, 'stone', { flatShading: true });
     // Dodecaedro facetado angular (detail 0) para leitura geológica de granito em vez de pedras arredondadas
     const monolithGeo = new THREE.DodecahedronGeometry(1.2, 0);
@@ -1319,7 +1312,7 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
       const inMoto = (Math.hypot(bc.x - 92, bc.z - 14) < 8);
       const inRadio = (Math.hypot(bc.x, bc.z - (-104)) < 8);
       const nearPlateau = this.allPlateaus && this.allPlateaus.some(pl => Math.hypot(pl.x - bc.x, pl.z - bc.z) < 7.5);
-      if (inCampinho || inMarket || inOlaria || inAgro || inSolar || inCapoeira || inHorta || inAcademia || inMoto || inRadio || nearPlateau || this.isProtectedLandmark(bc.x, bc.z, 3.2)) return;
+      if (inCampinho || inMarket || inOlaria || inAgro || inSolar || inCapoeira || inHorta || inAcademia || inMoto || inRadio || nearPlateau || this.isProtectedLandmark(bc.x, bc.z, 3.2) || isNearRoad(bc.x, bc.z, 1.8)) return;
 
       const y = this.getElevation(bc.x, bc.z);
       for (let frond = 0; frond < 3; frond++) {
@@ -1369,7 +1362,7 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
       const inMoto = (Math.hypot(sc.x - 92, sc.z - 14) < 8);
       const inRadio = (Math.hypot(sc.x, sc.z - (-104)) < 8);
       const nearPlateau = this.allPlateaus && this.allPlateaus.some(pl => Math.hypot(pl.x - sc.x, pl.z - sc.z) < 6.0);
-      if (inCampinho || inSolar || inCapoeira || inHorta || inAcademia || inMoto || inRadio || nearPlateau || this.isProtectedLandmark(sc.x, sc.z, 3.0)) return;
+      if (inCampinho || inSolar || inCapoeira || inHorta || inAcademia || inMoto || inRadio || nearPlateau || this.isProtectedLandmark(sc.x, sc.z, 3.0) || isNearRoad(sc.x, sc.z, 1.6)) return;
 
       const y = this.getElevation(sc.x, sc.z);
       dummy.position.set(sc.x, y + 0.4, sc.z);
@@ -1439,8 +1432,7 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
     const isClearForFlora = (x, z, plateauMargin = 4.6) => {
       if (z > 15.2 || z < -184.0) return false; // Evita praia/avenida da orla e cordilheira extrema
       if (Math.abs(x) < 3.6 && z > 2.5 && z < 18.5) return false; // Faixa da Escadaria Monumental
-      if (Math.abs(z - (-154.0)) < 4.5 && Math.abs(x) < 120.0) return false; // Faixa da Estrada da Sela Norte
-      if (Math.abs(z - (-98.0)) < 4.2 && Math.abs(x) > 60.0 && Math.abs(x) < 142.0) return false; // Anéis médios Leste/Oeste
+      if (isNearRoad(x, z, 1.35)) return false; // Protege todas as 18 rotas de asfalto
       if (this.isProtectedLandmark(x, z, 2.2)) return false;
       if (this.allPlateaus && this.allPlateaus.some(pl => Math.hypot(pl.x - x, pl.z - z) < plateauMargin)) return false;
       const y = this.getElevation(x, z);
@@ -1591,7 +1583,7 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
 
     expansionPalmCoords.forEach((loc, idx) => {
       if (this.allPlateaus && this.allPlateaus.some(pl => Math.hypot(pl.x - loc.x, pl.z - loc.z) < 7.5)) return;
-      if (Math.abs(loc.z - 18.0) < 3.5) return;
+      if (Math.abs(loc.z - 18.0) < 3.5 || isNearRoad(loc.x, loc.z, 1.6)) return;
       const y = this.getElevation(loc.x, loc.z);
       if (y > 0.35) {
         const palm = this.createLowPolyPalm();
@@ -1609,6 +1601,7 @@ roughnessFactor = clamp(mix(0.92 + (trRN - 0.5) * 0.08, 0.38, trWetShore), 0.28,
     // deixando todos os vales, ruas e lotes expandidos 100% livres e jogáveis!
     const treePlacements = [];
     const isNearExpandedRoad = (tx, tz) => {
+      if (isNearRoad(tx, tz, 4.2)) return true;
       // Protege a Rodovia Litorânea (z = 18) e todos os anéis viários dos novos bairros
       if (Math.abs(tz - 18.0) < 6.0) return true;
       if (Math.abs(tx) < 292 && tz > -192) {

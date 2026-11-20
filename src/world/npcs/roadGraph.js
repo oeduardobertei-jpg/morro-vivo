@@ -49,9 +49,6 @@ export const RoadGraphMixin = {
     if (Math.hypot(x - (-95.0), z) <= 6.2) {
       return (this.terrain ? this.terrain.getElevation(-95.0, 0.0) : 3.6) + 0.18; // Vila dos Pescadores
     }
-    if (Math.hypot(x - 95.0, z - (-18.0)) <= 8.2) {
-      return (this.terrain ? this.terrain.getElevation(95.0, -18.0) : 5.2) + 0.20; // Grande Olaria Leste
-    }
     if (Math.hypot(x - (-78.0), z - (-50.0)) <= 7.0) {
       return (this.terrain ? this.terrain.getElevation(-78.0, -50.0) : 10.4) + 0.20; // Mirante das Pipas
     }
@@ -61,9 +58,6 @@ export const RoadGraphMixin = {
     if (Math.hypot(x - 50.0, z - (-110.0)) <= 8.0) {
       return (this.terrain ? this.terrain.getElevation(50.0, -110.0) : 15.4) + 0.30; // Mirante da Vista Imperial
     }
-    if (Math.hypot(x - 70.0, z - (-72.0)) <= 3.6) {
-      return (this.terrain ? this.terrain.getElevation(70.0, -72.0) : 12.5) + 0.12; // Trilha da Crista Oriental
-    }
     if (Math.hypot(x - (-95.0), z - (-68.0)) <= 3.7) {
       return (this.terrain ? this.terrain.getElevation(-95.0, -68.0) : 9.8) + 0.15; // Mirante das Falésias do Poente
     }
@@ -71,30 +65,40 @@ export const RoadGraphMixin = {
       return (this.terrain ? this.terrain.getElevation(-88.0, -48.0) : 5.2) + 0.22; // Deck da Mesa de Dominó
     }
 
-    // 6. Terraços e Largos dos Núcleos de Bairro Expandidos (Oeste, Leste e Sela Norte)
+    // 6. Terraços e Largos dos Núcleos de Bairro Expandidos & Polos Produtivos (ancorados em anchorY = max(yC, yMax - 0.06))
+    const getElev = (px, pz) => (this.terrain ? this.terrain.getElevation(px, pz) : 6.0);
     const hubTerraces = [
-      { cx: -142.0, cz: -42.0,  hw: 6.0,  hd: 4.5,  off: 0.34 }, // Feirinha do Poente
-      { cx: 142.0,  cz: -42.0,  hw: 6.5,  hd: 4.5,  off: 0.34 }, // Quadra de Basquete
-      { cx: -32.0,  cz: -102.0, hw: 5.5,  hd: 5.5,  off: 0.34 }, // Coreto da Serra
-      { cx: 118.0,  cz: -82.0,  hw: 5.75, hd: 4.25, off: 0.34 }, // Galpão Cultural
-      { cx: -118.0, cz: -82.0,  hw: 5.5,  hd: 5.0,  off: 0.34 }, // Terreiro do Jongo
-      { cx: 28.0,   cz: -136.0, hw: 5.25, hd: 4.0,  off: 0.34 }, // Mirante Sela Norte
-      { cx: -216.0, cz: -14.0,  hw: 6.0,  hd: 5.0,  off: 0.34 }, // Capela Caiçara Poente
-      { cx: 216.0,  cz: -14.0,  hw: 6.5,  hd: 5.0,  off: 0.34 }, // Praça da Bocha Levante
-      { cx: -66.0,  cz: -132.0, hw: 6.0,  hd: 4.5,  off: 0.34 }, // Sítio Agroecológico Sela
-      { cx: -2.0,   cz: -170.0, hw: 6.0,  hd: 4.75, off: 0.34 }, // Anfiteatro Sela Norte
-      { cx: -62.0,  cz: -66.0,  hw: 4.3,  hd: 4.3,  off: 0.22 }, // Largo do Ipê Oeste
-      { cx: 56.0,   cz: -64.0,  hw: 4.3,  hd: 4.3,  off: 0.22 }  // Largo do Ipê Leste
+      { cx: -142.0, cz: -42.0,  hw: 6.0,  hd: 4.5,  off: 0.36 }, // Feirinha do Poente
+      { cx: 142.0,  cz: -42.0,  hw: 6.5,  hd: 4.5,  off: 0.36 }, // Quadra de Basquete
+      { cx: -32.0,  cz: -102.0, hw: 5.5,  hd: 5.5,  off: 0.36 }, // Coreto da Serra
+      { cx: 118.0,  cz: -82.0,  hw: 5.75, hd: 4.25, off: 0.36 }, // Galpão Cultural
+      { cx: -118.0, cz: -82.0,  hw: 5.5,  hd: 5.0,  off: 0.36 }, // Terreiro do Jongo
+      { cx: 28.0,   cz: -136.0, hw: 5.25, hd: 4.0,  off: 0.36 }, // Mirante Sela Norte
+      { cx: -216.0, cz: -14.0,  hw: 6.0,  hd: 5.0,  off: 0.36 }, // Capela Caiçara Poente
+      { cx: 216.0,  cz: -14.0,  hw: 6.5,  hd: 5.0,  off: 0.36 }, // Praça da Bocha Levante
+      { cx: -66.0,  cz: -132.0, hw: 6.0,  hd: 4.5,  off: 0.36 }, // Sítio Agroecológico Sela
+      { cx: -2.0,   cz: -170.0, hw: 6.0,  hd: 4.75, off: 0.36 }, // Anfiteatro Sela Norte
+      { cx: -62.0,  cz: -60.0,  hw: 4.5,  hd: 4.5,  off: 0.22 }, // Largo do Ipê Oeste
+      { cx: 46.0,   cz: -60.0,  hw: 4.5,  hd: 4.5,  off: 0.22 }, // Largo do Ipê Leste
+      { cx: -46.0,  cz: -86.0,  hw: 5.8,  hd: 4.6,  off: 0.24 }, // Pedreira da Serra
+      { cx: 118.0,  cz: -48.0,  hw: 5.4,  hd: 4.4,  off: 0.22 }, // Serraria Sustentável
+      { cx: 64.0,   cz: -31.0,  hw: 4.8,  hd: 4.1,  off: 0.20 }, // Criação Caipira
+      { cx: 96.0,   cz: -28.0,  hw: 6.4,  hd: 5.0,  off: 0.24 }, // Sítio & Pomar Agroflorestal
+      { cx: -22.0,  cz: -14.0,  hw: 6.6,  hd: 4.7,  off: 0.18 }, // Olaria Comunitária Central
+      { cx: -18.0,  cz: -72.0,  hw: 8.6,  hd: 6.0,  off: 0.36 }  // Parque Solar da Serra
     ];
-    hubTerraces.push(
-      { cx: -46.0, cz: -86.0, hw: 7.5, hd: 6.5, off: 0.25 },
-      { cx: 118.0, cz: -48.0, hw: 7.5, hd: 6.5, off: 0.25 },
-      { cx: 64.0, cz: -31.0, hw: 6.0, hd: 5.5, off: 0.22 }
-    );
     for (let i = 0; i < hubTerraces.length; i++) {
       const ht = hubTerraces[i];
       if (Math.abs(x - ht.cx) <= ht.hw && Math.abs(z - ht.cz) <= ht.hd) {
-        return (this.terrain ? this.terrain.getElevation(ht.cx, ht.cz) : 6.0) + ht.off;
+        const yC = getElev(ht.cx, ht.cz);
+        const yMax = Math.max(
+          yC,
+          getElev(ht.cx - ht.hw, ht.cz - ht.hd),
+          getElev(ht.cx + ht.hw, ht.cz - ht.hd),
+          getElev(ht.cx - ht.hw, ht.cz + ht.hd),
+          getElev(ht.cx + ht.hw, ht.cz + ht.hd)
+        );
+        return Math.max(yC, yMax - 0.06) + ht.off;
       }
     }
 
@@ -196,14 +200,16 @@ export const RoadGraphMixin = {
       { id: 'varzea_promenade', x: 55.0, z: 14.5, type: 'street', desc: 'Calçadão do Campinho' },
       { id: 'varzea_west', x: 36.0, z: 14.0, type: 'street', desc: 'Acesso Oeste do Campinho' },
 
-      // 9. Highlands & Mirante Imperial
-      { id: 'mirante_imp_0', x: 50.0, z: -102.0, type: 'mirante', desc: 'Pórtico do Mirante Imperial' },
+      // 9. Highlands & Mirante Imperial (100% alinhados à Estrada da Crista R6 e Coroa das Alturas R8!)
+      { id: 'mirante_imp_0', x: 50.0, z: -101.2, type: 'mirante', desc: 'Pórtico do Mirante Imperial' },
       { id: 'mirante_imp_1', x: 46.4, z: -110.0, type: 'mirante', desc: 'Luneta Poente' },
       { id: 'mirante_imp_2', x: 53.6, z: -110.0, type: 'mirante', desc: 'Luneta Levante' },
       { id: 'mirante_imp_center', x: 50.0, z: -111.0, type: 'mirante', desc: 'Rosa dos Ventos' },
-      { id: 'high_crista_w', x: -28.0, z: -85.0, type: 'crista', desc: 'Crista Poente' },
-      { id: 'torre_radio', x: 0.0, z: -104.0, type: 'crista', desc: 'Torre de Transmissão' },
-      { id: 'high_crista_e', x: 28.0, z: -85.0, type: 'crista', desc: 'Crista Levante' },
+      { id: 'crest_mid_e', x: 16.0, z: -74.0, type: 'highway', desc: 'Bifurcação da Crista Leste' },
+      { id: 'solar_park_gate', x: -16.5, z: -64.5, type: 'highway', desc: 'Pórtico da Usina Eco-Solar' },
+      { id: 'high_crista_w', x: -24.0, z: -92.0, type: 'crista', desc: 'Crista Poente' },
+      { id: 'torre_radio', x: 0.0, z: -96.0, type: 'crista', desc: 'Torre de Transmissão' },
+      { id: 'high_crista_e', x: 32.0, z: -86.0, type: 'crista', desc: 'Junção da Crista Levante' },
 
       // 10. Frontier Vielas (Lajes Urbanas)
       { id: 'viela_w_0', x: -84.0, z: 8.0, type: 'viela', desc: 'Viela do Poente 1' },
@@ -245,8 +251,8 @@ export const RoadGraphMixin = {
       { id: 'west_trail_high', x: -95.0, z: -68.0, type: 'trail', desc: 'Trilha das Falésias do Poente' },
 
       { id: 'east_pipodromo', x: 88.0, z: -48.0, type: 'pipodromo', desc: 'Pipódromo do Alto do Levante' },
-      { id: 'east_pomar_agro', x: 96.0, z: -28.0, type: 'agro', desc: 'Pomar Agroflorestal da Colina' },
-      { id: 'east_trail_crista', x: 70.0, z: -72.0, type: 'trail', desc: 'Trilha da Crista Oriental' },
+      { id: 'east_pomar_agro', x: 96.0, z: -22.5, type: 'agro', desc: 'Sítio & Pomar Agroflorestal da Colina' },
+      { id: 'east_trail_crista', x: 68.0, z: -84.0, type: 'street', desc: 'Curva Alta do Anel Médio Leste' },
 
       { id: 'beach_east_lounge', x: 138.0, z: 38.0, type: 'beach_east', desc: 'Deck & Lounge das Dunas' },
       { id: 'beach_east_frescobol', x: 142.0, z: 52.0, type: 'beach_east', desc: 'Arena de Frescobol do Nascente' },
@@ -359,7 +365,6 @@ export const RoadGraphMixin = {
     addEdge('transv_e_1', 'transv_e_2');
     addEdge('transv_e_2', 'transv_e_3');
     addEdge('transv_e_3', 'transv_e_4');
-    addEdge('transv_e_0', 'spine_1');
 
     // 5. Ladeira da Prainha / Mid-hill West
     addEdge('mid_w_0', 'mid_w_1');
@@ -405,16 +410,19 @@ export const RoadGraphMixin = {
     addEdge('varzea_west', 'coast_e_1b');
     addEdge('varzea_promenade', 'coast_e_2');
 
-    // 8. Highlands & Cristas
-    addEdge('spine_5', 'mirante_imp_0');
+    // 8. Highlands & Cristas (Seguindo 100% as pistas de asfalto R6, R7, R8 e R18 — sem cortar por cima de casas!)
+    addEdge('spine_4', 'solar_park_gate');
+    addEdge('spine_4', 'crest_mid_e');
+    addEdge('crest_mid_e', 'high_crista_e');
+    addEdge('high_crista_e', 'mirante_imp_0');
     addEdge('mirante_imp_0', 'mirante_imp_1');
     addEdge('mirante_imp_0', 'mirante_imp_2');
     addEdge('mirante_imp_1', 'mirante_imp_center');
     addEdge('mirante_imp_2', 'mirante_imp_center');
-    addEdge('spine_5', 'high_crista_w');
+    addEdge('spine_5', 'torre_radio');
+    addEdge('mid_ring_w_1', 'high_crista_w');
     addEdge('high_crista_w', 'torre_radio');
     addEdge('torre_radio', 'high_crista_e');
-    addEdge('high_crista_e', 'mirante_imp_0');
 
     // 9. Vielas Poente & Levante
     addEdge('mid_w_0', 'viela_w_0');

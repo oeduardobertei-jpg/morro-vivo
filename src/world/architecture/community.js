@@ -735,85 +735,119 @@ export const CommunityMixin = {
 
   createSolarPark(pos = { x: -18, z: -72 }) {
     const parkGroup = new THREE.Group();
-    const y = this.terrain ? this.terrain.getElevation(pos.x, pos.z) : 15.0;
-    // Eleva o patamar técnico de forma limpa e integrada sobre o terraço da serra
-    parkGroup.position.set(pos.x, y + 0.38, pos.z);
+    const getElev = (px, pz) => (this.terrain ? this.terrain.getElevation(px, pz) : 15.0);
+    const yC = getElev(pos.x, pos.z);
+    const yMax = Math.max(
+      yC,
+      getElev(pos.x - 8.5, pos.z - 6.0),
+      getElev(pos.x + 8.5, pos.z - 6.0),
+      getElev(pos.x - 8.5, pos.z + 6.0),
+      getElev(pos.x + 8.5, pos.z + 6.0)
+    );
+    const yMin = Math.min(
+      yC,
+      getElev(pos.x - 8.5, pos.z - 6.0),
+      getElev(pos.x + 8.5, pos.z - 6.0),
+      getElev(pos.x - 8.5, pos.z + 6.0),
+      getElev(pos.x + 8.5, pos.z + 6.0)
+    );
+    // Assenta o terraço em harmonia com a serra usando pedra carioca quente, tijolinho e madeira
+    const anchorY = Math.max(yC, yMax - 0.04) + 0.22;
+    parkGroup.position.set(pos.x, anchorY, pos.z);
 
-    // 1. Fundação Escalonada em Pedra de Granito & Concreto Armado (sem paredões cegos que pareçam caixas!)
-    const stoneBaseMat = new THREE.MeshLambertMaterial({ color: 0x64748B, flatShading: true });
-    const concreteDeckMat = new THREE.MeshLambertMaterial({ color: 0xCBD5E1, flatShading: true });
-    const curbMat = new THREE.MeshLambertMaterial({ color: 0xE2E8F0, flatShading: true });
+    // 1. Fundação em Pedra de Mão Carioca & Pátio em Terraço Quente (elimina o aspecto de caixa cinza industrial!)
+    const stoneBaseMat = getSharedStylizedMaterial(0x645E58, 'stone', { flatShading: true });
+    const warmStoneDeckMat = getSharedStylizedMaterial(0x9E9488, 'stone', { flatShading: true });
+    const brickTrimMat = getSharedStylizedMaterial(0xB45338, 'brick', { flatShading: true });
+    const timberMat = getSharedStylizedMaterial(0x6C4A2D, 'wood', { flatShading: true });
+    const foliageMat = getSharedStylizedMaterial(0x2D6A4F, 'foliage', { flatShading: true });
 
-    const deepStonePlinth = new THREE.Mesh(new THREE.BoxGeometry(18.0, 4.2, 12.8), stoneBaseMat);
-    deepStonePlinth.position.y = -2.1;
+    const baseH = Math.max(4.5, (anchorY - yMin) + 3.4);
+    const deepStonePlinth = new THREE.Mesh(new THREE.BoxGeometry(17.6, baseH, 12.4), stoneBaseMat);
+    deepStonePlinth.position.y = -baseH * 0.5 + 0.04;
     deepStonePlinth.receiveShadow = true;
+    deepStonePlinth.castShadow = true;
     parkGroup.add(deepStonePlinth);
 
-    const upperConcreteSlab = new THREE.Mesh(new THREE.BoxGeometry(17.2, 0.36, 12.0), concreteDeckMat);
-    upperConcreteSlab.position.y = -0.05;
-    upperConcreteSlab.receiveShadow = true;
-    parkGroup.add(upperConcreteSlab);
+    const upperStoneSlab = new THREE.Mesh(new THREE.BoxGeometry(17.2, 0.32, 12.0), warmStoneDeckMat);
+    upperStoneSlab.position.y = -0.02;
+    upperStoneSlab.receiveShadow = true;
+    parkGroup.add(upperStoneSlab);
 
-    // Piso drenante de brita clara emoldurado por meio-fio de concreto
-    const gravelGeo = new THREE.BoxGeometry(16.0, 0.16, 10.8);
-    const gravelMat = new THREE.MeshLambertMaterial({ color: 0x94A3B8, flatShading: true });
-    const gravel = new THREE.Mesh(gravelGeo, gravelMat);
-    gravel.position.y = 0.16;
+    // Piso drenante em areia/pedrisco quente com passarela central de madeira
+    const gravel = new THREE.Mesh(
+      new THREE.BoxGeometry(16.0, 0.14, 10.8),
+      getSharedStylizedMaterial(0xB5A895, 'stone', { flatShading: true })
+    );
+    gravel.position.y = 0.15;
     gravel.receiveShadow = true;
     parkGroup.add(gravel);
 
-    // Mureta baixa de borda (meio-fio técnico de 0.32m) preservando a vista panorâmica aberta
-    const curbNorth = new THREE.Mesh(new THREE.BoxGeometry(17.0, 0.32, 0.45), curbMat);
-    curbNorth.position.set(0, 0.26, -5.7);
+    const woodWalkway = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.16, 10.6), timberMat);
+    woodWalkway.position.set(1.5, 0.17, 0);
+    woodWalkway.receiveShadow = true;
+    parkGroup.add(woodWalkway);
+
+    // Muretas baixas de tijolinho cerâmico e madeira preservando a vista panorâmica
+    const curbNorth = new THREE.Mesh(new THREE.BoxGeometry(17.0, 0.34, 0.42), brickTrimMat);
+    curbNorth.position.set(0, 0.28, -5.7);
     parkGroup.add(curbNorth);
 
-    const curbWest = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.32, 11.8), curbMat);
-    curbWest.position.set(-8.3, 0.26, 0);
+    const curbWest = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.34, 11.8), brickTrimMat);
+    curbWest.position.set(-8.3, 0.28, 0);
     parkGroup.add(curbWest);
 
-    const curbEast = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.32, 11.8), curbMat);
-    curbEast.position.set(8.3, 0.26, 0);
+    const curbEast = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.34, 11.8), brickTrimMat);
+    curbEast.position.set(8.3, 0.28, 0);
     parkGroup.add(curbEast);
 
-    // Escadaria frontal e pátio de acesso ao sul (+Z) conectando suavemente à trilha da serra
+    // Floreiras tropicais nos cantos integrando o parque à vegetação do Alto da Serra
+    [[-7.4, -4.8], [7.4, -4.8], [-7.4, 4.8]].forEach(([px, pz]) => {
+      const planter = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.48, 1.4), brickTrimMat);
+      planter.position.set(px, 0.38, pz);
+      const bush = new THREE.Mesh(new THREE.DodecahedronGeometry(0.75, 0), foliageMat);
+      bush.position.set(px, 0.92, pz);
+      parkGroup.add(planter, bush);
+    });
+
+    // Escadaria frontal e pórtico de madeira ao sul (+Z) encontrando o novo ramal pavimentado em (-16.5, -64.5)
     for (let st = 0; st < 4; st++) {
-      const step = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.24, 0.72), concreteDeckMat);
-      step.position.set(-1.2, -st * 0.22, 6.1 + st * 0.65);
+      const step = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.26, 0.72), stoneBaseMat);
+      step.position.set(1.5, -st * 0.20, 6.0 + st * 0.62);
       step.receiveShadow = true;
       parkGroup.add(step);
     }
 
-    // Guarda-corpo tubular aberto ao redor do perímetro (Norte, Oeste, Leste e laterais Sul)
-    const fenceMat = new THREE.MeshLambertMaterial({ color: 0x334155 });
+    // Guarda-corpo em madeira rústica ao redor do perímetro
     const fencePosts = [
       { x: -8.1, z: -5.5 }, { x: -4.0, z: -5.5 }, { x: 0, z: -5.5 }, { x: 4.0, z: -5.5 }, { x: 8.1, z: -5.5 },
       { x: -8.1, z: 0 },    { x: 8.1, z: 0 },
-      { x: -8.1, z: 5.5 },  { x: -3.6, z: 5.5 },  { x: 1.2, z: 5.5 }, { x: 8.1, z: 5.5 }
+      { x: -8.1, z: 5.5 },  { x: -3.2, z: 5.5 },  { x: -0.8, z: 5.5 }, { x: 3.8, z: 5.5 }, { x: 8.1, z: 5.5 }
     ];
     fencePosts.forEach(fp => {
-      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.15, 5), fenceMat);
-      p.position.set(fp.x, 0.75, fp.z);
+      const p = new THREE.Mesh(new THREE.BoxGeometry(0.14, 1.10, 0.14), timberMat);
+      p.position.set(fp.x, 0.72, fp.z);
       parkGroup.add(p);
     });
 
-    const railNorth = new THREE.Mesh(new THREE.BoxGeometry(16.4, 0.07, 0.07), fenceMat);
-    railNorth.position.set(0, 1.25, -5.5);
+    const railNorth = new THREE.Mesh(new THREE.BoxGeometry(16.4, 0.09, 0.09), timberMat);
+    railNorth.position.set(0, 1.22, -5.5);
     parkGroup.add(railNorth);
 
-    const railWest = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 11.2), fenceMat);
-    railWest.position.set(-8.1, 1.25, 0);
+    const railWest = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 11.2), timberMat);
+    railWest.position.set(-8.1, 1.22, 0);
     parkGroup.add(railWest);
 
-    const railEast = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 11.2), fenceMat);
-    railEast.position.set(8.1, 1.25, 0);
+    const railEast = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.09, 11.2), timberMat);
+    railEast.position.set(8.1, 1.22, 0);
     parkGroup.add(railEast);
 
-    // Pórtico & Placa Comunitária na entrada sul: "USINA ECO-SOLAR DA SERRA"
-    const signBoard = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.65, 0.10), new THREE.MeshLambertMaterial({ color: 0x0284C7 }));
-    signBoard.position.set(-5.8, 1.45, 5.5);
+    // Pórtico & Placa Comunitária em madeira na entrada sul: "USINA ECO-SOLAR DA SERRA"
+    const signBoard = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.62, 0.12), timberMat);
+    signBoard.position.set(-3.2, 1.42, 5.5);
     parkGroup.add(signBoard);
 
-    // 2. Módulos Fotovoltaicos de Alta Eficiência (3 fileiras x 3 colunas bem espaçadas no pátio oeste/central)
+    // 2. Módulos Fotovoltaicos de Alta Eficiência sobre cavaletes de madeira e aço
     const cellMat = new THREE.MeshLambertMaterial({ color: 0x1E3A8A });
     const standMat = new THREE.MeshLambertMaterial({ color: 0x475569 });
 
@@ -824,71 +858,74 @@ export const CommunityMixin = {
         leg.position.y = 0.68;
         arrayGroup.add(leg);
 
-        const frame = new THREE.Mesh(new THREE.BoxGeometry(3.0, 0.08, 1.85), standMat);
+        const frame = new THREE.Mesh(new THREE.BoxGeometry(2.9, 0.08, 1.80), timberMat);
         frame.position.y = 1.35;
         frame.rotation.x = 0.35;
         arrayGroup.add(frame);
 
-        const panel = new THREE.Mesh(new THREE.BoxGeometry(2.82, 0.06, 1.68), cellMat);
+        const panel = new THREE.Mesh(new THREE.BoxGeometry(2.72, 0.06, 1.64), cellMat);
         panel.position.set(0, 1.40, 0);
         panel.rotation.x = 0.35;
         arrayGroup.add(panel);
 
-        arrayGroup.position.set(c * 3.8 - 5.2, 0.2, r * 3.1 - 3.0);
+        arrayGroup.position.set(c * 3.6 - 5.4, 0.2, r * 3.1 - 3.0);
         parkGroup.add(arrayGroup);
       }
     }
 
-    // 3. Cabine Técnica de Controle & Subestação (Arquitetura de alvenaria caiada com telhado cerâmico)
+    // 3. Chalé Técnico de Controle & Subestação (Alvenaria ocre carioca com telhado cerâmico colonial)
     const cabinWalls = new THREE.Mesh(
       new THREE.BoxGeometry(2.8, 2.2, 2.4),
-      new THREE.MeshLambertMaterial({ color: 0xF8FAFC, flatShading: true })
+      getSharedStylizedMaterial(0xF3E5D0, 'plaster', { flatShading: true })
     );
-    cabinWalls.position.set(6.0, 1.25, 2.8);
+    cabinWalls.position.set(5.8, 1.25, 2.6);
     cabinWalls.castShadow = true;
     parkGroup.add(cabinWalls);
 
     const cabinRoof = new THREE.Mesh(
-      new THREE.BoxGeometry(3.2, 0.22, 2.8),
-      new THREE.MeshLambertMaterial({ color: 0x0284C7, flatShading: true })
+      new THREE.ConeGeometry(2.3, 1.0, 4),
+      brickTrimMat
     );
-    cabinRoof.position.set(6.0, 2.45, 2.8);
+    cabinRoof.rotation.y = Math.PI / 4;
+    cabinRoof.position.set(5.8, 2.82, 2.6);
     cabinRoof.castShadow = true;
     parkGroup.add(cabinRoof);
 
     // Status LED do Inversor (Verde pulsante de energia limpa ativa)
     const ledMat = new THREE.MeshBasicMaterial({ color: 0x10B981 });
     const led = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.05), ledMat);
-    led.position.set(6.0, 1.5, 4.02);
+    led.position.set(5.8, 1.5, 3.82);
     parkGroup.add(led);
 
-    // 4. Reservatório e Caixa d'Água Central da Serra sobre base elevada
+    // 4. Reservatório e Caixa d'Água Central da Serra sobre torre de pedra e madeira
     const tankPedestal = new THREE.Mesh(
-      new THREE.CylinderGeometry(1.9, 2.0, 0.8, 8),
-      concreteDeckMat
+      new THREE.CylinderGeometry(1.85, 2.0, 0.9, 8),
+      stoneBaseMat
     );
-    tankPedestal.position.set(6.0, 0.55, -2.8);
+    tankPedestal.position.set(5.8, 0.58, -2.8);
     parkGroup.add(tankPedestal);
 
-    const tankGeo = new THREE.CylinderGeometry(1.75, 1.65, 2.8, 10);
+    const tankGeo = new THREE.CylinderGeometry(1.70, 1.60, 2.6, 10);
     const tankMat = new THREE.MeshLambertMaterial({ color: 0x0284C7, flatShading: true });
     const tank = new THREE.Mesh(tankGeo, tankMat);
-    tank.position.set(6.0, 2.35, -2.8);
+    tank.position.set(5.8, 2.30, -2.8);
     tank.castShadow = true;
     parkGroup.add(tank);
 
     this.group.add(parkGroup);
     this.solarPark = parkGroup;
     this.propObstacles = this.propObstacles || [];
-    this.propObstacles.push({ x: pos.x, z: pos.z, hw: 9.2, hd: 6.6, rotY: 0 });
+    this.propObstacles.push({ x: pos.x, z: pos.z, hw: 9.0, hd: 6.4, rotY: 0 });
   },
 
   createStoneQuarry(pos = { x: -46, z: -86 }) {
     const x = pos.x;
     const z = pos.z;
     const getElev = (px, pz) => (this.terrain ? this.terrain.getElevation(px, pz) : 12.0);
-    const gy = getElev(x, z);
-    const yMin = Math.min(gy, getElev(x - 6, z - 5), getElev(x + 6, z - 5), getElev(x - 6, z + 5), getElev(x + 6, z + 5));
+    const yC = getElev(x, z);
+    const yMin = Math.min(yC, getElev(x - 6, z - 5), getElev(x + 6, z - 5), getElev(x - 6, z + 5), getElev(x + 6, z + 5));
+    const yMax = Math.max(yC, getElev(x - 6, z - 5), getElev(x + 6, z - 5), getElev(x - 6, z + 5), getElev(x + 6, z + 5));
+    const gy = Math.max(yC, yMax - 0.06);
 
     const g = new THREE.Group();
     g.name = 'pedreira-serra';
@@ -1000,8 +1037,10 @@ export const CommunityMixin = {
     const x = pos.x;
     const z = pos.z;
     const getElev = (px, pz) => (this.terrain ? this.terrain.getElevation(px, pz) : 10.0);
-    const gy = getElev(x, z);
-    const yMin = Math.min(gy, getElev(x - 6, z - 5), getElev(x + 6, z - 5), getElev(x - 6, z + 5), getElev(x + 6, z + 5));
+    const yC = getElev(x, z);
+    const yMin = Math.min(yC, getElev(x - 6, z - 5), getElev(x + 6, z - 5), getElev(x - 6, z + 5), getElev(x + 6, z + 5));
+    const yMax = Math.max(yC, getElev(x - 6, z - 5), getElev(x + 6, z - 5), getElev(x - 6, z + 5), getElev(x + 6, z + 5));
+    const gy = Math.max(yC, yMax - 0.06);
 
     const g = new THREE.Group();
     g.name = 'serraria-sustentavel';
@@ -1114,8 +1153,10 @@ export const CommunityMixin = {
     // A) Criação Caipira (64, -31)
     const cx = 64.0;
     const cz = -31.0;
-    const cGy = getElev(cx, cz);
-    const cYMin = Math.min(cGy, getElev(cx - 5, cz - 4), getElev(cx + 5, cz - 4), getElev(cx - 5, cz + 4), getElev(cx + 5, cz + 4));
+    const cYC = getElev(cx, cz);
+    const cYMin = Math.min(cYC, getElev(cx - 5, cz - 4), getElev(cx + 5, cz - 4), getElev(cx - 5, cz + 4), getElev(cx + 5, cz + 4));
+    const cYMax = Math.max(cYC, getElev(cx - 5, cz - 4), getElev(cx + 5, cz - 4), getElev(cx - 5, cz + 4), getElev(cx + 5, cz + 4));
+    const cGy = Math.max(cYC, cYMax - 0.06);
 
     const cGroup = new THREE.Group();
     cGroup.name = 'criacao-caipira';

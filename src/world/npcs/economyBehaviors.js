@@ -21,12 +21,12 @@ const COMMERCE_SPOTS = [
   // 2. Extremos Costeiros, Cais & Vendas dos Vales Expandidos
   { id: 'pier_fish', name: 'Píer dos Pescadores', x: -78.0, z: 74.0, type: 'fishery', district: 'prainha', itemName: 'Pescado Fresco', resource: 'food', hubId: 'pier' },
   { id: 'cove_fish', name: 'Rancho Caiçara da Enseada', x: -95.0, z: 0.0, type: 'fishery', district: 'prainha', itemName: 'Peixe Salgado', resource: 'food', hubId: 'pier' },
-  { id: 'boteco_poente', name: 'Boteco do Vale do Poente', x: -186.0, z: -19.5, type: 'market', district: 'prainha', itemName: 'Refresco & Empada', resource: 'food', hubId: 'horta' },
-  { id: 'boteco_levante', name: 'Boteco do Vale do Levante', x: 186.0, z: -19.5, type: 'market', district: 'varzea', itemName: 'Suco & Salgado', resource: 'food', hubId: 'horta' },
-  { id: 'venda_sela', name: 'Venda da Sela da Serra', x: -6.0, z: -155.5, type: 'market', district: 'serra', itemName: 'Café & Pão de Queijo', resource: 'food', hubId: 'horta' },
+  { id: 'boteco_poente', name: 'Boteco do Vale do Poente', x: -186.0, z: -17.0, type: 'market', district: 'prainha', itemName: 'Refresco & Empada', resource: 'food', hubId: 'horta' },
+  { id: 'boteco_levante', name: 'Boteco do Vale do Levante', x: 186.0, z: -17.0, type: 'market', district: 'varzea', itemName: 'Suco & Salgado', resource: 'food', hubId: 'horta' },
+  { id: 'venda_sela', name: 'Venda da Sela da Serra', x: -6.0, z: -150.2, type: 'market', district: 'serra', itemName: 'Café & Pão de Queijo', resource: 'food', hubId: 'horta' },
 
-  // 3. Agrofloresta, Horta Comunitária & Criação Caipira
-  { id: 'horta_dona_nair', name: 'Horta Comunitária em Socalcos', x: 82.0, z: -8.0, type: 'farm', district: 'varzea', itemName: 'Cesto de Verduras', resource: 'food', hubId: 'horta' },
+  // 3. Sítio Agroflorestal da Colina & Criação Caipira
+  { id: 'horta_dona_nair', name: 'Sítio & Pomar Agroflorestal da Colina', x: 96.0, z: -22.5, type: 'farm', district: 'varzea', itemName: 'Cesto de Verduras & Frutas', resource: 'food', hubId: 'horta' },
   { id: 'criacao_caipira', name: 'Criação Caipira', x: 64.0, z: -24.0, type: 'farm', district: 'varzea', itemName: 'Ovos & Queijo Fresco', resource: 'food', hubId: 'horta' },
 
   // 4. Polo da Várzea: Feira Livre, Mercado Cultural & Açougue/Peixaria

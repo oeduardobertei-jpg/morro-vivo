@@ -599,6 +599,10 @@ export class PetManager {
         targetPos: new THREE.Vector3(),
         currentNodeId: null,
         targetNodeId: null,
+        pathQueue: [],
+        isPet: true,
+        stuckTimer: 0,
+        stuckLastPos: new THREE.Vector3(),
         rooftopHouse: null,
         rooftopBaseY: 0
       };
@@ -627,27 +631,51 @@ export class PetManager {
 
   _chooseNextTarget(pet) {
     const homeIds = pet.homeNodes || [];
-    const curNode = this._pickRoadNode(pet.currentNodeId || homeIds[0]);
-    let candidates = [];
+    const curId = pet.currentNodeId || homeIds[0] || 'alameda_crossroads';
+    const curNode = this._pickRoadNode(curId);
 
-    if (curNode && curNode.neighbors && curNode.neighbors.length > 0) {
-      candidates = curNode.neighbors.filter((nid) => homeIds.includes(nid));
+    // Se já houver rota viária planejada na fila, avança pelo próximo nó conectado da rua
+    if (pet.pathQueue && pet.pathQueue.length > 0) {
+      const nextId = pet.pathQueue.shift();
+      const nextNode = this._pickRoadNode(nextId);
+      if (nextNode) {
+        pet.targetNodeId = nextNode.id;
+        const ox = (Math.random() - 0.5) * 0.9;
+        const oz = (Math.random() - 0.5) * 0.9;
+        const ty = this.npcs && this.npcs.getFloorElevation ? this.npcs.getFloorElevation(nextNode.x + ox, nextNode.z + oz) : 4.0;
+        pet.targetPos.set(nextNode.x + ox, ty, nextNode.z + oz);
+        return;
+      }
+    }
+
+    let candidates = [];
+    if (homeIds.length > 1) {
+      candidates = homeIds.filter((id) => id !== curId);
+    }
+    if (candidates.length === 0 && curNode && curNode.neighbors && curNode.neighbors.length > 0) {
+      candidates = curNode.neighbors.filter((id) => id !== pet.targetNodeId);
       if (candidates.length === 0) candidates = curNode.neighbors;
     }
-    if (candidates.length === 0 && homeIds.length > 0) {
-      candidates = homeIds;
+
+    const goalId = candidates.length > 0
+      ? candidates[Math.floor(Math.random() * candidates.length)]
+      : curId;
+
+    // Traça caminho conectado pelo grafo viário para que pets nunca atravessem paredes em linha reta!
+    let nextId = goalId;
+    if (this.npcs && this.npcs.findRoadPath && curNode) {
+      const path = this.npcs.findRoadPath(curNode.id, goalId);
+      if (path && path.length > 1) {
+        pet.pathQueue = path.slice(1);
+        nextId = pet.pathQueue.shift();
+      }
     }
 
-    const filtered = candidates.length > 1 ? candidates.filter((id) => id !== pet.targetNodeId) : candidates;
-    const chosenId = filtered.length > 0
-      ? filtered[Math.floor(Math.random() * filtered.length)]
-      : (pet.currentNodeId || 'alameda_crossroads');
-
-    const dest = this._pickRoadNode(chosenId);
+    const dest = this._pickRoadNode(nextId);
     if (dest) {
       pet.targetNodeId = dest.id;
-      const ox = (Math.random() - 0.5) * 1.4;
-      const oz = (Math.random() - 0.5) * 1.4;
+      const ox = (Math.random() - 0.5) * 0.95;
+      const oz = (Math.random() - 0.5) * 0.95;
       const ty = this.npcs && this.npcs.getFloorElevation ? this.npcs.getFloorElevation(dest.x + ox, dest.z + oz) : 4.0;
       pet.targetPos.set(dest.x + ox, ty, dest.z + oz);
     }
@@ -841,6 +869,14 @@ export class PetManager {
             ? (isNight ? '🌙 Cochilando enroscado na laje tranquila' : '☀️ Tomando sol na laje de frente pro mar')
             : '👀 Vigiando o movimento das ruas lá embaixo';
         }
+        // Sincroniza dinamicamente a altura da laje caso a casa suba de nível (puxadinho N2/N3)!
+        if (pet.rooftopHouse && pet.rooftopHouse.position) {
+          if (pet.rooftopHouse.roofStyle === 'laje' && pet.rooftopHouse.lajeTopY !== undefined) {
+            pet.rooftopBaseY = pet.rooftopHouse.position.y + pet.rooftopHouse.lajeTopY;
+          } else {
+            this._placeRooftopCat(pet, new Set());
+          }
+        }
         if (pet.rooftopBaseY) {
           pet.group.position.y = pet.rooftopBaseY;
         }
@@ -883,6 +919,25 @@ export class PetManager {
           pet.group.position.z += nz * step;
           pet.group.rotation.y = smoothAnglePet(pet.group.rotation.y, Math.atan2(nx, nz), 9.5, dt);
           isMovingNow = true;
+
+          // Stuck Watchdog para Pets Terrestres: evita travamento em quinas de muros ou becos
+          pet.stuckTimer = (pet.stuckTimer || 0) + dt;
+          if (pet.stuckTimer >= 2.0) {
+            pet.stuckTimer = 0;
+            if (pet.stuckLastPos) {
+              const moved = Math.hypot(
+                pet.group.position.x - pet.stuckLastPos.x,
+                pet.group.position.z - pet.stuckLastPos.z
+              );
+              if (moved < 0.25) {
+                pet.avoidSide = -(pet.avoidSide || 1);
+                pet.avoidSideTimer = 1.4;
+                pet.pathQueue = [];
+                this._chooseNextTarget(pet);
+              }
+            }
+            pet.stuckLastPos.copy(pet.group.position);
+          }
         }
       }
 

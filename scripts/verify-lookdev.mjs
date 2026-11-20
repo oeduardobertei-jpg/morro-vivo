@@ -343,6 +343,16 @@ try {
   await setCam(-18, 18, 42, -6, 0, 88);
   await snap('28_shallow_water_clean_day.png');
 
+  // 6M4. Flanco Leste Reestruturado & Nivelado (replica exatamente o ângulo da Screenshot 1 do usuário)
+  await setModeAndPhase('bloom', 'day');
+  await setCam(85, 62, 58, 92, 12, -38);
+  await snap('29_east_hillside_clean_day.png');
+
+  // 6M5. Junção da Serra, Nascente Ancorada & Usina Eco-Solar Conectada (replica exatamente o ângulo Norte->Sul da Screenshot 2 do usuário)
+  await setModeAndPhase('bloom', 'sunset');
+  await setCam(6, 52, -126, 4, 18, -76);
+  await snap('30_serra_junction_solar_sunset.png');
+
   // 6N. Menuzinho Inicial Carioca (Dia + Escolher Save)
   await setModeAndPhase('bloom', 'day');
   await page.evaluate(() => {
@@ -927,6 +937,48 @@ try {
       economyAudit = { ok: false, error: err?.message || String(err) };
     }
 
+    // Auditoria Geométrica de Nivelamento dos Terraços (Sprint 14: 0 quadras/polos engolidos pela encosta)
+    const terrainRef = m.terrain || m.architecture?.terrain || arch?.terrain;
+    const getElev = (px, pz) => (terrainRef ? terrainRef.getElevation(px, pz) : 6.0);
+    const terraceChecks = [
+      { name: 'QuadraBasquete', cx: 142.0, cz: -42.0, hw: 6.5, hd: 4.5 },
+      { name: 'FeirinhaPoente', cx: -142.0, cz: -42.0, hw: 6.0, hd: 4.5 },
+      { name: 'CoretoSerra',    cx: -32.0, cz: -102.0, hw: 5.5, hd: 5.5 },
+      { name: 'GalpaoCultural', cx: 118.0, cz: -82.0, hw: 5.75, hd: 4.25 },
+      { name: 'TerreiroJongo',  cx: -118.0, cz: -82.0, hw: 5.5, hd: 5.0 },
+      { name: 'MiranteSela',    cx: 28.0, cz: -136.0, hw: 5.25, hd: 4.0 },
+      { name: 'PedreiraSerra',  cx: -46.0, cz: -86.0, hw: 5.8, hd: 4.6 },
+      { name: 'Serraria',       cx: 118.0, cz: -48.0, hw: 5.4, hd: 4.4 },
+      { name: 'CriacaoCaipira', cx: 64.0, cz: -31.0, hw: 4.8, hd: 4.1 },
+      { name: 'PomarColina',    cx: 96.0, cz: -28.0, hw: 6.4, hd: 5.0 },
+      { name: 'ParqueSolar',    cx: -18.0, cz: -72.0, hw: 8.5, hd: 6.0 }
+    ];
+    let buriedTerracesCount = 0;
+    let maxTerraceSlopeSpan = 0;
+    for (const tc of terraceChecks) {
+      const yC = getElev(tc.cx, tc.cz);
+      const c1 = getElev(tc.cx - tc.hw, tc.cz - tc.hd);
+      const c2 = getElev(tc.cx + tc.hw, tc.cz - tc.hd);
+      const c3 = getElev(tc.cx - tc.hw, tc.cz + tc.hd);
+      const c4 = getElev(tc.cx + tc.hw, tc.cz + tc.hd);
+      const yMax = Math.max(yC, c1, c2, c3, c4);
+      const yMin = Math.min(yC, c1, c2, c3, c4);
+      const span = yMax - yMin;
+      if (span > maxTerraceSlopeSpan) maxTerraceSlopeSpan = span;
+      const anchorY = Math.max(yC, yMax - 0.06);
+      const deckTopY = anchorY + 0.22;
+      if (yMax > deckTopY + 0.05) buriedTerracesCount++;
+    }
+    const monolithCount = terrainRef?.monolithObstacles?.length || 0;
+    const terraceClipAudit = {
+      checkedTerraces: terraceChecks.length,
+      buriedTerracesCount,
+      maxTerraceSlopeSpan: Number(maxTerraceSlopeSpan.toFixed(3)),
+      monolithsRegisteredInProps: monolithCount >= 20,
+      monolithCount,
+      ok: buriedTerracesCount === 0 && maxTerraceSlopeSpan < 0.45 && monolithCount >= 20
+    };
+
     return {
       fpsMaquete: Number(fpsMaquete.toFixed(1)),
       fpsStudioFX: Number(fpsStudioFX.toFixed(1)),
@@ -938,6 +990,7 @@ try {
       menuAudit,
       hudAudit,
       economyAudit,
+      terraceClipAudit,
       perf: m.perf.snapshot(),
       cull: m.culler.stats,
       batch: m.batcher.stats,
@@ -1022,7 +1075,7 @@ try {
   );
 
   console.log(JSON.stringify({ outDir, wasdMovedDist, pickCheck, audioCheck, metrics, resetAudit, errors, warningCount: warnings.length }, null, 2));
-  if (errors.length > 0 || !metrics.npcAudit?.ok || !metrics.spatialAudit?.ok || !metrics.petAudit?.ok || !metrics.hudAudit?.ok || !metrics.menuAudit?.ok || !metrics.economyAudit?.ok || !resetAudit?.ok) process.exitCode = 1;
+  if (errors.length > 0 || !metrics.npcAudit?.ok || !metrics.spatialAudit?.ok || !metrics.petAudit?.ok || !metrics.hudAudit?.ok || !metrics.menuAudit?.ok || !metrics.economyAudit?.ok || !metrics.terraceClipAudit?.ok || !resetAudit?.ok) process.exitCode = 1;
 } finally {
   await browser.close();
 }

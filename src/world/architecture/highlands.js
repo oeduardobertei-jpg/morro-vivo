@@ -9,7 +9,6 @@ export const HighlandsMixin = {
     this.createMiranteDaVistaImperial({ x: 50, z: -110 });
     this.createWindTurbines();
     this.createMiranteDasPipas();
-    this.createAgroflorestaTerraces();
     this.createNascenteDaSerra();
   },
 
@@ -604,42 +603,69 @@ export const HighlandsMixin = {
     this.group.add(farmGroup);
   },
 
-  // 5. NASCENTE DA SERRA (Olho d'Água Cristalino & Aqueduto de Bambu)
+  // 5. NASCENTE DA SERRA (Olho d'Água Cristalino & Bica de Bambu — 100% ancorado no relevo!)
   createNascenteDaSerra() {
     const springGroup = new THREE.Group();
-    const sy = this.terrain ? this.terrain.getElevation(-8, -65) : 13.5;
-    springGroup.position.set(-8, sy, -65);
+    const cx = -19.5;
+    const cz = -56.5;
+    const getElev = (px, pz) => (this.terrain ? this.terrain.getElevation(px, pz) : 13.5);
+    const sy = getElev(cx, cz);
+    springGroup.position.set(cx, sy, cz);
 
-    // Mossy rock basin
+    // Base circular de pedra musgosa profundamente ancorada na encosta
+    const stoneBaseMat = new THREE.MeshLambertMaterial({ color: 0x525E4E, flatShading: true });
     const rockMat = new THREE.MeshLambertMaterial({ color: 0x4D5A46, flatShading: true });
-    for (let r = 0; r < 7; r++) {
-      const angle = (r / 7) * Math.PI * 2;
-      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.7 + Math.random() * 0.4, 0), rockMat);
-      rock.position.set(Math.cos(angle) * 1.8, 0.5, Math.sin(angle) * 1.8);
+    const basinPlinth = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 2.9, 1.8, 12), stoneBaseMat);
+    basinPlinth.position.y = -0.78;
+    basinPlinth.receiveShadow = true;
+    springGroup.add(basinPlinth);
+
+    // Coroa de rochas naturais acompanhando a cota exata do terreno em cada ângulo
+    for (let r = 0; r < 9; r++) {
+      const angle = (r / 9) * Math.PI * 2;
+      const rad = 1.95 + (r % 2) * 0.22;
+      const lx = Math.cos(angle) * rad;
+      const lz = Math.sin(angle) * rad;
+      const localGroundY = getElev(cx + lx, cz + lz) - sy;
+      const rockSize = 0.62 + (r % 3) * 0.16;
+      const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(rockSize, 0), rockMat);
+      rock.scale.set(1.15, 0.85, 1.05);
+      rock.position.set(lx, Math.max(0.18, localGroundY + 0.25), lz);
+      rock.rotation.set(r * 0.4, angle, 0.15);
+      rock.castShadow = true;
+      rock.receiveShadow = true;
       springGroup.add(rock);
     }
 
-    // Pure spring water surface (azul turquesa cristalino)
+    // Espelho d'água cristalino da mina da serra
     const waterMat = new THREE.MeshLambertMaterial({
       color: 0x06B6D4,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.88,
       flatShading: true
     });
-    const pool = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.4, 0.3, 10), waterMat);
-    pool.position.y = 0.35;
+    const pool = new THREE.Mesh(new THREE.CylinderGeometry(1.75, 1.55, 0.28, 12), waterMat);
+    pool.position.y = 0.16;
     springGroup.add(pool);
 
-    // Split-bamboo aqueduct flume carrying water downhill
-    const bambooMat = new THREE.MeshLambertMaterial({ color: 0xA3E635 });
-    for (let f = 0; f < 3; f++) {
-      const flume = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 4.0, 5, 1, true, 0, Math.PI), bambooMat);
-      flume.rotation.z = Math.PI / 2;
-      flume.rotation.y = 0.2;
-      flume.position.set(2.0 + f * 3.5, 0.2 - f * 0.4, 0.8 + f * 1.2);
-      springGroup.add(flume);
-    }
+    // Bica de bambu sobre 2 forquilhas de madeira fincadas verticalmente na bacia de pedra (zero peças soltas!)
+    const bambooMat = new THREE.MeshLambertMaterial({ color: 0x84A942, flatShading: true });
+    const postWoodMat = new THREE.MeshLambertMaterial({ color: 0x5C4033, flatShading: true });
+    const spoutGroup = new THREE.Group();
+    spoutGroup.position.set(0, 0.18, 1.45);
+    [-0.55, 0.55].forEach((px) => {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.08, 0.85, 5), postWoodMat);
+      post.position.set(px, 0.12, 0);
+      spoutGroup.add(post);
+    });
+    const flume = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.11, 1.8, 6), bambooMat);
+    flume.rotation.z = Math.PI / 2;
+    flume.position.set(0, 0.52, 0);
+    spoutGroup.add(flume);
+    springGroup.add(spoutGroup);
 
+    this.propObstacles = this.propObstacles || [];
+    this.propObstacles.push({ x: cx, z: cz, r: 2.8 });
     this.group.add(springGroup);
   },
 
@@ -839,101 +865,145 @@ export const HighlandsMixin = {
 
     lifeGroup.add(pipGroup);
 
-    // 2. POMAR AGROFLORESTAL DA COLINA (x: 96, z: -28)
+    // 2. SÍTIO & POMAR AGROFLORESTAL DA COLINA (x: 96, z: -28 — Terraço Unificado em Pedra Carioca & Madeira)
     const agroX = 96.0, agroZ = -28.0;
-    const agroY = this.terrain ? this.terrain.getElevation(agroX, agroZ) : 6.8;
+    const getElev = (px, pz) => (this.terrain ? this.terrain.getElevation(px, pz) : 6.8);
+    const agroYC = getElev(agroX, agroZ);
+    const agroYMin = Math.min(
+      agroYC,
+      getElev(agroX - 6.5, agroZ - 5.0),
+      getElev(agroX + 6.5, agroZ - 5.0),
+      getElev(agroX - 6.5, agroZ + 5.0),
+      getElev(agroX + 6.5, agroZ + 5.0)
+    );
+    const agroYMax = Math.max(
+      agroYC,
+      getElev(agroX - 6.5, agroZ - 5.0),
+      getElev(agroX + 6.5, agroZ - 5.0)
+    );
+    const agroY = Math.max(agroYC, agroYMax - 0.06);
     const agroGroup = new THREE.Group();
     agroGroup.position.set(agroX, agroY, agroZ);
 
-    // Muretas curvas de contenção em pedra seca
-    const stoneMat = new THREE.MeshLambertMaterial({ color: 0x64748B, flatShading: true });
-    [-3.0, 0, 3.0].forEach(offsetZ => {
-      const wall = new THREE.Mesh(new THREE.BoxGeometry(12.0, 0.8, 0.45), stoneMat);
-      wall.position.set(0, (offsetZ + 3.0) * 0.25, offsetZ);
-      wall.receiveShadow = true;
-      agroGroup.add(wall);
+    // Embasamento profundo em pedra carioca e terra batida (elimina 100% muros flutuantes na encosta!)
+    const stoneWallMat = new THREE.MeshLambertMaterial({ color: 0x645E58, flatShading: true });
+    const warmEarthMat = new THREE.MeshLambertMaterial({ color: 0x8F6D4F, flatShading: true });
+    const darkSoilMat = new THREE.MeshLambertMaterial({ color: 0x4A3423, flatShading: true });
+    const timberBorderMat = new THREE.MeshLambertMaterial({ color: 0x5C3B24, flatShading: true });
+
+    const baseH = Math.max(4.2, (agroY - agroYMin) + 3.2);
+    const terracePlinth = new THREE.Mesh(new THREE.BoxGeometry(13.2, baseH, 10.4), stoneWallMat);
+    terracePlinth.position.set(0, -baseH * 0.5 + 0.12, 0);
+    terracePlinth.receiveShadow = true;
+    terracePlinth.castShadow = true;
+    agroGroup.add(terracePlinth);
+
+    const terraceTop = new THREE.Mesh(new THREE.BoxGeometry(12.8, 0.20, 10.0), warmEarthMat);
+    terraceTop.position.set(0, 0.14, 0);
+    terraceTop.receiveShadow = true;
+    agroGroup.add(terraceTop);
+
+    // Escadinha frontal de pedra conectando o patamar agrícola à encosta sul (+Z)
+    for (let st = 0; st < 3; st++) {
+      const step = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.36, 0.52), stoneWallMat);
+      step.position.set(-1.2, 0.02 - st * 0.22, 5.2 + st * 0.48);
+      step.receiveShadow = true;
+      agroGroup.add(step);
+    }
+
+    // 4 Canteiros escalonados em moldura de madeira com hortaliças variadas
+    const bedSpecs = [
+      { x: -3.2, z: -2.0, col: 0x16A34A },
+      { x: -3.2, z: 0.6,  col: 0x22C55E },
+      { x: -3.2, z: 3.0,  col: 0x15803D },
+      { x: 1.4,  z: 2.8,  col: 0x4ADE80 }
+    ];
+    bedSpecs.forEach((bs) => {
+      const frame = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.38, 1.55), timberBorderMat);
+      frame.position.set(bs.x, 0.38, bs.z);
+      frame.receiveShadow = true;
+      agroGroup.add(frame);
+
+      const soil = new THREE.Mesh(new THREE.BoxGeometry(4.15, 0.10, 1.32), darkSoilMat);
+      soil.position.set(bs.x, 0.56, bs.z);
+      agroGroup.add(soil);
+
+      const cropMat = new THREE.MeshLambertMaterial({ color: bs.col, flatShading: true });
+      for (let cx = -1.5; cx <= 1.5; cx += 0.75) {
+        const plant = new THREE.Mesh(new THREE.DodecahedronGeometry(0.26, 0), cropMat);
+        plant.position.set(bs.x + cx, 0.75, bs.z);
+        agroGroup.add(plant);
+      }
     });
 
-    // Canteiros e arbustos frutíferos (mamoeiros e bananeiras)
-    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4E342E });
+    // Árvores frutíferas tropicais (mamoeiros e cítricos na ala norte/leste do terraço)
+    const trunkMat = new THREE.MeshLambertMaterial({ color: 0x4E342E, flatShading: true });
     const leafMat = new THREE.MeshLambertMaterial({ color: 0x16A34A, flatShading: true });
-    const fruitMat = new THREE.MeshLambertMaterial({ color: 0xF59E0B });
+    const fruitMat = new THREE.MeshLambertMaterial({ color: 0xF59E0B, flatShading: true });
 
     const fruitSpots = [
-      { x: -4.0, z: -1.8 }, { x: -1.5, z: -2.0 }, { x: 2.0, z: -1.6 },
-      { x: -3.0, z: 1.5 },  { x: 1.0, z: 1.8 },   { x: 4.5, z: 1.2 }
+      { x: -4.6, z: -3.8 }, { x: -1.4, z: -3.8 }, { x: 1.6, z: -3.6 },
+      { x: 4.8,  z: -0.4 }, { x: 4.6,  z: 2.8 }
     ];
     fruitSpots.forEach(pt => {
       const tree = new THREE.Group();
-      tree.position.set(pt.x, 0.4, pt.z);
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.14, 2.2, 5), trunkMat);
+      tree.position.set(pt.x, 0.22, pt.z);
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.15, 2.2, 5), trunkMat);
       trunk.position.y = 1.1;
+      trunk.castShadow = true;
       tree.add(trunk);
 
       for (let l = 0; l < 5; l++) {
         const lAngle = (l / 5) * Math.PI * 2;
-        const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.4, 4), leafMat);
-        leaf.position.set(Math.cos(lAngle) * 0.4, 2.0, Math.sin(lAngle) * 0.4);
+        const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.38, 1.4, 4), leafMat);
+        leaf.position.set(Math.cos(lAngle) * 0.42, 2.0, Math.sin(lAngle) * 0.42);
         leaf.rotation.x = Math.cos(lAngle) * 0.55;
         leaf.rotation.z = Math.sin(lAngle) * 0.55;
         tree.add(leaf);
       }
 
-      // Frutos pendurados
-      const fruit = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 6), fruitMat);
-      fruit.position.set(0, 1.8, 0.15);
+      const fruit = new THREE.Mesh(new THREE.SphereGeometry(0.15, 6, 6), fruitMat);
+      fruit.position.set(0, 1.78, 0.16);
       tree.add(fruit);
 
       agroGroup.add(tree);
     });
 
     // Bica d'água da serra com cocho de pedra
-    const troughMat = new THREE.MeshLambertMaterial({ color: 0x475569 });
-    const waterMat = new THREE.MeshBasicMaterial({ color: 0x38BDF8, transparent: true, opacity: 0.75 });
+    const troughMat = new THREE.MeshLambertMaterial({ color: 0x475569, flatShading: true });
+    const waterMat = new THREE.MeshBasicMaterial({ color: 0x38BDF8, transparent: true, opacity: 0.80 });
     const trough = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.5, 0.8), troughMat);
-    trough.position.set(-4.5, 0.25, 3.2);
+    trough.position.set(1.2, 0.44, -0.4);
     agroGroup.add(trough);
 
     const waterSurface = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.05, 0.65), waterMat);
-    waterSurface.position.set(-4.5, 0.45, 3.2);
+    waterSurface.position.set(1.2, 0.65, -0.4);
     agroGroup.add(waterSurface);
 
-    // Cano de bambu vertendo água
-    const bamboo = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 1.1, 5), new THREE.MeshLambertMaterial({ color: 0xD4B886 }));
-    bamboo.rotation.x = Math.PI / 3;
-    bamboo.position.set(-4.5, 0.7, 2.8);
-    agroGroup.add(bamboo);
-
-    // Paiol de ferramentas rústico
-    const shedMat = new THREE.MeshLambertMaterial({ color: 0x5C4033, flatShading: true });
-    const shed = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.1, 2.0), shedMat);
-    shed.position.set(4.2, 1.05, -3.2);
+    // Paiol de ferramentas & Pergolado de colheita com lanterna quente
+    const shedMat = new THREE.MeshLambertMaterial({ color: 0x6C4A2D, flatShading: true });
+    const shed = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.1, 2.2), shedMat);
+    shed.position.set(4.1, 1.25, -2.9);
     shed.castShadow = true;
     agroGroup.add(shed);
 
-    const shedRoof = new THREE.Mesh(new THREE.ConeGeometry(1.8, 0.8, 4), new THREE.MeshLambertMaterial({ color: 0xB45309 }));
+    const shedRoof = new THREE.Mesh(new THREE.ConeGeometry(2.1, 0.9, 4), new THREE.MeshLambertMaterial({ color: 0xB45309, flatShading: true }));
     shedRoof.rotation.y = Math.PI / 4;
-    shedRoof.position.set(4.2, 2.45, -3.2);
+    shedRoof.position.set(4.1, 2.7, -2.9);
     agroGroup.add(shedRoof);
 
+    // Lanterna quente de alpendre no paiol do Sítio Agroflorestal (mantém contrato de 5 PointLights na cena)
+    const porchLight = new THREE.PointLight(0xF59E0B, 1.4, 8);
+    porchLight.position.set(2.5, 2.1, -2.4);
+    agroGroup.add(porchLight);
+
+    this.propObstacles = this.propObstacles || [];
+    this.propObstacles.push({ x: agroX, z: agroZ, hw: 6.4, hd: 5.0, rotY: 0 });
+    if (this.infrastructureNodes) {
+      this.infrastructureNodes.push({ x: agroX, z: agroZ, r: 7.8, name: 'Pomar & Sítio Agroflorestal' });
+    }
+
     lifeGroup.add(agroGroup);
-
-    // 3. TRILHA DA CRISTA ORIENTAL (x: 70, z: -72)
-    const cristaX = 70.0, cristaZ = -72.0;
-    const cristaY = this.terrain ? this.terrain.getElevation(cristaX, cristaZ) : 12.5;
-    const cristaGroup = new THREE.Group();
-    cristaGroup.position.set(cristaX, cristaY, cristaZ);
-
-    const cristaDeck = new THREE.Mesh(new THREE.CylinderGeometry(3.5, 3.8, 1.2, 8), deckMat);
-    cristaDeck.position.y = -0.5;
-    cristaGroup.add(cristaDeck);
-
-    const cristaBench = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.45, 0.6), plankMat);
-    cristaBench.position.set(0, 0.35, 0.8);
-    cristaGroup.add(cristaBench);
-
-    lifeGroup.add(cristaGroup);
-
     this.group.add(lifeGroup);
   }
 };

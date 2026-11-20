@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { isNearRoad } from '../RoadNetworkData.js';
 
 /** Encostas leste e oeste, mata atlântica, miradouros laterais e olarias. */
 export const HillsidesMixin = {
@@ -446,9 +447,9 @@ export const HillsidesMixin = {
       return m;
     };
 
-    // 2 Motos estacionadas em 45°
-    motoGroup.add(buildMoto(-1.6, 2.2, Math.PI / 3, 0xDC2626)); // Moto Vermelha
-    motoGroup.add(buildMoto(0.8, 2.4, Math.PI / 3.5, 0x1E293B)); // Moto Preta
+    // 2 Motos estacionadas em 45° dentro da baia coberta (afastadas da pista em Z=18)
+    motoGroup.add(buildMoto(-1.4, 1.0, Math.PI / 3, 0xDC2626)); // Moto Vermelha
+    motoGroup.add(buildMoto(0.9, 1.1, Math.PI / 3.5, 0x1E293B)); // Moto Preta
 
     eastExpGroup.add(motoGroup);
 
@@ -542,8 +543,8 @@ export const HillsidesMixin = {
       { x: 114.4, z: -10.8, hw: 1.15, hd: 0.75, rotY: 0, ignoreRoles: ['Atleta de Calistenia'] },
       { x: 110.6, z: -10.2, hw: 1.65, hd: 0.85, rotY: 0 },
       { x: 92.0, z: 13.4, hw: 1.6, hd: 0.55, rotY: 0 },
-      { x: 90.4, z: 16.2, r: 1.05 },
-      { x: 92.8, z: 16.4, r: 1.05 },
+      { x: 90.6, z: 15.0, r: 0.95 },
+      { x: 92.9, z: 15.1, r: 0.95 },
       { x: 126.0, z: 56.9, hw: 2.05, hd: 0.55, rotY: 0 },
       { x: 127.4, z: 58.8, r: 0.75 }
     );
@@ -816,168 +817,93 @@ export const HillsidesMixin = {
     this.group.add(deckGroup);
   },
 
-  // 8. A GRANDE OLARIA IMPERIAL & CERÂMICA COMUNITÁRIA (Fornos de Barro e Telhas)
-  createGrandeOlariaCeramica(pos = { x: 95, z: -18 }) {
-    const olariaGroup = new THREE.Group();
-    const y = this.terrain ? this.terrain.getElevation(pos.x, pos.z) : 5.2;
-    olariaGroup.position.set(pos.x, y, pos.z);
-
-    // Terraced pad foundation
-    const ground = new THREE.Mesh(
-      new THREE.CylinderGeometry(8.5, 9.2, 1.8, 14),
-      new THREE.MeshLambertMaterial({ color: 0x6E4C33, flatShading: true })
-    );
-    ground.position.y = -0.7;
-    ground.receiveShadow = true;
-    olariaGroup.add(ground);
-
-    const brickRedMat = new THREE.MeshLambertMaterial({ color: 0xB45309, flatShading: true });
-    const darkBrickMat = new THREE.MeshLambertMaterial({ color: 0x78350F, flatShading: true });
-
-    // 2 Traditional Dome Brick Kilns (Fornos de Barro de Queima Contínua)
-    for (let k = 0; k < 2; k++) {
-      const kilnX = -2.8 + k * 4.6;
-      const kGroup = new THREE.Group();
-
-      // Kiln cylinder base
-      const base = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.8, 1.8, 10), brickRedMat);
-      base.position.y = 0.9;
-      base.castShadow = true;
-      kGroup.add(base);
-
-      // Kiln dome top
-      const dome = new THREE.Mesh(new THREE.SphereGeometry(1.6, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), brickRedMat);
-      dome.position.y = 1.8;
-      kGroup.add(dome);
-
-      // Chimney stack
-      const chim = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.45, 2.2, 6), darkBrickMat);
-      chim.position.set(0, 3.4, 0);
-      kGroup.add(chim);
-
-      // Glowing arched doorway
-      const door = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.3), new THREE.MeshBasicMaterial({ color: 0x1E1B18 }));
-      door.position.set(0, 0.5, 1.6);
-      kGroup.add(door);
-
-      // Fire ember pointlight
-      const fireGlow = new THREE.PointLight(0xEA580C, 1.8, 8);
-      fireGlow.position.set(0, 0.6, 1.8);
-      kGroup.add(fireGlow);
-      if (k === 0) this.kilnFire = fireGlow;
-
-      kGroup.position.set(kilnX, 0, -2.5);
-      olariaGroup.add(kGroup);
-    }
-
-    // Open Timber Tile Curing Shed (Barracão de Secagem de Telhas)
-    const shed = new THREE.Group();
-    const woodMat = new THREE.MeshLambertMaterial({ color: 0x5C4033 });
-    for (let pX of [-2.4, 2.4]) {
-      for (let pZ of [-1.5, 1.5]) {
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 2.4, 4), woodMat);
-        post.position.set(pX, 1.2, pZ);
-        shed.add(post);
-      }
-    }
-    const tileRoofMat = new THREE.MeshLambertMaterial({ color: 0xC2410C, flatShading: true });
-    const roof = new THREE.Mesh(new THREE.ConeGeometry(3.6, 1.2, 4), tileRoofMat);
-    roof.position.set(0, 2.8, 0);
-    roof.rotation.y = Math.PI / 4;
-    shed.add(roof);
-
-    // Stacks of terracotta tiles inside
-    for (let t = -1.6; t <= 1.6; t += 0.55) {
-      const tileStack = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.8, 1.8), tileRoofMat);
-      tileStack.position.set(t, 0.4, 0);
-      shed.add(tileStack);
-    }
-    shed.position.set(0, 0, 3.0);
-    olariaGroup.add(shed);
-
-    // Finished brick pallets
-    for (let p = 0; p < 3; p++) {
-      const pallet = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.8, 0.9), brickRedMat);
-      pallet.position.set(4.5, 0.4, -1.0 + p * 1.5);
-      pallet.castShadow = true;
-      olariaGroup.add(pallet);
-    }
-
-    this.group.add(olariaGroup);
-    this.propObstacles = this.propObstacles || [];
-    this.propObstacles.push(
-      { x: pos.x - 2.8, z: pos.z - 2.5, r: 2.15 },
-      { x: pos.x + 1.8, z: pos.z - 2.5, r: 2.15 },
-      { x: pos.x, z: pos.z + 3.0, hw: 2.8, hd: 1.9, rotY: 0 },
-      { x: pos.x + 4.5, z: pos.z + 0.5, hw: 1.0, hd: 2.2, rotY: 0 }
-    );
-  },
-
   createBrickOlaria(pos) {
     const olariaGroup = new THREE.Group();
-    // Apoiado diretamente no terreno plano esculpido (sem base)
-    const y = this.terrain ? this.terrain.getElevation(pos.x, pos.z) + 0.1 : 6.8;
-    olariaGroup.position.set(pos.x, y, pos.z);
+    const getElev = (px, pz) => (this.terrain ? this.terrain.getElevation(px, pz) : 6.8);
+    const yC = getElev(pos.x, pos.z);
+    const yMin = Math.min(yC, getElev(pos.x - 6, pos.z - 5), getElev(pos.x + 6, pos.z - 5), getElev(pos.x - 6, pos.z + 5), getElev(pos.x + 6, pos.z + 5));
+    const yMax = Math.max(yC, getElev(pos.x - 6, pos.z - 5), getElev(pos.x + 6, pos.z - 5));
+    const anchorY = Math.max(yC, yMax - 0.06);
+    olariaGroup.position.set(pos.x, anchorY, pos.z);
 
-    // Traditional red brick dome kiln (Forno de Queima de Tijolos)
+    // Embasamento de pedra e pátio de barro batido para a Olaria Comunitária Central
+    const baseH = Math.max(3.6, (anchorY - yMin) + 2.8);
+    const stonePlinth = new THREE.Mesh(
+      new THREE.BoxGeometry(13.6, baseH, 9.8),
+      new THREE.MeshLambertMaterial({ color: 0x645E58, flatShading: true })
+    );
+    stonePlinth.position.set(0, -baseH * 0.5 + 0.08, 0);
+    stonePlinth.receiveShadow = true;
+    olariaGroup.add(stonePlinth);
+
+    const yardFloor = new THREE.Mesh(
+      new THREE.BoxGeometry(13.2, 0.18, 9.4),
+      new THREE.MeshLambertMaterial({ color: 0x8C6244, flatShading: true })
+    );
+    yardFloor.position.set(0, 0.09, 0);
+    yardFloor.receiveShadow = true;
+    olariaGroup.add(yardFloor);
+
+    // 2 Traditional Red Brick Dome Kilns (Fornos Gêmeos de Queima de Tijolos & Telhas)
     const kilnMat = new THREE.MeshLambertMaterial({ color: 0x8C2D19, flatShading: true });
-    const kilnBody = new THREE.Mesh(new THREE.CylinderGeometry(2.4, 2.8, 2.6, 10), kilnMat);
-    kilnBody.position.set(-3.5, 1.3, 0);
-    kilnBody.castShadow = true;
-    olariaGroup.add(kilnBody);
+    const chimneyMat = new THREE.MeshLambertMaterial({ color: 0x481E14, flatShading: true });
+    [-3.8, -0.6].forEach((kx, kIdx) => {
+      const kScale = kIdx === 0 ? 1.0 : 0.82;
+      const kilnBody = new THREE.Mesh(new THREE.CylinderGeometry(1.7 * kScale, 2.0 * kScale, 2.2 * kScale, 10), kilnMat);
+      kilnBody.position.set(kx, 1.1 * kScale, -1.2);
+      kilnBody.castShadow = true;
+      olariaGroup.add(kilnBody);
 
-    const kilnCap = new THREE.Mesh(new THREE.ConeGeometry(2.4, 1.2, 10), kilnMat);
-    kilnCap.position.set(-3.5, 3.2, 0);
-    olariaGroup.add(kilnCap);
+      const kilnCap = new THREE.Mesh(new THREE.SphereGeometry(1.7 * kScale, 10, 7, 0, Math.PI * 2, 0, Math.PI * 0.5), kilnMat);
+      kilnCap.position.set(kx, 2.2 * kScale, -1.2);
+      olariaGroup.add(kilnCap);
 
-    // Smoking chimney stack
-    const chimney = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.35, 0.45, 3.8, 6),
-      new THREE.MeshLambertMaterial({ color: 0x481E14 })
-    );
-    chimney.position.set(-3.5, 4.6, 0);
-    olariaGroup.add(chimney);
+      const chimney = new THREE.Mesh(new THREE.CylinderGeometry(0.26 * kScale, 0.36 * kScale, 3.2 * kScale, 6), chimneyMat);
+      chimney.position.set(kx, 3.8 * kScale, -1.2);
+      olariaGroup.add(chimney);
 
-    // Fire glow from kiln door
-    const fireDoor = new THREE.Mesh(
-      new THREE.BoxGeometry(0.8, 0.9, 0.2),
-      new THREE.MeshBasicMaterial({ color: 0xFF5400 })
-    );
-    fireDoor.position.set(-3.5, 0.6, 2.7);
-    olariaGroup.add(fireDoor);
+      const fireDoor = new THREE.Mesh(
+        new THREE.BoxGeometry(0.68 * kScale, 0.82 * kScale, 0.2),
+        new THREE.MeshBasicMaterial({ color: 0xFF5400 })
+      );
+      fireDoor.position.set(kx, 0.55 * kScale, -1.2 + 1.85 * kScale);
+      olariaGroup.add(fireDoor);
 
-    const fireGlow = new THREE.PointLight(0xFF6B00, 1.8, 8);
-    fireGlow.position.set(-3.5, 0.8, 3.0);
-    olariaGroup.add(fireGlow);
+      const fireGlow = new THREE.PointLight(kIdx === 0 ? 0xFF6B00 : 0xEA580C, 1.8, 8);
+      fireGlow.position.set(kx, 0.75 * kScale, -1.2 + 2.1 * kScale);
+      olariaGroup.add(fireGlow);
+      if (kIdx === 0) this.kilnFire = fireGlow;
+    });
 
     // Stacks of finished red clay bricks ready for transport
     const brickMat = new THREE.MeshLambertMaterial({ color: 0xB55338, flatShading: true });
     for (let bx = 0; bx < 3; bx++) {
       for (let bz = 0; bz < 2; bz++) {
-        const stack = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.1, 1.1), brickMat);
-        stack.position.set(1.5 + bx * 1.8, 0.55, -2.0 + bz * 2.2);
+        const stack = new THREE.Mesh(new THREE.BoxGeometry(1.3, 1.0, 1.0), brickMat);
+        stack.position.set(2.0 + bx * 1.65, 0.58, -2.0 + bz * 2.1);
         stack.castShadow = true;
         olariaGroup.add(stack);
       }
     }
 
-    // Wooden loading platform roof
-    const woodMat = new THREE.MeshLambertMaterial({ color: 0x6C4A2D });
+    // Wooden loading platform roof with ceramic tiles
+    const woodMat = new THREE.MeshLambertMaterial({ color: 0x6C4A2D, flatShading: true });
     for (let c = 0; c < 4; c++) {
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 3.2, 4), woodMat);
-      pole.position.set(1.0 + (c % 2) * 4.2, 1.6, -3.0 + Math.floor(c / 2) * 4.5);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.10, 3.1, 5), woodMat);
+      pole.position.set(1.5 + (c % 2) * 3.9, 1.6, -3.0 + Math.floor(c / 2) * 4.3);
       olariaGroup.add(pole);
     }
-    const shedRoof = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.15, 5.5), woodMat);
-    shedRoof.position.set(3.1, 3.2, -0.75);
+    const shedRoof = new THREE.Mesh(new THREE.BoxGeometry(4.8, 0.18, 5.2), new THREE.MeshLambertMaterial({ color: 0xB45309, flatShading: true }));
+    shedRoof.position.set(3.45, 3.18, -0.85);
+    shedRoof.rotation.x = 0.12;
     olariaGroup.add(shedRoof);
 
     this.group.add(olariaGroup);
     this.olaria = olariaGroup;
     this.propObstacles = this.propObstacles || [];
     this.propObstacles.push(
-      { x: pos.x - 3.5, z: pos.z, r: 3.15 },
-      { x: pos.x + 3.2, z: pos.z - 0.9, hw: 2.75, hd: 2.15, rotY: 0 }
+      { x: pos.x - 2.3, z: pos.z - 1.2, hw: 3.4, hd: 2.2, rotY: 0 },
+      { x: pos.x + 3.4, z: pos.z - 0.9, hw: 2.6, hd: 2.2, rotY: 0 }
     );
   },
 
@@ -1002,7 +928,7 @@ export const HillsidesMixin = {
     const wireMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
 
     // 1. ELEVATED COMMUNITY WATER TANKS ON BRICK / TIMBER STILTS (Caixas d'Água sobre palafitas)
-    // Iconic Rio hillside infrastructure supplying gravity-fed running water to the alleys
+    // Iconic Rio hillside infrastructure supplying gravity-fed running water to the alleys (100% fora das ruas!)
     const waterTankSpots = [
       { x: -14, z: -10, rot: 0.1 },
       { x: 14,  z: -10, rot: -0.1 },
@@ -1010,21 +936,22 @@ export const HillsidesMixin = {
       { x: 25,  z: -25, rot: -0.2 },
       { x: -6,  z: -34, rot: 0.05 },
       { x: 6,   z: -34, rot: -0.05 },
-      { x: -44, z: -22, rot: 0.15 },
-      { x: 44,  z: -22, rot: -0.15 },
+      { x: -42, z: -16, rot: 0.15 },
+      { x: 44,  z: -20, rot: -0.15 },
       { x: -70, z: -44, rot: 0.3 },
       { x: 70,  z: -44, rot: -0.3 },
       { x: -158, z: -2,  rot: 0.2 },
-      { x: -194, z: -20, rot: -0.15 },
+      { x: -194, z: -14, rot: -0.15 },
       { x: -234, z: -2,  rot: 0.25 },
       { x: 158,  z: -2,  rot: -0.2 },
-      { x: 194,  z: -20, rot: 0.15 },
+      { x: 194,  z: -14, rot: 0.15 },
       { x: 234,  z: -2,  rot: -0.25 },
-      { x: -82,  z: -144, rot: 0.1 },
-      { x: 82,   z: -144, rot: -0.1 }
+      { x: -82,  z: -136, rot: 0.1 },
+      { x: 82,   z: -136, rot: -0.1 }
     ];
 
     waterTankSpots.forEach(spot => {
+      if (isNearRoad(spot.x, spot.z, 2.2)) return;
       if (this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(spot.x, spot.z, 2.5)) return;
       if (this.infrastructureNodes && this.infrastructureNodes.some(n => Math.hypot(n.x - spot.x, n.z - spot.z) < 3.2)) return;
 
@@ -1076,27 +1003,26 @@ export const HillsidesMixin = {
       detailsGroup.add(tankTower);
     });
 
-    // 2. VARAIS DE ROUPA COMUNITÁRIOS (Free-standing hillside clotheslines)
-    // Clotheslines stretched on rustic timber posts with colorful fluttering laundry
+    // 2. VARAIS DE ROUPA COMUNITÁRIOS (Free-standing hillside clotheslines, 100% fora das ruas!)
     const clotheslineSpots = [
       { x: -18, z: -7,  rot: 0.3 },
-      { x: 18,  z: -7,  rot: -0.3 },
-      { x: -10, z: -19, rot: 0.1 },
-      { x: 10,  z: -19, rot: -0.1 },
+      { x: 14,  z: -7,  rot: -0.3 },
+      { x: -10, z: -24, rot: 0.1 },
+      { x: 10,  z: -24, rot: -0.1 },
       { x: -22, z: -31, rot: 0.4 },
       { x: 22,  z: -31, rot: -0.4 },
       { x: -36, z: -15, rot: 0.2 },
       { x: 36,  z: -15, rot: -0.2 },
       { x: -52, z: -34, rot: 0.35 },
-      { x: 52,  z: -34, rot: -0.35 },
+      { x: 44,  z: -34, rot: -0.35 },
       { x: -162, z: -6,  rot: 0.25 },
       { x: -204, z: -14, rot: -0.3 },
       { x: -238, z: -12, rot: 0.15 },
       { x: 162,  z: -6,  rot: -0.25 },
       { x: 204,  z: -14, rot: 0.3 },
       { x: 238,  z: -12, rot: -0.15 },
-      { x: -44,  z: -148, rot: 0.2 },
-      { x: 44,   z: -148, rot: -0.2 }
+      { x: -44,  z: -142, rot: 0.2 },
+      { x: 44,   z: -142, rot: -0.2 }
     ];
 
     const clothesColors = [0xFF5964, 0x35A7FF, 0xFFE74C, 0xFFFFFF, 0x10B981, 0xEC4899];
@@ -1105,6 +1031,7 @@ export const HillsidesMixin = {
     const clothGeo = new THREE.BoxGeometry(0.38, 0.52, 0.03);
 
     clotheslineSpots.forEach((clSpot, idx) => {
+      if (isNearRoad(clSpot.x, clSpot.z, 2.1)) return;
       if (this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(clSpot.x, clSpot.z, 2.0)) return;
       if (this.infrastructureNodes && this.infrastructureNodes.some(n => Math.hypot(n.x - clSpot.x, n.z - clSpot.z) < 2.8)) return;
 
@@ -1139,14 +1066,13 @@ export const HillsidesMixin = {
       detailsGroup.add(clGroup);
     });
 
-    // 3. BOSQUES DE BANANEIRAS & VEGETAÇÃO DE ENCOSTA (Banana groves & tropical greenery)
-    // Banana plants with arching leaves and pendant purple banana flower clusters
+    // 3. BOSQUES DE BANANEIRAS & VEGETAÇÃO DE ENCOSTA (100% fora das estradas!)
     const bananaClusters = [
       { x: -8,  z: -12 }, { x: 8,   z: -12 },
-      { x: -16, z: -23 }, { x: 16,  z: -23 },
+      { x: -24, z: -23 }, { x: 16,  z: -23 },
       { x: -32, z: -19 }, { x: 32,  z: -19 },
       { x: -3,  z: -36 }, { x: 3,   z: -36 },
-      { x: -50, z: -44 }, { x: 50,  z: -44 },
+      { x: -50, z: -44 }, { x: 42,  z: -44 },
       { x: -68, z: -28 }, { x: 68,  z: -28 }
     ];
 
@@ -1155,6 +1081,7 @@ export const HillsidesMixin = {
     const blossomGeo = new THREE.ConeGeometry(0.14, 0.38, 5);
 
     bananaClusters.forEach((cluster, cIdx) => {
+      if (isNearRoad(cluster.x, cluster.z, 2.5)) return;
       if (this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(cluster.x, cluster.z, 2.5)) return;
       if (this.infrastructureNodes && this.infrastructureNodes.some(n => Math.hypot(n.x - cluster.x, n.z - cluster.z) < 3.2)) return;
 

@@ -19,47 +19,60 @@ export const WorkersMixin = {
 
     const courier = candidates[0];
     courier.isCourier = true;
-    courier.courierState = 'traveling_to_site';
     courier.courierSite = siteData;
     courier.onDelivered = onDelivered;
     courier.waitTimer = 0;
     courier.cartRattleTimer = 0;
 
-    // Equip pushcart & hide tools
-    courier.cartGroup.visible = true;
-    courier.hat.visible = true;
-    courier.builderHelmet.visible = false;
-    courier.toolArm.visible = false;
-
-    // Inicia no cais de carga da Olaria
-    courier.group.position.set(
-      olariaPos.x,
-      this.getFloorElevation(olariaPos.x, olariaPos.z),
-      olariaPos.z
-    );
-    courier.currentNodeId = 'olaria_dock';
-
     // Roteamento inteligente por vias pavimentadas até o lote (nunca atravessa a Praça do Samba de carrinho!)
     const avoidPlaza = new Set(['plaza', 'mirante', 'portico', 'alameda']);
     const destRoadNode = this.getNearestRoadNode(siteData.plateau.x, siteData.plateau.z, null, (n) => !avoidPlaza.has(n.type))
       || this.getNearestRoadNode(siteData.plateau.x, siteData.plateau.z);
-    const courierPath = this.findRoadPath('olaria_dock', destRoadNode ? destRoadNode.id : 'olaria_dock', avoidPlaza);
-    courier.pathQueue = courierPath.slice(1);
-    if (courier.pathQueue.length > 0) {
-      courier.targetNodeId = courier.pathQueue.shift();
-      const nextNd = this.roadNodesMap.get(courier.targetNodeId);
-      courier.targetPos = nextNd ? nextNd.position.clone() : new THREE.Vector3(siteData.plateau.x, siteData.plateau.y, siteData.plateau.z);
-    } else {
-      courier.targetPos = new THREE.Vector3(siteData.plateau.x, siteData.plateau.y, siteData.plateau.z);
-    }
+    const destNodeId = destRoadNode ? destRoadNode.id : 'olaria_dock';
+
+    const distToOlaria = Math.hypot(courier.group.position.x - olariaPos.x, courier.group.position.z - olariaPos.z);
+    courier.hat.visible = true;
+    courier.builderHelmet.visible = false;
+    courier.toolArm.visible = false;
     courier.speed = 2.6; // brisk pushing pace
+
+    if (distToOlaria > 3.2) {
+      // Caminha pelas ruas até o cais da Olaria antes de pegar o carrinho (ZERO teleporte!)
+      courier.courierState = 'going_to_pickup';
+      courier.cartGroup.visible = false;
+      courier.pickupNodeId = 'olaria_dock';
+      courier.deliveryNodeId = destNodeId;
+      const startNode = this.getNearestRoadNode(courier.group.position.x, courier.group.position.z, courier.group.position.y, (n) => !avoidPlaza.has(n.type))
+        || this.getNearestRoadNode(courier.group.position.x, courier.group.position.z);
+      const toPickupPath = this.findRoadPath(startNode ? startNode.id : 'olaria_dock', 'olaria_dock', avoidPlaza);
+      courier.pathQueue = toPickupPath.slice(1);
+      if (courier.pathQueue.length > 0) {
+        courier.targetNodeId = courier.pathQueue.shift();
+        const nextNd = this.roadNodesMap.get(courier.targetNodeId);
+        courier.targetPos = nextNd ? nextNd.position.clone() : new THREE.Vector3(olariaPos.x, this.getFloorElevation(olariaPos.x, olariaPos.z), olariaPos.z);
+      } else {
+        courier.targetPos = new THREE.Vector3(olariaPos.x, this.getFloorElevation(olariaPos.x, olariaPos.z), olariaPos.z);
+      }
+    } else {
+      courier.courierState = 'traveling_to_site';
+      courier.cartGroup.visible = true;
+      courier.currentNodeId = 'olaria_dock';
+      const courierPath = this.findRoadPath('olaria_dock', destNodeId, avoidPlaza);
+      courier.pathQueue = courierPath.slice(1);
+      if (courier.pathQueue.length > 0) {
+        courier.targetNodeId = courier.pathQueue.shift();
+        const nextNd = this.roadNodesMap.get(courier.targetNodeId);
+        courier.targetPos = nextNd ? nextNd.position.clone() : new THREE.Vector3(siteData.plateau.x, siteData.plateau.y, siteData.plateau.z);
+      } else {
+        courier.targetPos = new THREE.Vector3(siteData.plateau.x, siteData.plateau.y, siteData.plateau.z);
+      }
+      if (this.soundtrack) {
+        this.soundtrack.playCartRattle(courier.group.position);
+      }
+    }
 
     const districtName = siteData.plateau.faction ? siteData.plateau.faction.toUpperCase() : 'o canteiro';
     courier.currentAction = `🚚 Carreto comunitário: transportando tijolos da Olaria para ${districtName}`;
-
-    if (this.soundtrack) {
-      this.soundtrack.playCartRattle(courier.group.position);
-    }
 
     return courier;
   },
@@ -129,7 +142,6 @@ export const WorkersMixin = {
 
     const dstY = this.getFloorElevation(dst.position.x, dst.position.z);
     courier.isCourier = true;
-    courier.courierState = 'delivering';
     courier.role = 'Carregador de Insumos';
     courier.currentAction = `Carreto: ${route.label || 'Suprimentos'}`;
     courier.courierSite = {
@@ -141,11 +153,36 @@ export const WorkersMixin = {
       if (onDelivered) onDelivered(route);
     };
 
-    if (courier.cartGroup) courier.cartGroup.visible = true;
-    const startY = this.getFloorElevation(src.position.x, src.position.z);
-    courier.group.position.set(src.position.x, startY, src.position.z);
-
     const avoidPlaza = new Set(['plaza', 'soccer', 'beach']);
+    const distToSrc = Math.hypot(courier.group.position.x - src.position.x, courier.group.position.z - src.position.z);
+    if (distToSrc > 3.2) {
+      // Caminha pelas ruas até o polo de origem antes de retirar a carga (ZERO teleporte!)
+      courier.courierState = 'going_to_pickup';
+      courier.pickupNodeId = route.fromNodeId;
+      courier.deliveryNodeId = route.toNodeId;
+      if (courier.cartGroup) courier.cartGroup.visible = false;
+      const startNode = this.getNearestRoadNode
+        ? this.getNearestRoadNode(courier.group.position.x, courier.group.position.z, courier.group.position.y, (n) => !avoidPlaza.has(n.type))
+        : src;
+      const startId = startNode ? startNode.id : route.fromNodeId;
+      const toSrcPath = this.findRoadPath ? this.findRoadPath(startId, route.fromNodeId, avoidPlaza) : [route.fromNodeId];
+      const queue = (toSrcPath && toSrcPath.length > 0) ? [...toSrcPath] : [route.fromNodeId];
+      if (queue[0] === startId && queue.length > 1) {
+        courier.currentNodeId = queue.shift();
+      } else {
+        courier.currentNodeId = startId;
+      }
+      courier.targetNodeId = queue.shift() || route.fromNodeId;
+      const nxt = this.roadNodesMap ? this.roadNodesMap.get(courier.targetNodeId) : null;
+      courier.targetPos = nxt ? nxt.position.clone() : src.position.clone();
+      courier.targetPos.y = this.getFloorElevation(courier.targetPos.x, courier.targetPos.z);
+      courier.pathQueue = queue;
+      return courier;
+    }
+
+    courier.courierState = 'delivering';
+    if (courier.cartGroup) courier.cartGroup.visible = true;
+
     const path = this.findRoadPath ? this.findRoadPath(route.fromNodeId, route.toNodeId, avoidPlaza) : [route.toNodeId];
     const queue = (path && path.length > 0) ? [...path] : [route.toNodeId];
     if (queue[0] === route.fromNodeId && queue.length > 1) {

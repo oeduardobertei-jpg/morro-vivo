@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createStylizedFigure } from '../npcs/population.js';
 import { getSharedStylizedMaterial } from '../../render/StylizedMaterials.js';
+import { isNearRoad } from '../RoadNetworkData.js';
 
 const _cmpInv = new THREE.Matrix4();
 const _cmpRel = new THREE.Matrix4();
@@ -176,13 +177,11 @@ export const HousesMixin = {
       this.createSambaPlaza({ x: -2, z: -4 });
       this.createSoccerField({ x: 55, z: 4 });
       this.createBrickOlaria({ x: -22, z: -14 });
-      this.createAgroforestFarm({ x: 82, z: -8 });
       this.createCulturalMarket({ x: 75, z: 4 });
       this.createSolarPark({ x: -18, z: -72 });
       this.createHighlandLandmarks();
       this.createWestPioneerCove({ x: -95, z: 0 });
       this.createMiranteDoPoente({ x: -98, z: -55 });
-      this.createGrandeOlariaCeramica({ x: 95, z: -18 });
       this.createMiranteDoLevante({ x: 98, z: -55 });
       this.createTorreDeRadioCume({ x: 0, z: -104 });
       this.createWestHillsideLife();
@@ -195,6 +194,11 @@ export const HousesMixin = {
       if (this.createSustainableSawmill) this.createSustainableSawmill({ x: 118, z: -48 });
       if (this.createPoultryAndButcherHub) this.createPoultryAndButcherHub();
       if (this.createMobilitySystems) this.createMobilitySystems();
+      if (this.terrain && this.terrain.monolithObstacles && this.propObstacles) {
+        for (const mo of this.terrain.monolithObstacles) {
+          this.propObstacles.push({ x: mo.x, z: mo.z, r: mo.r });
+        }
+      }
       this.infrastructureCreated = true;
     }
 
@@ -885,7 +889,8 @@ export const HousesMixin = {
     // realoca automaticamente o lote para a margem lateral da via (formando fachada de rua organizada!).
     const isSpotClean = (tx, tz) => {
       if (this.terrain && this.terrain.isProtectedLandmark && this.terrain.isProtectedLandmark(tx, tz, 2.8)) return false;
-      if (this.infrastructureNodes && this.infrastructureNodes.some(n => Math.hypot(n.x - tx, n.z - tz) < 3.8)) return false;
+      if (isNearRoad(tx, tz, 2.25)) return false;
+      if (this.infrastructureNodes && this.infrastructureNodes.some(n => Math.hypot(n.x - tx, n.z - tz) < Math.max(3.9, n.r || 3.9))) return false;
       if (this.houses && this.houses.some(h => Math.hypot(h.position.x - tx, h.position.z - tz) < 6.2)) return false;
       if (this.terrain) {
         const gy = this.terrain.getElevation(tx, tz);
@@ -1011,6 +1016,7 @@ export const HousesMixin = {
 
     // Patamar de pedra argamassada sob toda a projeção da casa (elimina aspecto de "caixa solta na grama")
     const plinthHeight = Math.max(0.95, slopeDelta + 0.85);
+    houseData.plinthHeight = plinthHeight;
     const stonePlinth = new THREE.Mesh(new THREE.BoxGeometry(4.6, plinthHeight, 4.3), stonePlinthMat);
     stonePlinth.position.set(0, -plinthHeight / 2 - 0.08, 0.1);
     stonePlinth.receiveShadow = true;
@@ -1095,9 +1101,9 @@ export const HousesMixin = {
       houseGroup.add(step);
     }
 
-    // EXTENSÃO DA CALÇADA ATÉ A RUA (Integração Orgânica)
-    if (nearestNode && minDist > 3.6 && minDist < 15.0) {
-      const numSlabs = Math.floor((minDist - 3.6) / 0.85);
+    // EXTENSÃO DA CALÇADA ATÉ O MEIO-FIO DA RUA (Para antes do asfalto para nunca invadir a pista!)
+    if (nearestNode && minDist > 5.2 && minDist < 15.0) {
+      const numSlabs = Math.floor((minDist - 5.2) / 0.85);
       const slabGeo = new THREE.BoxGeometry(1.2, 0.1, 0.8);
       const slabMat = getSharedStylizedMaterial(0x949FA9, 'stone', { flatShading: true });
       for (let s = 1; s <= numSlabs; s++) {
@@ -1105,6 +1111,7 @@ export const HousesMixin = {
         // Convert to global to get proper terrain height
         const gx = plat.x + Math.sin(naturalAngle) * distFromCenter;
         const gz = plat.z + Math.cos(naturalAngle) * distFromCenter;
+        if (isNearRoad(gx, gz, 0.25)) break;
         const gy = this.terrain ? this.terrain.getElevation(gx, gz) : groundY;
         const localY = gy - buildY;
         
@@ -1740,6 +1747,14 @@ export const HousesMixin = {
     houseData.laje = lajeGroup;
     houseData.roofStyle = roofStyle;
     houseData.lajeTopY = lajeY + 0.11;
+    houseData.collisionBounds = {
+      cxOff: 0.0,
+      czOff: 0.22,
+      hw: 2.58,
+      hd: 2.52,
+      baseY: houseData.position.y - Math.max(1.4, (houseData.plinthHeight || 1.5)),
+      topY: houseData.position.y + lajeY + 1.45
+    };
   },
 
   createClothesline() {
@@ -1864,14 +1879,14 @@ export const HousesMixin = {
     const makeTerrace = (x, z, w, d, topMat) => {
       const g = new THREE.Group();
       const yC = getElev(x, z);
-      const yMin = Math.min(
-        yC,
-        getElev(x - w * 0.5, z - d * 0.5),
-        getElev(x + w * 0.5, z - d * 0.5),
-        getElev(x - w * 0.5, z + d * 0.5),
-        getElev(x + w * 0.5, z + d * 0.5)
-      );
-      const baseH = Math.max(4.5, (yC - yMin) + 3.8);
+      const c1 = getElev(x - w * 0.5, z - d * 0.5);
+      const c2 = getElev(x + w * 0.5, z - d * 0.5);
+      const c3 = getElev(x - w * 0.5, z + d * 0.5);
+      const c4 = getElev(x + w * 0.5, z + d * 0.5);
+      const yMin = Math.min(yC, c1, c2, c3, c4);
+      const yMax = Math.max(yC, c1, c2, c3, c4);
+      const anchorY = Math.max(yC, yMax - 0.06);
+      const baseH = Math.max(4.5, (anchorY - yMin) + 3.8);
       const base = new THREE.Mesh(new THREE.BoxGeometry(w - 0.15, baseH, d - 0.15), matFoundationStone);
       base.position.y = -baseH * 0.5 + 0.14;
       base.receiveShadow = true;
@@ -1891,7 +1906,7 @@ export const HousesMixin = {
         g.add(step);
       }
 
-      g.position.set(x, yC, z);
+      g.position.set(x, anchorY, z);
       if (this.infrastructureNodes) {
         this.infrastructureNodes.push({ x, z, r: Math.max(w, d) * 0.65 });
       }
@@ -2187,10 +2202,10 @@ export const HousesMixin = {
     );
     freezeHub(amphiGroup);
 
-    // 11 & 12. DOIS LARGOS DE BAIRRO COM IPÊ FLORIDO (Oeste Amarelo -62,-66 | Leste Rosa 56,-64)
+    // 11 & 12. DOIS LARGOS DE BAIRRO COM IPÊ FLORIDO (Oeste Amarelo -62,-60 | Leste Rosa 46,-60 — recuados das pistas!)
     const pocketPlazas = [
-      { cx: -62, cz: -66, bloomColor: 0xFACC15 },
-      { cx: 56,  cz: -64, bloomColor: 0xEC4899 }
+      { cx: -62, cz: -60, bloomColor: 0xFACC15 },
+      { cx: 46,  cz: -60, bloomColor: 0xEC4899 }
     ];
     pocketPlazas.forEach((pp) => {
       const largo = new THREE.Group();

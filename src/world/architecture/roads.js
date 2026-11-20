@@ -1,5 +1,14 @@
 import * as THREE from 'three';
 import { getSharedStylizedMaterial } from '../../render/StylizedMaterials.js';
+import {
+  ROAD_ROUTES,
+  ROAD_TIERS,
+  ROAD_JUNCTIONS,
+  ROAD_HALF_W,
+  ROAD_CURB_W,
+  getMinRoadCenterDistance,
+  isNearRoad
+} from '../RoadNetworkData.js';
 
 /** Vias, alameda do samba, bocas de boteco, estradas de laje e postes. */
 export const RoadsMixin = {
@@ -8,19 +17,15 @@ export const RoadsMixin = {
     if (Math.abs(sx - 55.0) < 18.0 && Math.abs(sz - 4.0) < 13.0) return true; // Campinho de Futebol
     if (Math.abs(sx - 75.0) < 9.5 && Math.abs(sz - 4.0) < 7.5) return true;   // Mercado Cultural
     if (Math.abs(sx - (-22.0)) < 8.5 && Math.abs(sz - (-14.0)) < 6.5) return true; // Olaria Central
-    if (Math.hypot(sx - 95.0, sz - (-18.0)) < 8.2) return true;               // Grande Olaria Leste
-    if (Math.abs(sx - 82.0) < 9.5 && Math.abs(sz - (-8.0)) < 6.5) return true; // Agrofloresta
-    if (Math.abs(sx - 75.0) < 8.2 && Math.abs(sz - (-45.0)) < 5.8) return true; // Socalcos Leste
-    if (Math.abs(sx - 96.0) < 6.5 && Math.abs(sz - (-28.0)) < 5.0) return true; // Pomar Agroflorestal
+    if (Math.abs(sx - 96.0) < 7.5 && Math.abs(sz - (-28.0)) < 5.8) return true; // Pomar & Sítio Agroflorestal
     if (Math.hypot(sx - (-2.0), sz - (-4.0)) < 9.2) return true;              // Praça do Samba
     if (Math.abs(sx - (-2.0)) < 3.4 && sz > -19.0 && sz < -12.2) return true; // Escadaria da Alameda do Samba
     if (Math.abs(sx - (-18.0)) < 11.2 && Math.abs(sz - (-72.0)) < 8.6) return true; // Parque Solar da Serra
-    if (Math.hypot(sx - (-8.0), sz - (-65.0)) < 4.5) return true;             // Nascente da Serra
+    if (Math.hypot(sx - (-19.5), sz - (-56.5)) < 4.2) return true;            // Nascente da Serra
     if (Math.hypot(sx - 0.0, sz - (-104.0)) < 4.8) return true;               // Torre de Rádio
     if (Math.hypot(sx - 50.0, sz - (-110.0)) < 8.8) return true;              // Deck do Mirante Imperial
     if (Math.hypot(sx - (-78.0), sz - (-50.0)) < 8.6) return true;            // Deck do Mirante das Pipas
     if (Math.hypot(sx - 88.0, sz - (-48.0)) < 6.8) return true;               // Deck do Pipódromo do Levante
-    if (Math.hypot(sx - 70.0, sz - (-72.0)) < 4.4) return true;               // Deck da Trilha da Crista
     if (Math.hypot(sx - (-95.0), sz - (-68.0)) < 4.6) return true;            // Deck das Falésias do Poente
     if (Math.hypot(sx - (-98.0), sz - (-55.0)) < 5.2) return true;            // Mirante do Poente
     if (Math.hypot(sx - 98.0, sz - (-55.0)) < 5.2) return true;               // Mirante do Levante
@@ -35,13 +40,13 @@ export const RoadsMixin = {
     if (Math.hypot(sx - 216.0, sz - (-14.0)) < 10.0) return true;   // Praça da Bocha do Vale do Levante
     if (Math.hypot(sx - (-66.0), sz - (-132.0)) < 9.5) return true; // Sítio Agroecológico Sela Oeste
     if (Math.hypot(sx - (-2.0), sz - (-170.0)) < 9.5) return true;  // Anfiteatro de Pedra Sela Norte
-    if (Math.hypot(sx - (-62.0), sz - (-66.0)) < 6.0) return true;  // Largo Comunitário Oeste
-    if (Math.hypot(sx - 56.0, sz - (-64.0)) < 6.0) return true;     // Largo Comunitário Leste
+    if (Math.hypot(sx - (-62.0), sz - (-60.0)) < 5.8) return true;  // Largo Comunitário Oeste
+    if (Math.hypot(sx - 46.0, sz - (-60.0)) < 5.8) return true;     // Largo Comunitário Leste
     return false;
   },
 
   createContinentalRoadNetwork() {
-    // Pavimentação Urbana Carioca: Asfalto contínuo de ladeira e meio-fio de granito
+    // Pavimentação Urbana Carioca: Asfalto contínuo de ladeira e meio-fio de granito sem guias cruzando encruzilhadas!
     const roadMat = getSharedStylizedMaterial(0x3E3B38, 'asphalt', {
       flatShading: true,
       side: THREE.DoubleSide
@@ -51,95 +56,15 @@ export const RoadsMixin = {
       side: THREE.DoubleSide
     });
 
-    const routes = [
-      // 1. Avenida Beira-Mar (Grande Calçadão Litorâneo: Z = 18.0, X de -285 a +285)
-      [
-        { x: -285, z: 18.0 }, { x: -245, z: 18.0 }, { x: -205, z: 18.0 }, { x: -165, z: 18.0 },
-        { x: -125, z: 18.0 }, { x: -102, z: 18.0 }, { x: -78, z: 18.0 },  { x: -50, z: 18.0 },
-        { x: -20, z: 18.0 },  { x: 0, z: 18.0 },    { x: 15, z: 18.0 },   { x: 45, z: 18.0 },
-        { x: 75, z: 18.0 },   { x: 102, z: 18.0 },  { x: 125, z: 18.0 },  { x: 165, z: 18.0 },
-        { x: 205, z: 18.0 },  { x: 245, z: 18.0 },  { x: 285, z: 18.0 }
-      ],
-      // 2. Ladeira do Morro do Sol (Subida Central do Morro: Orla -> Colina Sul -> Alameda -> Olaria -> Serra)
-      [
-        { x: 15, z: 18.0 },   { x: 22, z: 10.0 },   { x: 24, z: 0.0 },    { x: 20, z: -10.0 },
-        { x: 14, z: -18.0 },  { x: -2, z: -19.5 },  { x: -15, z: -18.0 }, { x: -22, z: -14.0 }
-      ],
-      // 3. Eixo Central da Serra (Continuação suave subindo a encosta oeste até o Platô do Alto da Serra)
-      [
-        { x: -15, z: -18.0 }, { x: -18, z: -28.0 }, { x: -16, z: -40.0 }, { x: -10, z: -52.0 }, { x: 0, z: -66.0 }
-      ],
-      // 4. Ladeira da Várzea (Subida Oriental: Polo da Várzea contornando suavemente a encosta leste)
-      [
-        { x: 75, z: 18.0 },   { x: 85, z: 10.0 },   { x: 82, z: -2.0 },   { x: 78, z: -14.0 },
-        { x: 62, z: -22.0 },  { x: 46, z: -26.0 },  { x: 28, z: -32.0 },  { x: 14, z: -46.0 }, { x: 0, z: -66.0 }
-      ],
-      // 5. Ladeira da Prainha (Subida Ocidental: Porto da Prainha contornando suavemente a encosta oeste)
-      [
-        { x: -78, z: 18.0 },  { x: -75, z: 14.0 },  { x: -70, z: 2.0 },   { x: -65, z: -10.0 },
-        { x: -52, z: -20.0 }, { x: -35, z: -30.0 }, { x: -20, z: -42.0 }, { x: 0, z: -66.0 }
-      ],
-      // 6. Estrada da Crista & Mirante Imperial (Platô da Serra -> Mirante Imperial)
-      [
-        { x: 0, z: -66.0 },   { x: 16, z: -74.0 },  { x: 32, z: -86.0 },  { x: 46, z: -96.0 }, { x: 50, z: -102.0 }
-      ],
-      // 7. Estrada da Torre de Rádio (Platô da Serra -> Cume Norte)
-      [
-        { x: 0, z: -66.0 },   { x: 0, z: -82.0 },   { x: 0, z: -100.0 },  { x: 0, z: -104.0 }
-      ],
-      // 8. Trilha Panorâmica da Coroa das Alturas
-      [
-        { x: -45, z: -85.0 }, { x: -24, z: -92.0 }, { x: 0, z: -96.0 },   { x: 24, z: -92.0 }, { x: 45, z: -85.0 }
-      ],
-      // 9. Estrada das Falésias do Poente (Vale Ocidental)
-      [
-        { x: -78, z: 18.0 },  { x: -115, z: 12.0 }, { x: -135, z: -20.0 }, { x: -154, z: -16.0 },
-        { x: -186, z: -22.0 }, { x: -216, z: -34.0 }, { x: -244, z: -22.0 }, { x: -266, z: 6.0 }, { x: -278, z: 18.0 }
-      ],
-      // 10. Estrada do Vale do Levante (Vale Oriental)
-      [
-        { x: 78, z: 18.0 },   { x: 115, z: 12.0 },  { x: 135, z: -20.0 }, { x: 154, z: -16.0 },
-        { x: 186, z: -22.0 }, { x: 216, z: -34.0 }, { x: 244, z: -22.0 }, { x: 266, z: 6.0 },  { x: 278, z: 18.0 }
-      ],
-      // 11. Estrada da Sela da Serra Norte (Contorno norte profundo)
-      [
-        { x: -116, z: -132.0 }, { x: -62, z: -152.0 }, { x: 0, z: -156.0 }, { x: 62, z: -152.0 }, { x: 116, z: -132.0 }
-      ],
-      // 12. Ramal da Estação Alta do Bondinho (liga Estrada da Crista à entrada norte da estação em X=32, Z=-58)
-      [
-        { x: 16, z: -74.0 }, { x: 25, z: -70.5 }, { x: 32, z: -65.4 }
-      ],
-      // 13. Subida Noroeste (Vale do Poente -> Vila da Sela Oeste, fechando anel noroeste)
-      [
-        { x: -154, z: -16.0 }, { x: -162, z: -34.0 }, { x: -158, z: -56.0 },
-        { x: -144, z: -80.0 }, { x: -132, z: -108.0 }, { x: -116, z: -132.0 }
-      ],
-      // 14. Subida Nordeste (Vale do Levante -> Vila da Sela Leste, fechando anel nordeste)
-      [
-        { x: 154, z: -16.0 }, { x: 162, z: -34.0 }, { x: 158, z: -56.0 },
-        { x: 144, z: -80.0 }, { x: 132, z: -108.0 }, { x: 116, z: -132.0 }
-      ],
-      // 15. Ramal Central da Sela Norte (liga Coroa das Alturas -> Largo/Anfiteatro da Sela)
-      [
-        { x: 0, z: -96.0 }, { x: 10, z: -104.0 }, { x: 12, z: -120.0 }, { x: 8, z: -138.0 }, { x: 0, z: -156.0 }
-      ],
-      // 16. Anel Médio Oeste (Ladeira da Prainha -> Largo Oeste -> Sela Poente)
-      [
-        { x: -35, z: -30.0 }, { x: -48, z: -56.0 }, { x: -66, z: -80.0 }, { x: -96, z: -98.0 }, { x: -136, z: -98.0 }
-      ],
-      // 17. Anel Médio Leste (Ladeira da Várzea -> Largo Leste -> Sela Levante)
-      [
-        { x: 46, z: -26.0 }, { x: 54, z: -52.0 }, { x: 68, z: -84.0 }, { x: 96, z: -98.0 }, { x: 136, z: -98.0 }
-      ]
-    ];
-
+    const routes = ROAD_ROUTES;
     const roadPositions = [];
     const curbPositions = [];
 
-    const halfW = 1.7; // Largura da pista asfáltica (3.4m)
-    const curbW = 0.22; // Largura do meio-fio de cantaria (0.22m)
+    const halfW = ROAD_HALF_W; // Largura da pista asfáltica (3.4m)
+    const curbW = ROAD_CURB_W; // Largura do meio-fio de cantaria (0.22m)
 
-    routes.forEach(route => {
+    routes.forEach((route, routeIdx) => {
+      const tierOffset = (ROAD_TIERS[routeIdx] || 0) * 0.005;
       // 1. Gera pontos de amostragem refinados (~1.2m)
       const points = [];
       for (let i = 0; i < route.length - 1; i++) {
@@ -153,7 +78,7 @@ export const RoadsMixin = {
           const z = p1.z + (p2.z - p1.z) * t;
           points.push({ x, z });
           // Registra nó de infraestrutura para evitar casas sobre as pistas
-          this.infrastructureNodes.push({ x, z });
+          this.infrastructureNodes.push({ x, z, r: 4.2 });
         }
       }
 
@@ -178,55 +103,88 @@ export const RoadsMixin = {
         const nx = -tz / len;
         const nz = tx / len;
 
-        // Pista Asfáltica (Esquerda e Direita)
+        // Pista Asfáltica com crista central coroada (4 triângulos por fatia) e micro-offset de camada:
+        // Garante que nenhuma ondulação convexa do terreno atravesse o centro do asfalto!
         const lx = p.x + nx * halfW;
         const lz = p.z + nz * halfW;
-        const ly = (this.terrain ? this.terrain.getElevation(lx, lz) : 2.5) + 0.08;
+        const ly = (this.terrain ? this.terrain.getElevation(lx, lz) : 2.5) + 0.12 + tierOffset;
 
         const rx = p.x - nx * halfW;
         const rz = p.z - nz * halfW;
-        const ry = (this.terrain ? this.terrain.getElevation(rx, rz) : 2.5) + 0.08;
+        const ry = (this.terrain ? this.terrain.getElevation(rx, rz) : 2.5) + 0.12 + tierOffset;
 
-        // Meio-fio Esquerdo (topo ligeiramente elevado +0.16m para relevo)
+        const rawCy = (this.terrain ? this.terrain.getElevation(p.x, p.z) : 2.5) + 0.13 + tierOffset;
+        const cy = Math.max(rawCy, (ly + ry) * 0.5 + 0.015);
+
+        // Meio-fio Esquerdo (topo ligeiramente elevado +0.19m para relevo)
         const clx = p.x + nx * (halfW + curbW);
         const clz = p.z + nz * (halfW + curbW);
-        const cly = (this.terrain ? this.terrain.getElevation(clx, clz) : 2.5) + 0.16;
+        const cly = Math.max(ly + 0.05, (this.terrain ? this.terrain.getElevation(clx, clz) : 2.5) + 0.19);
 
         // Meio-fio Direito
         const crx = p.x - nx * (halfW + curbW);
         const crz = p.z - nz * (halfW + curbW);
-        const cry = (this.terrain ? this.terrain.getElevation(crx, crz) : 2.5) + 0.16;
+        const cry = Math.max(ry + 0.05, (this.terrain ? this.terrain.getElevation(crx, crz) : 2.5) + 0.19);
 
         slices.push({
           l: [lx, ly, lz],
+          c: [p.x, cy, p.z],
           r: [rx, ry, rz],
           cl: [clx, cly, clz],
           cr: [crx, cry, crz]
         });
       }
 
-      // 3. Monta malha contínua (triângulos perfeitos sem dentes ou fendas)
+      // 3. Monta malha contínua suprimindo meios-fios internos dentro de encruzilhadas!
       for (let i = 0; i < slices.length - 1; i++) {
         const s0 = slices[i];
         const s1 = slices[i + 1];
 
-        // Superfície da Pista de Asfalto (2 triângulos por segmento)
+        // Superfície da Pista de Asfalto (4 triângulos por segmento acompanhando a crista central c)
         roadPositions.push(
-          ...s0.l, ...s0.r, ...s1.l,
-          ...s1.l, ...s0.r, ...s1.r
+          ...s0.l, ...s0.c, ...s1.l,
+          ...s1.l, ...s0.c, ...s1.c,
+          ...s0.c, ...s0.r, ...s1.c,
+          ...s1.c, ...s0.r, ...s1.r
         );
 
-        // Meio-fio Esquerdo (2 triângulos formando o topo da guia)
-        curbPositions.push(
-          ...s0.cl, ...s0.l, ...s1.cl,
-          ...s1.cl, ...s0.l, ...s1.l
-        );
+        // Verifica se o meio-fio esquerdo invade a caixa asfáltica de outra rota que cruza ou entronca aqui
+        const lMidX = (s0.cl[0] + s1.cl[0]) * 0.5;
+        const lMidZ = (s0.cl[2] + s1.cl[2]) * 0.5;
+        if (getMinRoadCenterDistance(lMidX, lMidZ, routeIdx) >= halfW + 0.18) {
+          curbPositions.push(
+            ...s0.cl, ...s0.l, ...s1.cl,
+            ...s1.cl, ...s0.l, ...s1.l
+          );
+        }
 
-        // Meio-fio Direito (2 triângulos formando o topo da guia)
-        curbPositions.push(
-          ...s0.r, ...s0.cr, ...s1.r,
-          ...s1.r, ...s0.cr, ...s1.cr
-        );
+        // Verifica se o meio-fio direito invade a caixa asfáltica de outra rota
+        const rMidX = (s0.cr[0] + s1.cr[0]) * 0.5;
+        const rMidZ = (s0.cr[2] + s1.cr[2]) * 0.5;
+        if (getMinRoadCenterDistance(rMidX, rMidZ, routeIdx) >= halfW + 0.18) {
+          curbPositions.push(
+            ...s0.r, ...s0.cr, ...s1.r,
+            ...s1.r, ...s0.cr, ...s1.cr
+          );
+        }
+      }
+    });
+
+    // 4. Discos de Concordância Asfáltica nos Cruzamentos Principais (arredonda cantos agudos de encruzilhadas)
+    ROAD_JUNCTIONS.forEach((jn) => {
+      const segs = 16;
+      const r = jn.r || 2.1;
+      const cy = (this.terrain ? this.terrain.getElevation(jn.x, jn.z) : 2.5) + 0.135;
+      for (let s = 0; s < segs; s++) {
+        const a0 = (s / segs) * Math.PI * 2;
+        const a1 = ((s + 1) / segs) * Math.PI * 2;
+        const x0 = jn.x + Math.cos(a0) * r;
+        const z0 = jn.z + Math.sin(a0) * r;
+        const y0 = (this.terrain ? this.terrain.getElevation(x0, z0) : 2.5) + 0.132;
+        const x1 = jn.x + Math.cos(a1) * r;
+        const z1 = jn.z + Math.sin(a1) * r;
+        const y1 = (this.terrain ? this.terrain.getElevation(x1, z1) : 2.5) + 0.132;
+        roadPositions.push(jn.x, cy, jn.z, x1, y1, z1, x0, y0, z0);
       }
     });
 
@@ -494,36 +452,36 @@ export const RoadsMixin = {
         id: 'boteco_vale_poente',
         name: 'Boteco do Vale do Poente',
         tableX: -186.0,
-        tableZ: -19.5,
+        tableZ: -17.0,
         chairColor: chairMatAmbev,
         hasUmbrella: true,
         chairs: [
-          { x: -186.7, z: -19.5, rotY: Math.PI / 2 },
-          { x: -185.3, z: -19.5, rotY: -Math.PI / 2 }
+          { x: -186.7, z: -17.0, rotY: Math.PI / 2 },
+          { x: -185.3, z: -17.0, rotY: -Math.PI / 2 }
         ]
       },
       {
         id: 'boteco_vale_levante',
         name: 'Boteco do Vale do Levante',
         tableX: 186.0,
-        tableZ: -19.5,
+        tableZ: -17.0,
         chairColor: chairMatBrahma,
         hasUmbrella: true,
         chairs: [
-          { x: 185.3, z: -19.5, rotY: Math.PI / 2 },
-          { x: 186.7, z: -19.5, rotY: -Math.PI / 2 }
+          { x: 185.3, z: -17.0, rotY: Math.PI / 2 },
+          { x: 186.7, z: -17.0, rotY: -Math.PI / 2 }
         ]
       },
       {
         id: 'boteco_sela_serra',
         name: 'Venda da Sela da Serra',
         tableX: -6.0,
-        tableZ: -155.5,
+        tableZ: -150.2,
         chairColor: chairMatAmbev,
         hasUmbrella: false,
         chairs: [
-          { x: -6.7, z: -155.5, rotY: Math.PI / 2 },
-          { x: -5.3, z: -155.5, rotY: -Math.PI / 2 }
+          { x: -6.7, z: -150.2, rotY: Math.PI / 2 },
+          { x: -5.3, z: -150.2, rotY: -Math.PI / 2 }
         ]
       }
     ];
@@ -893,20 +851,21 @@ export const RoadsMixin = {
 
   createSolarLamps() {
     this.solarLamps = [];
+    this.propObstacles = this.propObstacles || [];
     const lampCoords = [
       { x: -90, z: 12 },
       { x: -50, z: 8 },
-      { x: -6, z: -4 },  // Edge of Samba Plaza (cleanly away from campfire!)
+      { x: -6, z: -4 },   // Edge of Samba Plaza (cleanly away from campfire!)
       { x: 45, z: 8 },
-      { x: 85, z: 6 },
+      { x: 88.5, z: 6 },  // Calçada externa da Ladeira da Várzea
       { x: 0, z: -55 },
       { x: -75, z: -45 },
       { x: 75, z: -45 },
       { x: -95, z: 0 },   // Vila dos Pescadores do Poente
       { x: -98, z: -55 }, // Mirante do Poente
-      { x: 95, z: -18 },  // Grande Olaria
+      { x: 96, z: -20.5 },// Entrada do Sítio Agroflorestal da Colina
       { x: 98, z: -55 },  // Mirante do Levante
-      { x: 0, z: -104 },  // Torre de Rádio
+      { x: -4.2, z: -100.5 }, // Pátio Sul da Torre de Rádio
       { x: -168, z: 12 }, // Vale do Poente Baixo
       { x: -225, z: 12 }, // Orla do Poente Expandida
       { x: -195, z: -55 },// Encosta do Poente Expandida
@@ -920,10 +879,10 @@ export const RoadsMixin = {
       { x: 216, z: -24 }, // Praça da Bocha do Levante
       { x: -66, z: -142 },// Sítio Agroecológico da Sela
       { x: -2, z: -160 }, // Anfiteatro da Sela Norte
-      { x: -62, z: -72 }, // Largo do Ipê Oeste
-      { x: 56, z: -70 },  // Largo do Ipê Leste
-      { x: -158, z: -56 },// Subida Noroeste
-      { x: 158, z: -56 }  // Subida Nordeste
+      { x: -57.5, z: -63.5 }, // Largo do Ipê Oeste (calçada)
+      { x: 50.5, z: -61.5 },  // Largo do Ipê Leste (calçada)
+      { x: -153.5, z: -56 },  // Subida Noroeste (meio-fio externo)
+      { x: 153.5, z: -56 }    // Subida Nordeste (meio-fio externo)
     ];
 
     // Geometrias e materiais compartilhados (permite batching em 1 draw call e 0 PointLights extras por poste!)
@@ -939,9 +898,15 @@ export const RoadsMixin = {
     });
 
     lampCoords.forEach(pos => {
+      let lx = pos.x;
+      let lz = pos.z;
+      if (isNearRoad(lx, lz, 0.55)) {
+        lx += lx >= 0 ? 2.6 : -2.6;
+      }
       const lampGroup = new THREE.Group();
-      const y = this.terrain ? this.terrain.getElevation(pos.x, pos.z) : 6;
-      lampGroup.position.set(pos.x, y, pos.z);
+      const y = this.terrain ? this.terrain.getElevation(lx, lz) : 6;
+      lampGroup.position.set(lx, y, lz);
+      this.propObstacles.push({ x: lx, z: lz, r: 0.42 });
 
       const pole = new THREE.Mesh(poleGeo, poleMat);
       pole.position.y = 1.75;

@@ -139,79 +139,123 @@ export class NPCManager {
   }
 
   /**
-   * Colisão global unificada (OBB real das casas + props/estruturas + barreiras de segurança).
-   * Empurra pelo menor eixo de penetração com deslize tangencial em direção ao destino.
+   * Colisão global unificada em 3 iterações (OBB real das casas com validação vertical + props/monólitos + barreiras suaves).
+   * Inclui memória de contorno de quina (avoidSide) para eliminar oscilações e travamentos em cantos.
    */
   resolveHouseAndWorldObstacles(npc, delta) {
     const pos = npc.group.position;
     const tx = npc.targetPos ? npc.targetPos.x : pos.x;
     const tz = npc.targetPos ? npc.targetPos.z : pos.z;
+    const dt = delta || 0.016;
+    const entityPad = npc.isPet ? 0.14 : 0.18;
 
-    // 1. OBB exata contra todas as casas da colina (incluindo degraus frontais em +Z local)
-    if (this.arch && this.arch.houses) {
-      const halfW = 2.52;
-      const halfD = 2.42;
-      const effHalfD = halfD + 0.25; // cobre +0.50 em +Z local com centro deslocado +0.25
-      const maxCheckR = halfW + effHalfD + 0.6;
-
-      for (let h = 0; h < this.arch.houses.length; h++) {
-        const house = this.arch.houses[h];
-        if (!house || !house.position) continue;
-        if (npc.isBuilder && npc.builderState === 'working' && npc.assignedSite &&
-          (npc.assignedSite.house === house || npc.assignedSite.plateau === house.plateau)) {
-          continue;
-        }
-
-        const hx = house.position.x;
-        const hz = house.position.z;
-        const dx = pos.x - hx;
-        if (Math.abs(dx) > maxCheckR) continue;
-        const dz = pos.z - hz;
-        if (Math.abs(dz) > maxCheckR) continue;
-        const dy = pos.y - house.position.y;
-        if (dy > 4.5 || dy < -6.8) continue;
-
-        const rotY = house.meshGroup ? house.meshGroup.rotation.y : 0;
-        const c = rotY ? Math.cos(rotY) : 1.0;
-        const s = rotY ? Math.sin(rotY) : 0.0;
-        const lx = dx * c - dz * s;
-        const lz = (dx * s + dz * c) - 0.25;
-
-        const penX = halfW - Math.abs(lx);
-        const penZ = effHalfD - Math.abs(lz);
-        if (penX > 0 && penZ > 0) {
-          let nlx = lx;
-          let nlz = lz;
-          let lnx = 0;
-          let lnz = 0;
-          if (penX < penZ) {
-            lnx = lx >= 0 ? 1 : -1;
-            nlx = lnx * halfW;
-          } else {
-            lnz = lz >= 0 ? 1 : -1;
-            nlz = lnz * effHalfD;
-          }
-
-          const localZ = nlz + 0.25;
-          pos.x = hx + nlx * c + localZ * s;
-          pos.z = hz - nlx * s + localZ * c;
-
-          const wnx = lnx * c + lnz * s;
-          const wnz = -lnx * s + lnz * c;
-          const tanX = -wnz;
-          const tanZ = wnx;
-          const dot = (tx - pos.x) * tanX + (tz - pos.z) * tanZ;
-          const slideSign = dot >= 0 ? 1 : -1;
-          const slideDist = (npc.speed || 1.8) * (delta || 0.016) * 1.35;
-          pos.x += tanX * slideSign * slideDist;
-          pos.z += tanZ * slideSign * slideDist;
-        }
-      }
+    if (npc.avoidSideTimer > 0) {
+      npc.avoidSideTimer = Math.max(0, npc.avoidSideTimer - dt);
     }
 
-    // 2. Obstáculos de estruturas, pedras, barracas, píer, fornos e mobiliário
-    if (this.resolvePropObstacles) {
-      this.resolvePropObstacles(npc, tx, tz, delta);
+    const pickSlideSign = (tanX, tanZ) => {
+      if (npc.avoidSideTimer > 0 && (npc.avoidSide === 1 || npc.avoidSide === -1)) {
+        return npc.avoidSide;
+      }
+      const dot = (tx - pos.x) * tanX + (tz - pos.z) * tanZ;
+      const sign = dot >= 0 ? 1 : -1;
+      npc.avoidSide = sign;
+      npc.avoidSideTimer = 1.15;
+      return sign;
+    };
+
+    // 3 iterações de relaxação física para impedir que desviar da Casa A empurre o NPC/Pet para dentro da Casa B ou Prop C
+    for (let iter = 0; iter < 3; iter++) {
+      // 1. OBB exata contra todas as casas da colina (usando house.collisionBounds e verificação vertical estrita)
+      if (this.arch && this.arch.houses) {
+        for (let h = 0; h < this.arch.houses.length; h++) {
+          const house = this.arch.houses[h];
+          if (!house || !house.position) continue;
+          if (npc.isBuilder && npc.builderState === 'working' && npc.assignedSite &&
+            (npc.assignedSite.house === house || npc.assignedSite.plateau === house.plateau)) {
+            continue;
+          }
+
+          const cb = house.collisionBounds;
+          const halfW = (cb ? cb.hw : 2.55) + entityPad;
+          const effHalfD = (cb ? cb.hd : 2.52) + entityPad;
+          const czOff = cb ? cb.czOff : 0.22;
+          const maxCheckR = halfW + effHalfD + 0.6;
+
+          const hx = house.position.x;
+          const hz = house.position.z;
+          const dx = pos.x - hx;
+          if (Math.abs(dx) > maxCheckR) continue;
+          const dz = pos.z - hz;
+          if (Math.abs(dz) > maxCheckR) continue;
+
+          // Validação vertical real: evita colisão fantasma em ruas abaixo do muro de arrimo ou acima do telhado
+          const baseY = cb ? cb.baseY : (house.position.y - 4.2);
+          const topY = cb ? cb.topY : (house.position.y + (house.level || 1) * 2.5 + 1.4);
+          if (pos.y + 1.55 < baseY || pos.y > topY + 0.15) continue;
+
+          const rotY = house.meshGroup ? house.meshGroup.rotation.y : 0;
+          const c = rotY ? Math.cos(rotY) : 1.0;
+          const s = rotY ? Math.sin(rotY) : 0.0;
+          const lx = dx * c - dz * s;
+          const lz = (dx * s + dz * c) - czOff;
+
+          const penX = halfW - Math.abs(lx);
+          const penZ = effHalfD - Math.abs(lz);
+          if (penX > 0 && penZ > 0) {
+            let nlx = lx;
+            let nlz = lz;
+            let lnx = 0;
+            let lnz = 0;
+            if (penX < penZ) {
+              lnx = lx >= 0 ? 1 : -1;
+              nlx = lnx * halfW;
+            } else {
+              lnz = lz >= 0 ? 1 : -1;
+              nlz = lnz * effHalfD;
+            }
+
+            const localZ = nlz + czOff;
+            pos.x = hx + nlx * c + localZ * s;
+            pos.z = hz - nlx * s + localZ * c;
+
+            if (iter === 0) {
+              const wnx = lnx * c + lnz * s;
+              const wnz = -lnx * s + lnz * c;
+              const tanX = -wnz;
+              const tanZ = wnx;
+              const slideSign = pickSlideSign(tanX, tanZ);
+              const slideDist = (npc.speed || 1.8) * dt * 1.25;
+              pos.x += tanX * slideSign * slideDist;
+              pos.z += tanZ * slideSign * slideDist;
+            }
+          }
+        }
+      }
+
+      // 2. Obstáculos de estruturas, monólitos de granito, barracas, píer, fornos e mobiliário
+      if (this.resolvePropObstacles) {
+        this.resolvePropObstacles(npc, tx, tz, iter === 0 ? dt : 0);
+      }
+
+      // 2B. Árvores e rochas da reserva florestal de borda (natureObstacles)
+      if (this.arch && this.arch.natureObstacles) {
+        const natObs = this.arch.natureObstacles;
+        for (let n = 0; n < natObs.length; n++) {
+          const no = natObs[n];
+          const r = (no.radius || 1.6) * 0.65;
+          const ndx = pos.x - no.x;
+          if (Math.abs(ndx) > r) continue;
+          const ndz = pos.z - no.z;
+          if (Math.abs(ndz) > r) continue;
+          const dSq = ndx * ndx + ndz * ndz;
+          if (dSq < r * r && dSq > 0.0001) {
+            const d = Math.sqrt(dSq);
+            pos.x = no.x + (ndx / d) * r;
+            pos.z = no.z + (ndz / d) * r;
+          }
+        }
+      }
     }
 
     // 3. Barreira do penhasco frontal do Morro do Sol
@@ -230,24 +274,27 @@ export class NPCManager {
       }
     }
 
-    // 4. Barreira rígida do Campinho de Várzea (apenas jogadores entram no gramado)
+    // 4. Perímetro Suave do Alambrado do Campinho de Várzea (sem teleporte para X=37/73!)
     if (npc.role !== 'Jogador da Pelada') {
-      if (pos.x >= 40.0 && pos.x <= 70.0 && pos.z >= -5.5 && pos.z <= 13.5) {
-        if (pos.z < 3.5) {
-          pos.x = pos.x < 55.0 ? 37.0 : 73.0;
-        } else {
-          pos.z = 14.5;
-        }
-      } else if (pos.x > 43.2 && pos.x < 66.8 && pos.z > -3.6 && pos.z < 11.6) {
+      if (pos.x > 43.2 && pos.x < 66.8 && pos.z > -3.6 && pos.z < 11.6) {
         const dLeft = pos.x - 43.2;
         const dRight = 66.8 - pos.x;
         const dTop = pos.z - (-3.6);
         const dBottom = 11.6 - pos.z;
         const minD = Math.min(dLeft, dRight, dTop, dBottom);
-        if (minD === dLeft) pos.x = 43.2;
-        else if (minD === dRight) pos.x = 66.8;
-        else if (minD === dTop) pos.z = -3.6;
-        else pos.z = 11.6;
+        if (minD === dLeft) {
+          pos.x = 43.2;
+          pos.z += (tz >= pos.z ? 1 : -1) * (npc.speed || 1.8) * dt;
+        } else if (minD === dRight) {
+          pos.x = 66.8;
+          pos.z += (tz >= pos.z ? 1 : -1) * (npc.speed || 1.8) * dt;
+        } else if (minD === dTop) {
+          pos.z = -3.6;
+          pos.x += (tx >= pos.x ? 1 : -1) * (npc.speed || 1.8) * dt;
+        } else {
+          pos.z = 11.6;
+          pos.x += (tx >= pos.x ? 1 : -1) * (npc.speed || 1.8) * dt;
+        }
       }
     }
 
@@ -261,16 +308,9 @@ export class NPCManager {
       }
     }
 
-    // 6. Guarda-corpo e resgate do Píer dos Pescadores
-    if (pos.z >= 60.5 && pos.z <= 96.0 && Math.abs(pos.x - (-78.0)) < 3.2) {
-      pos.x = -78.0 + Math.max(-0.45, Math.min(0.45, pos.x - (-78.0)));
-    }
-    if (!npc.isDedicatedBeachgoer && !npc.isFisherman && Math.abs(pos.x - (-78.0)) <= 6.5 && pos.z >= 64.0 && pos.z <= 98.0) {
-      if (Math.abs(pos.x - (-78.0)) > 1.2 || pos.y < 1.0) {
-        pos.x = -78.0;
-        pos.z = 54.0;
-        npc.targetPos = new THREE.Vector3(-78.0, this.getFloorElevation(-78.0, 54.0), 54.0);
-      }
+    // 6. Guarda-corpo lateral do Píer dos Pescadores (sem teleporte abrupto!)
+    if (pos.z >= 60.5 && pos.z <= 96.0 && Math.abs(pos.x - (-78.0)) < 1.35) {
+      pos.x = -78.0 + Math.max(-0.55, Math.min(0.55, pos.x - (-78.0)));
     }
   }
 
@@ -809,21 +849,21 @@ export class NPCManager {
         return;
       }
 
-      // 3. WHEELBARROW COURIER LOGISTICS (Carreto de Tijolos & Insumos)
+      // 3. WHEELBARROW COURIER LOGISTICS (Carreto de Tijolos & Insumos — sem teleporte na retirada!)
       if (npc.isCourier) {
         if (!npc.courierSite || !npc.courierSite.plateau) {
           this.releaseCourier(npc);
           return;
         }
-        // Rotate wheel continuously while moving
-        npc.cartWheel.rotation.x += delta * 14;
-
-        // Periodic cart rattle sound
-        npc.cartRattleTimer += delta;
-        if (npc.cartRattleTimer >= 2.4) {
-          npc.cartRattleTimer = 0;
-          if (this.soundtrack) {
-            this.soundtrack.playCartRattle(npc.group.position);
+        const hasCart = Boolean(npc.cartGroup && npc.cartGroup.visible);
+        if (hasCart && npc.cartWheel) {
+          npc.cartWheel.rotation.x += delta * 14;
+          npc.cartRattleTimer += delta;
+          if (npc.cartRattleTimer >= 2.4) {
+            npc.cartRattleTimer = 0;
+            if (this.soundtrack) {
+              this.soundtrack.playCartRattle(npc.group.position);
+            }
           }
         }
 
@@ -837,6 +877,26 @@ export class NPCManager {
             npc.targetNodeId = npc.pathQueue.shift();
             const nxt = this.roadNodesMap.get(npc.targetNodeId);
             if (nxt) npc.targetPos = nxt.position.clone();
+          } else if (npc.courierState === 'going_to_pickup') {
+            // Chegou ao polo de origem! Equipa o carrinho de mão e inicia a rota de entrega
+            npc.courierState = npc.courierSite.isSupplyTransfer ? 'delivering' : 'traveling_to_site';
+            if (npc.cartGroup) npc.cartGroup.visible = true;
+            if (this.soundtrack) {
+              this.soundtrack.playCartRattle(npc.group.position);
+            }
+            const avoidPlaza = new Set(['plaza', 'mirante', 'portico', 'alameda', 'soccer', 'beach']);
+            const fromId = npc.pickupNodeId || 'olaria_dock';
+            const toId = npc.deliveryNodeId || (this.getNearestRoadNode(npc.courierSite.plateau.x, npc.courierSite.plateau.z, null, (n) => !avoidPlaza.has(n.type))?.id || fromId);
+            const delivPath = this.findRoadPath(fromId, toId, avoidPlaza);
+            npc.pathQueue = delivPath.slice(1);
+            npc.currentNodeId = fromId;
+            if (npc.pathQueue.length > 0) {
+              npc.targetNodeId = npc.pathQueue.shift();
+              const nxt = this.roadNodesMap.get(npc.targetNodeId);
+              npc.targetPos = nxt ? nxt.position.clone() : new THREE.Vector3(npc.courierSite.plateau.x, npc.courierSite.plateau.y, npc.courierSite.plateau.z);
+            } else {
+              npc.targetPos = new THREE.Vector3(npc.courierSite.plateau.x, npc.courierSite.plateau.y, npc.courierSite.plateau.z);
+            }
           } else {
             // Chegou à via mais próxima da obra, caminha os últimos metros até a laje
             const siteTarget = new THREE.Vector3(npc.courierSite.plateau.x, npc.courierSite.plateau.y, npc.courierSite.plateau.z);
@@ -1885,10 +1945,23 @@ export class NPCManager {
               npc.group.position.z - npc.stuckLastPos.z
             );
             if (distTraveled < 0.35) {
-              const curY = npc.group.position.y || (this.terrain ? this.terrain.getElevation(npc.group.position.x, npc.group.position.z) : 0);
-              const safeRoad = this.getNearestRoadNode(npc.group.position.x, npc.group.position.z, curY);
-              if (safeRoad) {
-                npc.group.position.set(safeRoad.x, this.getFloorElevation(safeRoad.x, safeRoad.z), safeRoad.z);
+              // Redireciona suavemente pelo próximo nó da rota sem teleporte abrupto!
+              npc.avoidSide = -(npc.avoidSide || 1);
+              npc.avoidSideTimer = 1.4;
+              if (npc.builderPathQueue && npc.builderPathQueue.length > 0) {
+                npc.builderTargetNodeId = npc.builderPathQueue.shift();
+                const nxt = this.roadNodesMap.get(npc.builderTargetNodeId);
+                if (nxt) npc.targetPos = nxt.position.clone();
+              } else {
+                const curY = npc.group.position.y || (this.terrain ? this.terrain.getElevation(npc.group.position.x, npc.group.position.z) : 0);
+                const safeRoad = this.getNearestRoadNode(npc.group.position.x, npc.group.position.z, curY);
+                if (safeRoad) {
+                  const dx = safeRoad.x - npc.group.position.x;
+                  const dz = safeRoad.z - npc.group.position.z;
+                  const len = Math.hypot(dx, dz) || 1;
+                  npc.group.position.x += (dx / len) * 0.55;
+                  npc.group.position.z += (dz / len) * 0.55;
+                }
               }
             }
           }

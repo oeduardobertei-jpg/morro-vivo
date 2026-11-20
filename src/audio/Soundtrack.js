@@ -81,10 +81,15 @@ export class AmbientSoundtrack {
     this.musicGainNode.connect(this.core.masterInput);
     this.masterGain = this.musicGainNode;
 
-    // Pré-fader para instrumentos musicais (passam pelo ganho da música para que mute/ducking afetem seco + reverb!)
+    // Pré-fader para instrumentos musicais + filtro de calor analógico sincronizado com o céu!
     this.musicPreGain = this.ctx.createGain();
     this.musicPreGain.gain.value = 1.0;
-    this.musicPreGain.connect(this.musicGainNode);
+    this.musicToneFilter = this.ctx.createBiquadFilter();
+    this.musicToneFilter.type = 'lowpass';
+    this.musicToneFilter.Q.value = 0.55;
+    this.musicToneFilter.frequency.value = 3400;
+    this.musicPreGain.connect(this.musicToneFilter);
+    this.musicToneFilter.connect(this.musicGainNode);
 
     this.musicReverbPre = this.ctx.createGain();
     this.musicReverbPre.gain.value = 1.0;
@@ -184,7 +189,8 @@ export class AmbientSoundtrack {
         break;
       case 'music': {
         const duck = this.sambaProximityDuck !== undefined ? this.sambaProximityDuck : 1.0;
-        const mLevel = fraction * 0.78 * duck;
+        const phaseScale = this._getPhaseMusicScale(this._getCurrentPhase());
+        const mLevel = fraction * 0.78 * duck * phaseScale;
         if (this.musicGainNode) this.musicGainNode.gain.setTargetAtTime(mLevel, t, 0.14);
         if (this.musicReverbOut) this.musicReverbOut.gain.setTargetAtTime(mLevel * 0.85, t, 0.14);
         break;
@@ -267,13 +273,37 @@ export class AmbientSoundtrack {
     this.oceanBreezeActive = true;
   }
 
+  _getPhaseMusicScale(phase) {
+    if (phase === 'day') return 0.84;
+    if (phase === 'dawn') return 0.86;
+    return 0.96;
+  }
+
+  _getPhaseToneCutoff(phase, progress = null) {
+    if (phase === 'dawn') return 2600;
+    if (phase === 'day') return (typeof progress === 'number' && progress < 0.16) ? 3400 : 4800;
+    if (phase === 'sunset') return 3900;
+    return 2900;
+  }
+
   play() {
     if (!this.ctx) this.init();
     if (this.isPlaying) return;
     this.isPlaying = true;
     this.startOceanBreeze();
+    const phase = this._getCurrentPhase();
+    const progress = this.env && this.env.getCycleProgress ? this.env.getCycleProgress() : null;
+    if (this.musicPreGain && this.ctx) {
+      const now = this.ctx.currentTime;
+      this.musicPreGain.gain.cancelScheduledValues(now);
+      this.musicPreGain.gain.setValueAtTime(0.05, now);
+      this.musicPreGain.gain.linearRampToValueAtTime(1.0, now + 1.45);
+    }
+    if (this.musicToneFilter && this.ctx) {
+      this.musicToneFilter.frequency.setTargetAtTime(this._getPhaseToneCutoff(phase, progress), this.ctx.currentTime, 1.1);
+    }
     if (this.musicEngine) {
-      this.musicEngine.setPhase(this._getCurrentPhase());
+      this.musicEngine.setPhase(phase, progress);
       this.musicEngine.start();
     }
   }
@@ -296,7 +326,7 @@ export class AmbientSoundtrack {
       section: 'A',
       title: 'Toque para ouvir Bossa & Mar',
       chord: 'Cmaj9',
-      bpm: 83,
+      bpm: 74,
       phase: this._getCurrentPhase(),
       barIndex: 0
     };
@@ -319,10 +349,14 @@ export class AmbientSoundtrack {
     if (!this.ctx || this.ctx.state !== 'running') return;
 
     const phase = this._getCurrentPhase();
+    const progress = this.env && this.env.getCycleProgress ? this.env.getCycleProgress() : null;
 
-    // Sincroniza fase do dia na música (Bossa Solar -> Pôr do Sol -> Seresta Noturna -> Alvorecer)
+    // Sincroniza fase, progresso solar e calor analógico na música (Noite -> Alvorecer -> Manhã -> Dia -> Pôr do Sol)
     if (this.musicEngine) {
-      this.musicEngine.setPhase(phase);
+      this.musicEngine.setPhase(phase, progress);
+    }
+    if (this.musicToneFilter) {
+      this.musicToneFilter.frequency.setTargetAtTime(this._getPhaseToneCutoff(phase, progress), this.ctx.currentTime, 1.1);
     }
 
     // Atualiza mar estéreo, ondas individuais e fauna brasileira (sabiá, bem-te-vi, gaivotas, grilos)
@@ -330,7 +364,7 @@ export class AmbientSoundtrack {
       this.soundscape.update(delta, this.camera, this.controls, phase);
     }
 
-    // Crossfade/Ducking automático da Trilha quando chegamos pertinho da Roda de Samba (-2, 15.2, -4)
+    // Crossfade/Ducking automático da Trilha (Roda de Samba + normalização suave entre fases do dia)
     if (this.camera && this.musicGainNode) {
       const sambaX = -2.0, sambaY = 15.2, sambaZ = -4.0;
       const focusDist = (this.controls && this.controls.target)
@@ -350,10 +384,11 @@ export class AmbientSoundtrack {
       }
       this.sambaProximityDuck = targetDuck;
       const musicFraction = (this.volumes.music ?? 70) / 100.0;
-      const targetLevel = musicFraction * 0.78 * targetDuck;
-      this.musicGainNode.gain.setTargetAtTime(targetLevel, this.ctx.currentTime, 0.35);
+      const phaseScale = this._getPhaseMusicScale(phase);
+      const targetLevel = musicFraction * 0.78 * targetDuck * phaseScale;
+      this.musicGainNode.gain.setTargetAtTime(targetLevel, this.ctx.currentTime, 0.85);
       if (this.musicReverbOut) {
-        this.musicReverbOut.gain.setTargetAtTime(targetLevel * 0.85, this.ctx.currentTime, 0.35);
+        this.musicReverbOut.gain.setTargetAtTime(targetLevel * 0.85, this.ctx.currentTime, 0.85);
       }
     }
   }

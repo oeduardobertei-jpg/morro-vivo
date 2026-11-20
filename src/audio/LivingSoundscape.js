@@ -119,14 +119,14 @@ export class LivingSoundscape {
     this.zoomProximity = zoomFactor;
 
     const t = this.ctx.currentTime;
-    const nightCalm = (this.phase === 'night') ? 0.80 : 1.0;
+    const calmMult = (this.phase === 'night') ? 0.80 : (this.phase === 'dawn' ? 0.86 : 1.0);
 
     if (this._surfGain) {
-      const surfTarget = (0.14 + beachProx * 0.36) * zoomFactor * nightCalm;
+      const surfTarget = (0.14 + beachProx * 0.36) * zoomFactor * calmMult;
       this._surfGain.gain.setTargetAtTime(surfTarget, t, 0.45);
     }
     if (this._surfFilterL && this._surfFilterR) {
-      const baseCut = (240 + beachProx * 240) * (this.phase === 'night' ? 0.88 : 1.0);
+      const baseCut = (240 + beachProx * 240) * (this.phase === 'night' ? 0.88 : (this.phase === 'dawn' ? 0.92 : 1.0));
       this._surfFilterL.frequency.setTargetAtTime(baseCut, t, 0.55);
       this._surfFilterR.frequency.setTargetAtTime(baseCut * 1.07, t, 0.55);
     }
@@ -136,7 +136,7 @@ export class LivingSoundscape {
     if (this._waveTimer <= 0) {
       this._waveTimer = 5.5 + Math.random() * 5.2;
       if (beachProx > 0.22) {
-        this._triggerWaveWash(beachProx * zoomFactor * nightCalm);
+        this._triggerWaveWash(beachProx * zoomFactor * calmMult);
       }
     }
 

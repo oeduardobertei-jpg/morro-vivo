@@ -647,7 +647,13 @@ const valWealth = document.getElementById('val-wealth');
 const valWater = document.getElementById('val-water');
 const valEnergy = document.getElementById('val-energy');
 const valCulture = document.getElementById('val-culture');
+const barWater = document.getElementById('bar-water');
+const barEnergy = document.getElementById('bar-energy');
+const barCulture = document.getElementById('bar-culture');
 const dayCounter = document.getElementById('day-counter');
+const hudAvgHarmony = document.getElementById('hud-avg-harmony');
+const buildReadyDot = document.getElementById('build-ready-dot');
+const hudElectionDays = document.getElementById('hud-election-days');
 const tickerText = document.getElementById('ticker-text');
 const hudWhisper = document.getElementById('hud-whisper');
 const hudFeedList = document.getElementById('hud-feed-list');
@@ -680,6 +686,11 @@ const prainhaLeader = document.getElementById('prainha-leader');
 const solLeader = document.getElementById('sol-leader');
 const serraLeader = document.getElementById('serra-leader');
 const varzeaLeader = document.getElementById('varzea-leader');
+
+const barDistPrainha = document.getElementById('bar-dist-prainha');
+const barDistSol = document.getElementById('bar-dist-sol');
+const barDistSerra = document.getElementById('bar-dist-serra');
+const barDistVarzea = document.getElementById('bar-dist-varzea');
 
 const actionButtonsCostMap = [
   { id: 'act-puxadinho', cost: ACTION_COSTS.puxadinho },
@@ -921,25 +932,51 @@ if (popFeed) {
   });
 }
 
+const minActionCost = Math.min(...actionButtonsCostMap.map((i) => i.cost));
+const clampPct = (v) => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+
 // Hook simulation updates
 simulation.onUpdate((summary) => {
+  const waterPct = clampPct(summary.metrics.water);
+  const energyPct = clampPct(summary.metrics.energy);
+  const culturePct = clampPct(summary.metrics.culture);
+
   valPop.innerText = summary.metrics.population;
   valWealth.innerText = `R$ ${summary.metrics.wealth}`;
-  valWater.innerText = `${summary.metrics.water}%`;
-  valEnergy.innerText = `${summary.metrics.energy}%`;
-  valCulture.innerText = `${summary.metrics.culture}%`;
+  valWater.innerText = `${waterPct}%`;
+  valEnergy.innerText = `${energyPct}%`;
+  valCulture.innerText = `${culturePct}%`;
+  if (barWater) barWater.style.width = `${waterPct}%`;
+  if (barEnergy) barEnergy.style.width = `${energyPct}%`;
+  if (barCulture) barCulture.style.width = `${culturePct}%`;
+
   dayCounter.innerText = `DIA ${summary.day}`;
   if (buildTreasuryHint) buildTreasuryHint.innerText = `Caixa R$ ${summary.metrics.wealth}`;
+  if (buildReadyDot) buildReadyDot.classList.toggle('ready', summary.metrics.wealth >= minActionCost);
+  if (hudElectionDays && summary.politics) {
+    hudElectionDays.innerText = `${summary.politics.daysUntilElection}d`;
+  }
 
-  if (prainhaHarmony && summary.factions.prainha) prainhaHarmony.innerText = `${summary.factions.prainha.harmony}%`;
-  if (solHarmony && summary.factions.sol) solHarmony.innerText = `${summary.factions.sol.harmony}%`;
-  if (serraHarmony && summary.factions.serra) serraHarmony.innerText = `${summary.factions.serra.harmony}%`;
-  if (varzeaHarmony && summary.factions.varzea) varzeaHarmony.innerText = `${summary.factions.varzea.harmony}%`;
-
-  if (prainhaLeader && summary.factions.prainha) prainhaLeader.innerText = summary.factions.prainha.leader;
-  if (solLeader && summary.factions.sol) solLeader.innerText = summary.factions.sol.leader;
-  if (serraLeader && summary.factions.serra) serraLeader.innerText = summary.factions.serra.leader;
-  if (varzeaLeader && summary.factions.varzea) varzeaLeader.innerText = summary.factions.varzea.leader;
+  const districtPairs = [
+    { faction: summary.factions.prainha, labelEl: prainhaHarmony, leaderEl: prainhaLeader, barEl: barDistPrainha },
+    { faction: summary.factions.sol, labelEl: solHarmony, leaderEl: solLeader, barEl: barDistSol },
+    { faction: summary.factions.serra, labelEl: serraHarmony, leaderEl: serraLeader, barEl: barDistSerra },
+    { faction: summary.factions.varzea, labelEl: varzeaHarmony, leaderEl: varzeaLeader, barEl: barDistVarzea }
+  ];
+  let harmonySum = 0;
+  let harmonyCount = 0;
+  districtPairs.forEach(({ faction, labelEl, leaderEl, barEl }) => {
+    if (!faction) return;
+    const h = clampPct(faction.harmony);
+    harmonySum += h;
+    harmonyCount += 1;
+    if (labelEl) labelEl.innerText = `${h}%`;
+    if (leaderEl) leaderEl.innerText = faction.leader;
+    if (barEl) barEl.style.width = `${h}%`;
+  });
+  if (hudAvgHarmony && harmonyCount > 0) {
+    hudAvgHarmony.innerText = `${Math.round(harmonySum / harmonyCount)}%`;
+  }
 
   // Highlight affordability on strategic action buttons
   actionButtonsCostMap.forEach(item => {
@@ -1193,6 +1230,8 @@ const activeCamLabel = document.getElementById('active-cam-label');
 const activeCamAngle = document.getElementById('active-cam-angle');
 const hudRegionSubtitle = document.getElementById('hud-region-subtitle');
 const popCameras = document.getElementById('pop-cameras');
+const btnCamPrev = document.getElementById('btn-cam-prev');
+const btnCamNext = document.getElementById('btn-cam-next');
 
 const camShortNames = {
   pan: 'Panorâmica',
@@ -1204,24 +1243,17 @@ const camShortNames = {
   varzea: 'Várzea'
 };
 
-function selectCameraPreset(key) {
-  followTargetGroup = null;
+/** Apply active camera preset & current angle index to viewport and HUD. */
+function applyCurrentCameraAngle(key) {
   const config = cameraPresets[key];
-  if (!config) return;
-
-  // If clicking the already-active region button, cycle to the next curated camera angle!
-  if (activePresetKey === key) {
-    presetAngleIndex[key] = ((presetAngleIndex[key] || 0) + 1) % config.angles.length;
-  } else {
-    activePresetKey = key;
-    presetAngleIndex[key] = 0;
-  }
+  if (!config || !config.angles.length) return;
 
   setActiveCamBtn(key);
   cinematicCam.setPreset(key);
 
-  const angleObj = config.angles[presetAngleIndex[key]] || config.angles[0];
-  const angleNum = presetAngleIndex[key] + 1;
+  const idx = presetAngleIndex[key] || 0;
+  const angleObj = config.angles[idx] || config.angles[0];
+  const angleNum = idx + 1;
   const totalAngles = config.angles.length;
 
   if (activeCamLabel) activeCamLabel.innerText = camShortNames[key] || config.name;
@@ -1245,6 +1277,45 @@ function selectCameraPreset(key) {
   } else {
     simulation.addEvent(`🎬 Drone Cinema sobrevoando: ${config.name}!`, 'culture');
   }
+}
+
+function selectCameraPreset(key) {
+  followTargetGroup = null;
+  const config = cameraPresets[key];
+  if (!config) return;
+
+  // If clicking the already-active region button, cycle to the next curated camera angle!
+  if (activePresetKey === key) {
+    presetAngleIndex[key] = ((presetAngleIndex[key] || 0) + 1) % config.angles.length;
+  } else {
+    activePresetKey = key;
+    presetAngleIndex[key] = 0;
+  }
+  applyCurrentCameraAngle(key);
+}
+
+/** Step backward (-1) or forward (+1) through angles of the active camera vista. */
+function stepCameraAngle(dir) {
+  followTargetGroup = null;
+  const key = activePresetKey || 'pan';
+  const config = cameraPresets[key];
+  if (!config || !config.angles.length) return;
+  const count = config.angles.length;
+  presetAngleIndex[key] = ((presetAngleIndex[key] || 0) + dir + count) % count;
+  applyCurrentCameraAngle(key);
+}
+
+if (btnCamPrev) {
+  btnCamPrev.onclick = () => {
+    if (soundtrack && soundtrack.playUiClick) soundtrack.playUiClick('cam');
+    stepCameraAngle(-1);
+  };
+}
+if (btnCamNext) {
+  btnCamNext.onclick = () => {
+    if (soundtrack && soundtrack.playUiClick) soundtrack.playUiClick('cam');
+    stepCameraAngle(1);
+  };
 }
 
 Object.keys(camButtons).forEach(key => {
@@ -1334,14 +1405,12 @@ if (btnCinema) {
   btnCinema.onclick = toggleCinematicMode;
 }
 
-// Soundtrack Audio Dock, Next Section, Inline Volumes & Mixer Popover
+// Soundtrack Vitrola Dock, Next Section & Mixer Popover
 const btnAudio = document.getElementById('btn-audio');
-const audioLabel = document.getElementById('audio-label');
+const hudVitrola = document.querySelector('.hud-vitrola');
 const btnAudioNext = document.getElementById('btn-audio-next');
 const dockTrackTitle = document.getElementById('dock-track-title');
 const dockTrackMeta = document.getElementById('dock-track-meta');
-const dockVolMusic = document.getElementById('dock-vol-music');
-const dockVolSea = document.getElementById('dock-vol-sea');
 
 let _lastPlayingState = null;
 let _lastTrackTitle = '';
@@ -1355,14 +1424,14 @@ function syncNowPlayingUI() {
       btnAudio.classList.toggle('is-playing', playing);
       btnAudio.setAttribute('aria-pressed', String(playing));
     }
-    if (audioLabel) {
-      audioLabel.textContent = playing ? 'Bossa: ON' : 'Bossa: OFF';
+    if (hudVitrola) {
+      hudVitrola.classList.toggle('is-playing', playing);
     }
   }
   const info = soundtrack && soundtrack.getNowPlaying ? soundtrack.getNowPlaying() : null;
   if (dockTrackTitle && dockTrackMeta) {
-    const nextTitle = (playing && info) ? (info.title || 'Sol na Varanda') : 'Toque para ouvir Bossa & Mar';
-    const nextMeta = (playing && info) ? `Bossa Carioca · ${info.chord} · ${info.bpm} bpm` : 'trilha generativa carioca ao vivo';
+    const nextTitle = (playing && info) ? (info.title || 'Sol na Varanda') : 'Toque a Vitrola do Morro';
+    const nextMeta = (playing && info) ? `Bossa Carioca · ${info.chord} · ${info.bpm} bpm` : 'bossa carioca, seresta & mar ao vivo';
     if (nextTitle !== _lastTrackTitle) {
       _lastTrackTitle = nextTitle;
       dockTrackTitle.textContent = nextTitle;
@@ -1419,14 +1488,6 @@ function syncMixerUI() {
       syncSliderVisual(item.input);
     }
   });
-  if (dockVolMusic) {
-    dockVolMusic.value = vols.music ?? 70;
-    syncSliderVisual(dockVolMusic);
-  }
-  if (dockVolSea) {
-    dockVolSea.value = vols.sea ?? 68;
-    syncSliderVisual(dockVolSea);
-  }
 }
 
 Object.keys(mixerSliders).forEach(ch => {
@@ -1437,44 +1498,9 @@ Object.keys(mixerSliders).forEach(ch => {
       soundtrack.setVolume(ch, val);
       if (item.label) item.label.innerText = `${val}%`;
       syncSliderVisual(item.input);
-      if (ch === 'music' && dockVolMusic) {
-        dockVolMusic.value = val;
-        syncSliderVisual(dockVolMusic);
-      } else if (ch === 'sea' && dockVolSea) {
-        dockVolSea.value = val;
-        syncSliderVisual(dockVolSea);
-      }
     };
   }
 });
-
-if (dockVolMusic) {
-  dockVolMusic.oninput = (e) => {
-    const val = Number(e.target.value);
-    soundtrack.setVolume('music', val);
-    syncSliderVisual(dockVolMusic);
-    const mItem = mixerSliders.music;
-    if (mItem?.input && mItem?.label) {
-      mItem.input.value = val;
-      mItem.label.innerText = `${val}%`;
-      syncSliderVisual(mItem.input);
-    }
-  };
-}
-
-if (dockVolSea) {
-  dockVolSea.oninput = (e) => {
-    const val = Number(e.target.value);
-    soundtrack.setVolume('sea', val);
-    syncSliderVisual(dockVolSea);
-    const sItem = mixerSliders.sea;
-    if (sItem?.input && sItem?.label) {
-      sItem.input.value = val;
-      sItem.label.innerText = `${val}%`;
-      syncSliderVisual(sItem.input);
-    }
-  };
-}
 
 if (popMixer) {
   popMixer.addEventListener('toggle', (e) => {
@@ -1530,6 +1556,7 @@ setGameSpeed(1);
 const timeIcon = document.getElementById('time-icon');
 const timeLabel = document.getElementById('time-label');
 const hudClock = document.getElementById('hud-clock');
+const hudSolarDot = document.getElementById('hud-solar-dot');
 const popTime = document.getElementById('pop-time');
 
 const PHASE_META = {
@@ -1569,14 +1596,30 @@ function formatSolarClock(progress) {
 }
 
 let _lastClockStr = '';
+let _lastArcBucket = -1;
 function syncSolarClock(phaseKey = null) {
   const cur = phaseKey || env.currentPhase || 'day';
   const info = PHASE_META[cur] || PHASE_META.day;
-  const clock = formatSolarClock(env.getCycleProgress ? env.getCycleProgress() : 0.11);
+  const p = ((env.getCycleProgress ? env.getCycleProgress() : 0.11) % 1 + 1) % 1;
+  const clock = formatSolarClock(p);
   const str = `${clock} · ${info.name}`;
   if (hudClock && str !== _lastClockStr) {
     _lastClockStr = str;
     hudClock.textContent = str;
+  }
+  const bucket = Math.round(p * 120);
+  if (hudSolarDot && bucket !== _lastArcBucket) {
+    _lastArcBucket = bucket;
+    const isDayArc = p >= 0.88 || p < 0.58;
+    const arcT = isDayArc
+      ? Math.min(1, Math.max(0, ((p - 0.88 + 1) % 1) / 0.70))
+      : Math.min(1, Math.max(0, (p - 0.58) / 0.30));
+    const theta = Math.PI * (1 - arcT);
+    const cx = (19 + 15 * Math.cos(theta)).toFixed(2);
+    const cy = (14 - 11 * Math.sin(theta)).toFixed(2);
+    hudSolarDot.setAttribute('cx', cx);
+    hudSolarDot.setAttribute('cy', cy);
+    hudSolarDot.setAttribute('fill', isDayArc ? 'var(--accent)' : '#FAF4EA');
   }
 }
 
@@ -1632,8 +1675,14 @@ const btnFxToggle = document.getElementById('btn-fx-toggle');
 const fxLabel = document.getElementById('fx-label');
 const popSettings = document.getElementById('pop-settings');
 
+const FX_SHORT_LABELS = {
+  maquete: 'Maquete',
+  bloom: 'Studio FX',
+  off: 'Limpo'
+};
+
 function updateFxButtonUI() {
-  if (fxLabel) fxLabel.textContent = postFX.getModeLabel();
+  if (fxLabel) fxLabel.textContent = FX_SHORT_LABELS[postFX.mode] || postFX.getModeLabel();
   if (btnFxToggle) btnFxToggle.classList.toggle('active', postFX.mode !== 'off');
   if (popSettings) {
     popSettings.querySelectorAll('[data-fx-mode]').forEach((btn) => {
